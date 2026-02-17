@@ -6,12 +6,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
+import subprocess  # nosec B404 - subprocess is required for scoped git CLI usage.
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Literal, Optional, overload
 from urllib import error, parse, request
 
 DEFAULT_NOTION_VERSION = "2022-06-28"
@@ -79,7 +79,7 @@ class NotionClient:
         for attempt in range(retries):
             req = request.Request(url, data=body, method=method, headers=headers)
             try:
-                with request.urlopen(req, timeout=30) as resp:
+                with request.urlopen(req, timeout=30) as resp:  # nosec B310
                     raw = resp.read().decode("utf-8")
                     return json.loads(raw) if raw else {}
             except error.HTTPError as exc:
@@ -102,9 +102,7 @@ class NotionClient:
                     message = parsed.get("message", raw_err)
                 except json.JSONDecodeError:
                     pass
-                raise NotionAPIError(
-                    f"{method} {path} failed ({exc.code}): {message}"
-                ) from exc
+                raise NotionAPIError(f"{method} {path} failed ({exc.code}): {message}") from exc
             except error.URLError as exc:
                 if attempt < retries - 1:
                     time.sleep(1.0)
@@ -132,7 +130,7 @@ class NotionClient:
         }
         data = self.request_json("POST", "/pages", payload)
         page_id = data.get("id")
-        if not page_id:
+        if not isinstance(page_id, str) or not page_id:
             raise NotionAPIError("POST /pages succeeded but no page id returned")
         return page_id
 
@@ -158,9 +156,9 @@ class NotionClient:
 
     def list_child_ids(self, block_id: str) -> list[str]:
         ids: list[str] = []
-        cursor: Optional[str] = None
+        cursor: str | None = None
         while True:
-            query = {"page_size": 100}
+            query: dict[str, object] = {"page_size": 100}
             if cursor:
                 query["start_cursor"] = cursor
             data = self.request_json("GET", f"/blocks/{block_id}/children", query=query)
@@ -195,11 +193,25 @@ def fail(msg: str) -> None:
     print(f"{LOG_PREFIX} ERROR: {msg}", file=sys.stderr)
 
 
-def run_git(args: list[str], text: bool = True, check: bool = True) -> subprocess.CompletedProcess:
-    proc = subprocess.run(
+@overload
+def run_git(
+    args: list[str], text: Literal[True] = True, check: bool = True
+) -> subprocess.CompletedProcess[str]: ...
+
+
+@overload
+def run_git(
+    args: list[str], text: Literal[False], check: bool = True
+) -> subprocess.CompletedProcess[bytes]: ...
+
+
+def run_git(
+    args: list[str], text: bool = True, check: bool = True
+) -> subprocess.CompletedProcess[str] | subprocess.CompletedProcess[bytes]:
+    # nosec: `git` command + args are controlled in code.
+    proc = subprocess.run(  # nosec
         ["git", *args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=text,
         check=False,
     )
@@ -574,7 +586,9 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
             marker = list_match.group(2)
             content = list_match.group(3).strip()
             block_type = (
-                "numbered_list_item" if marker.endswith(".") and marker[0].isdigit() else "bulleted_list_item"
+                "numbered_list_item"
+                if marker.endswith(".") and marker[0].isdigit()
+                else "bulleted_list_item"
             )
             append_list_item(
                 root_blocks=blocks,
@@ -662,8 +676,9 @@ def handle_upsert(
     parent_page_id: str,
     root: Path,
 ) -> None:
-    assert op.path
     path = op.path
+    if not path:
+        raise RuntimeError("Invalid upsert operation: missing path")
     staged = read_staged_file(path)
     raw_id = extract_frontmatter_value(staged, "notion_page_id")
     title = markdown_title(staged, path)
@@ -682,8 +697,9 @@ def handle_upsert(
 
 
 def handle_delete(notion: NotionClient, op: Operation) -> None:
-    assert op.path
     path = op.path
+    if not path:
+        raise RuntimeError("Invalid delete operation: missing path")
     old_markdown = read_head_file(path)
     if old_markdown is None:
         warn(f"Cannot read {path} from HEAD; skip archive")
@@ -705,14 +721,13 @@ def handle_rename(
     parent_page_id: str,
     root: Path,
 ) -> None:
-    assert op.old_path and op.new_path
     old_path = op.old_path
     new_path = op.new_path
+    if not old_path or not new_path:
+        raise RuntimeError("Invalid rename operation: missing old/new path")
 
     old_markdown = read_head_file(old_path)
-    old_raw_id = (
-        extract_frontmatter_value(old_markdown, "notion_page_id") if old_markdown else None
-    )
+    old_raw_id = extract_frontmatter_value(old_markdown, "notion_page_id") if old_markdown else None
 
     new_markdown = read_staged_file(new_path)
     new_raw_id = extract_frontmatter_value(new_markdown, "notion_page_id")
@@ -766,18 +781,12 @@ def main() -> int:
         notion_version = os.getenv("NOTION_API_VERSION", DEFAULT_NOTION_VERSION).strip()
 
         if not notion_token or not parent_raw:
-            warn(
-                "NOTION_TOKEN/NOTION_PARENT_PAGE_ID missing; "
-                "skip docs sync for this commit"
-            )
+            warn("NOTION_TOKEN/NOTION_PARENT_PAGE_ID missing; skip docs sync for this commit")
             return 0
 
         parent_page_id = normalize_notion_id(parent_raw)
         if not parent_page_id:
-            fail(
-                "NOTION_PARENT_PAGE_ID is invalid. "
-                "Use a 32-hex or UUID page id."
-            )
+            fail("NOTION_PARENT_PAGE_ID is invalid. Use a 32-hex or UUID page id.")
             return 1
 
         notion = NotionClient(notion_token, notion_version)

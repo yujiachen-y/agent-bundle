@@ -1,3 +1,4 @@
+minimum_pre_commit_version: "3.5.0"
 repos:
   - repo: local
     hooks:
@@ -8,3 +9,43 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+
+      - id: python-quality-gates
+        name: python size and duplicate gates
+        entry: python3 scripts/check_python_quality.py --max-file-lines 850 --max-function-lines 90 --duplicate-window 6 --paths scripts tests
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: pytest-coverage
+        name: pytest coverage gate
+        entry: pytest
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        args: [--config-file=pyproject.toml]
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.3
+    hooks:
+      - id: bandit
+        args: [-r, scripts]
+        pass_filenames: false
+
+  - repo: https://github.com/pypa/pip-audit
+    rev: v2.9.0
+    hooks:
+      - id: pip-audit
+        args: [-r, requirements.txt]

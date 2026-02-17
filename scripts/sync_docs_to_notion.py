@@ -27,6 +27,16 @@ HEX32_RE = re.compile(r"([0-9a-fA-F]{32})")
 LIST_ITEM_RE = re.compile(r"^(\s*)([-*+]|\d+\.)\s+(.*)$")
 INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 QUOTE_LINE_RE = re.compile(r"^\s*>\s?(.*)$")
+CODE_FENCE_RE = re.compile(r"^\s*```(?P<lang>[^\s`]+)?\s*$")
+NOTION_CODE_LANGUAGES = {"bash", "json", "markdown", "mermaid", "plain text", "python", "yaml"}
+MERMAID_MULTI_SOURCE_EDGE_RE = re.compile(
+    r"^(\s*)([A-Za-z_][A-Za-z0-9_]*(?:\s*&\s*[A-Za-z_][A-Za-z0-9_]*)+)\s*-->\s*(.+)$"
+)
+CODE_LANGUAGE_ALIASES = {
+    "plaintext": "plain text",
+    "text": "plain text",
+    "yml": "yaml",
+}
 
 
 @dataclass
@@ -479,15 +489,44 @@ def make_text_block(block_type: str, text: str) -> dict:
     }
 
 
-def make_code_block(text: str) -> dict:
+def normalize_code_language(language_hint: str | None) -> str:
+    if not language_hint:
+        return "plain text"
+    normalized = language_hint.strip().lower()
+    mapped = CODE_LANGUAGE_ALIASES.get(normalized, normalized)
+    if mapped in NOTION_CODE_LANGUAGES:
+        return mapped
+    return "plain text"
+
+
+def make_code_block(text: str, language: str = "plain text") -> dict:
     return {
         "object": "block",
         "type": "code",
         "code": {
             "rich_text": to_rich_text(text),
-            "language": "plain text",
+            "language": language,
         },
     }
+
+
+def normalize_code_content(text: str, language: str) -> str:
+    if language != "mermaid":
+        return text
+
+    normalized = text.replace("\\n", "<br/>")
+    lines: list[str] = []
+    for raw_line in normalized.splitlines():
+        match = MERMAID_MULTI_SOURCE_EDGE_RE.match(raw_line)
+        if not match:
+            lines.append(raw_line)
+            continue
+        indent, sources, target = match.groups()
+        target_normalized = target.lstrip()
+        spacer = "" if target_normalized.startswith("|") else " "
+        for source in (item.strip() for item in sources.split("&")):
+            lines.append(f"{indent}{source} -->{spacer}{target_normalized}")
+    return "\n".join(lines)
 
 
 def append_list_item(
@@ -530,6 +569,7 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
     blocks: list[dict] = []
     list_stack: list[tuple[int, dict]] = []
     in_code_block = False
+    code_language = "plain text"
     code_lines: list[str] = []
 
     for raw_line in text.splitlines():
@@ -537,39 +577,36 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
         expanded = line.expandtabs(4)
         stripped = expanded.strip()
         leading_spaces = len(expanded) - len(expanded.lstrip(" "))
-
-        if stripped.startswith("```"):
+        fence_match = CODE_FENCE_RE.match(expanded)
+        if fence_match:
             if in_code_block:
-                blocks.append(make_code_block("\n".join(code_lines)))
+                code_content = normalize_code_content("\n".join(code_lines), code_language)
+                blocks.append(make_code_block(code_content, code_language))
                 code_lines = []
                 in_code_block = False
+                code_language = "plain text"
             else:
                 in_code_block = True
+                code_language = normalize_code_language(fence_match.group("lang"))
             list_stack.clear()
             continue
-
         if in_code_block:
             code_lines.append(line)
             continue
-
         if not stripped:
             continue
-
         if stripped.startswith("### "):
             list_stack.clear()
             blocks.append(make_text_block("heading_3", stripped[4:].strip()))
             continue
-
         if stripped.startswith("## "):
             list_stack.clear()
             blocks.append(make_text_block("heading_2", stripped[3:].strip()))
             continue
-
         if stripped.startswith("# "):
             list_stack.clear()
             blocks.append(make_text_block("heading_1", stripped[2:].strip()))
             continue
-
         quote_match = QUOTE_LINE_RE.match(expanded)
         if quote_match:
             quote_block = make_text_block("quote", quote_match.group(1).strip())
@@ -579,7 +616,6 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
                 list_stack.clear()
                 blocks.append(quote_block)
             continue
-
         list_match = LIST_ITEM_RE.match(expanded)
         if list_match:
             indent = len(list_match.group(1))
@@ -597,19 +633,18 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
                 block=make_text_block(block_type, content),
             )
             continue
-
         if list_stack and leading_spaces > list_stack[-1][0]:
             append_child_to_current_list_item(
                 list_stack,
                 make_text_block("paragraph", stripped),
             )
             continue
-
         list_stack.clear()
         blocks.append(make_text_block("paragraph", stripped))
 
     if in_code_block:
-        blocks.append(make_code_block("\n".join(code_lines)))
+        code_content = normalize_code_content("\n".join(code_lines), code_language)
+        blocks.append(make_code_block(code_content, code_language))
 
     return blocks or [make_text_block("paragraph", "(empty document)")]
 

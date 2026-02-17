@@ -461,8 +461,23 @@ def test_markdown_to_blocks_empty_and_code_block() -> None:
     empty_blocks = sync.markdown_to_blocks("")
     assert empty_blocks[0]["type"] == "paragraph"
 
-    code_blocks = sync.markdown_to_blocks("```\\nprint('x')\\n```")
+    code_blocks = sync.markdown_to_blocks("```\nprint('x')\n```")
     assert code_blocks[0]["type"] == "code"
+    assert code_blocks[0]["code"]["language"] == "plain text"
+
+    mermaid_blocks = sync.markdown_to_blocks("```mermaid\ngraph TD\nA-->B\n```")
+    assert mermaid_blocks[0]["type"] == "code"
+    assert mermaid_blocks[0]["code"]["language"] == "mermaid"
+
+    mermaid_compatible = sync.markdown_to_blocks(
+        '```mermaid\ngraph TD\nA["Line\\nTwo"]\nA & B -->|request| C\n```'
+    )
+    rendered = "".join(
+        item["text"]["content"] for item in mermaid_compatible[0]["code"]["rich_text"]
+    )
+    assert "Line<br/>Two" in rendered
+    assert "A -->|request| C" in rendered
+    assert "B -->|request| C" in rendered
 
 
 def test_staged_changes_parses_z_output(monkeypatch: pytest.MonkeyPatch) -> None:

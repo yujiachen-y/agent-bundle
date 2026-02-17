@@ -20,3 +20,19 @@ Open [http://127.0.0.1:8787](http://127.0.0.1:8787) for the lightweight chat UI.
 ## Bundle Config (YAML)
 
 Default config is `bundle.yaml` at repo root. A secondary config for the examples folder is `examples/bundle.yaml`.
+
+## SKILL.md Format
+
+Local skills must follow the Agent Skills frontmatter format:
+
+```markdown
+---
+name: my-skill
+description: When this skill should be used.
+---
+
+# Instructions
+...
+```
+
+`name` and `description` are required. Skills without valid YAML frontmatter are rejected at load time.

@@ -28,11 +28,12 @@ Command:
 pytest
 ```
 Result:
-- `7 passed in 0.13s`.
+- `8 passed in 0.16s`.
 
 Covered areas:
 - Config parsing and path resolution.
 - Skill discovery + matching.
+- SKILL.md frontmatter compliance validation (`name`/`description` required).
 - Chat Completions endpoint behavior.
 - MCP initialize/list/call flow.
 - Build dry-run behavior and Dockerfile generation.
@@ -121,6 +122,11 @@ Re-validation after fix:
 - Re-ran `pytest` => all pass.
 - Re-ran `agent-bundle validate` + `build --dry-run` => outputs correct.
 - Re-ran `pre-commit run --all-files` => pass.
+
+Additional correction after review:
+- Updated local skill format to Agent Skills frontmatter style and enforced it in the loader.
+- `SKILL.md` without valid YAML frontmatter is now rejected with explicit error messages.
+- Re-ran `pytest` and `pre-commit` after the change.
 
 ## 6) Why This Design Is the Best Fit for Current Scope
 

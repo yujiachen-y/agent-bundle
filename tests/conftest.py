@@ -14,7 +14,12 @@ def runtime_fixture(tmp_path: Path) -> tuple[AgentRuntime, Path]:
     skills_dir = tmp_path / "skills" / "planner"
     skills_dir.mkdir(parents=True)
     (skills_dir / "SKILL.md").write_text(
-        "# Planner Skill\n\nHandle planning, tradeoff analysis, and delivery sequencing.\n",
+        "---\n"
+        "name: planner-skill\n"
+        "description: Handle planning, tradeoff analysis, and delivery sequencing.\n"
+        "---\n\n"
+        "# Planner Skill Instructions\n\n"
+        "Use this skill for milestone planning and rollout sequencing.\n",
         encoding="utf-8",
     )
 

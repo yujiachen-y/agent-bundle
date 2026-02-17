@@ -118,3 +118,6 @@ Exit criteria:
   - `build.dockerfile: ../Dockerfile.agent-bundle`
 - After the fix, tests and command validation were re-run successfully.
 - Docker availability was verified and real image build/container smoke test completed successfully (`demo-agent-bundle:test`).
+- Skill format compliance was aligned to Agent Skills frontmatter:
+  - local `SKILL.md` now requires YAML frontmatter with `name` and `description`.
+  - loader was updated to parse metadata from frontmatter and reject invalid files.

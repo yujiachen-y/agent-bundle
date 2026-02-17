@@ -22,4 +22,4 @@ def test_chat_completions_endpoint(runtime_fixture) -> None:
     assert payload["object"] == "chat.completion"
     assert payload["choices"][0]["message"]["role"] == "assistant"
     assert "dummy-provider" in payload["choices"][0]["message"]["content"]
-    assert "Planner Skill" in payload["agent_bundle"]["selected_skills"]
+    assert "planner-skill" in payload["agent_bundle"]["selected_skills"]

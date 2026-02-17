@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import httpx
+import yaml
 
 from .config import ResolvedBundleConfig
 
@@ -20,22 +22,44 @@ class Skill:
     source_path: str
     content: str
     keywords: frozenset[str]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def _extract_name(markdown: str, fallback: str) -> str:
-    for line in markdown.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("# "):
-            return stripped[2:].strip()
-    return fallback
+def _parse_frontmatter(markdown: str, source_path: Path) -> tuple[dict[str, Any], str]:
+    lines = markdown.splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise ValueError(
+            f"{source_path} is missing YAML frontmatter; expected leading '---' block"
+        )
+
+    closing_index = -1
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            closing_index = index
+            break
+
+    if closing_index == -1:
+        raise ValueError(f"{source_path} has unterminated YAML frontmatter")
+
+    raw_frontmatter = "\n".join(lines[1:closing_index]).strip()
+    parsed = yaml.safe_load(raw_frontmatter) if raw_frontmatter else {}
+    if parsed is None:
+        parsed = {}
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{source_path} frontmatter must be a YAML object")
+
+    body = "\n".join(lines[closing_index + 1 :]).lstrip("\n")
+    return parsed, body
 
 
-def _extract_description(markdown: str) -> str:
-    for line in markdown.splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#"):
-            return stripped
-    return ""
+def _validate_skill_metadata(frontmatter: dict[str, Any], source_path: Path) -> tuple[str, str]:
+    name = str(frontmatter.get("name", "")).strip()
+    description = str(frontmatter.get("description", "")).strip()
+    if not name:
+        raise ValueError(f"{source_path} frontmatter must include non-empty 'name'")
+    if not description:
+        raise ValueError(f"{source_path} frontmatter must include non-empty 'description'")
+    return name, description
 
 
 def _extract_keywords(*chunks: str) -> frozenset[str]:
@@ -84,16 +108,16 @@ class SkillManager:
 
     def _load_local(self, file_path: Path) -> Skill:
         content = file_path.read_text(encoding="utf-8")
-        fallback = file_path.parent.name
-        name = _extract_name(content, fallback)
-        description = _extract_description(content)
-        keywords = _extract_keywords(name, description, content[:1200])
+        frontmatter, body = _parse_frontmatter(content, file_path)
+        name, description = _validate_skill_metadata(frontmatter, file_path)
+        keywords = _extract_keywords(name, description, body[:1200])
         return Skill(
             name=name,
             description=description,
             source_path=str(file_path),
-            content=content,
+            content=body,
             keywords=keywords,
+            metadata=frontmatter,
         )
 
     def _load_registries(self) -> list[Skill]:
@@ -133,6 +157,7 @@ class SkillManager:
                     source_path=source_path,
                     content=content,
                     keywords=_extract_keywords(name, description, content[:1200]),
+                    metadata={},
                 )
             )
         return loaded

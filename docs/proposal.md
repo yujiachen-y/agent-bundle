@@ -86,7 +86,61 @@ The following items are intentionally excluded from the initial scope but may be
 
 ## Design Overview
 
-<!-- High-level architecture or design description. -->
+### Architecture
+
+```mermaid
+graph TD
+    subgraph External Interfaces
+        direction LR
+        HTTP["HTTP\n(Chat Completions)"]
+        MCP["MCP Server"]
+        TUI["TUI *"]
+        WebUI["WebUI *"]
+    end
+
+    subgraph Agent Runtime
+        subgraph Agent Loop
+            direction LR
+            PROMPT["System Prompt\n+ skill metadata"]
+            TOOLS["Built-in Tools\nBash · Read · Write · Edit"]
+        end
+        LLM["LLM Provider Layer\nAnthropic · OpenAI · Gemini · OpenRouter · Ollama · …"]
+    end
+
+    subgraph Sandbox Filesystem
+        subgraph Volume
+            SKILLS["/skills/ (read-only)\nSKILL.md + scripts/"]
+            WORKSPACE["/workspace/ (read-write)\nagent working directory"]
+        end
+        HOOKS["Lifecycle Hooks\npre-mount · post-unmount"]
+    end
+
+    HTTP & MCP & TUI & WebUI -->|request| PROMPT
+    PROMPT --> TOOLS
+    TOOLS -->|LLM calls| LLM
+    TOOLS -->|tool I/O| SKILLS
+    TOOLS -->|tool I/O| WORKSPACE
+    HOOKS <-->|mount · unmount| Volume
+```
+
+\* TUI and WebUI are available in local `serve` mode only.
+
+### Sandbox Lifecycle
+
+```
+pre-mount ──► mount ──────────────────── unmount ──► post-unmount
+(seed files)    │                                    (upload handler)
+                ▼
+         ┌────────────┐
+         │  /skills/   │  skill SKILL.md + scripts (read-only)
+         │  /workspace/│  agent working directory   (read-write)
+         └────────────┘
+```
+
+1. **pre-mount** — User-defined scripts seed files into the volume (e.g., download assets, install skill resources).
+2. **mount** — The volume is attached to the sandbox. The agent session begins.
+3. **unmount** — The agent session ends. The volume is detached.
+4. **post-unmount** — User-defined scripts collect artifacts from the volume and hand them off to upload handlers.
 
 ## Implementation Plan
 

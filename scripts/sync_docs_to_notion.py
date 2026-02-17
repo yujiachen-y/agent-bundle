@@ -26,6 +26,7 @@ UUID_RE = re.compile(
 HEX32_RE = re.compile(r"([0-9a-fA-F]{32})")
 LIST_ITEM_RE = re.compile(r"^(\s*)([-*+]|\d+\.)\s+(.*)$")
 INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+QUOTE_LINE_RE = re.compile(r"^\s*>\s?(.*)$")
 
 
 @dataclass
@@ -498,6 +499,17 @@ def append_list_item(
     stack.append((indent, block))
 
 
+def append_child_to_current_list_item(stack: list[tuple[int, dict]], block: dict) -> bool:
+    if not stack:
+        return False
+    parent = stack[-1][1]
+    parent_type = parent["type"]
+    parent_payload = parent[parent_type]
+    children = parent_payload.setdefault("children", [])
+    children.append(block)
+    return True
+
+
 def markdown_to_blocks(markdown: str) -> list[dict]:
     text = strip_frontmatter(markdown).strip("\n")
     if not text:
@@ -512,6 +524,7 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
         line = raw_line.rstrip("\r")
         expanded = line.expandtabs(4)
         stripped = expanded.strip()
+        leading_spaces = len(expanded) - len(expanded.lstrip(" "))
 
         if stripped.startswith("```"):
             if in_code_block:
@@ -545,9 +558,14 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
             blocks.append(make_text_block("heading_1", stripped[2:].strip()))
             continue
 
-        if stripped.startswith("> "):
-            list_stack.clear()
-            blocks.append(make_text_block("quote", stripped[2:].strip()))
+        quote_match = QUOTE_LINE_RE.match(expanded)
+        if quote_match:
+            quote_block = make_text_block("quote", quote_match.group(1).strip())
+            if list_stack and leading_spaces > list_stack[-1][0]:
+                append_child_to_current_list_item(list_stack, quote_block)
+            else:
+                list_stack.clear()
+                blocks.append(quote_block)
             continue
 
         list_match = LIST_ITEM_RE.match(expanded)
@@ -563,6 +581,13 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
                 stack=list_stack,
                 indent=indent,
                 block=make_text_block(block_type, content),
+            )
+            continue
+
+        if list_stack and leading_spaces > list_stack[-1][0]:
+            append_child_to_current_list_item(
+                list_stack,
+                make_text_block("paragraph", stripped),
             )
             continue
 

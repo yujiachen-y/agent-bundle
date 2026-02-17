@@ -24,6 +24,8 @@ UUID_RE = re.compile(
     r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
 )
 HEX32_RE = re.compile(r"([0-9a-fA-F]{32})")
+LIST_ITEM_RE = re.compile(r"^(\s*)([-*+]|\d+\.)\s+(.*)$")
+INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 
 
 @dataclass
@@ -414,9 +416,44 @@ def markdown_title(markdown: str, path: str) -> str:
 
 def to_rich_text(text: str) -> list[dict]:
     content = safe_text(text)
+    rich_text: list[dict] = []
     max_len = 1800
-    chunks = [content[i : i + max_len] for i in range(0, len(content), max_len)]
-    return [{"type": "text", "text": {"content": chunk}} for chunk in chunks]
+
+    cursor = 0
+    tokens: list[tuple[str, bool]] = []
+    for match in INLINE_CODE_RE.finditer(content):
+        if match.start() > cursor:
+            tokens.append((content[cursor : match.start()], False))
+        tokens.append((match.group(1), True))
+        cursor = match.end()
+
+    if cursor < len(content):
+        tokens.append((content[cursor:], False))
+
+    if not tokens:
+        tokens.append((content, False))
+
+    for raw_chunk, is_code in tokens:
+        if not raw_chunk:
+            continue
+
+        for i in range(0, len(raw_chunk), max_len):
+            chunk = raw_chunk[i : i + max_len]
+            if not chunk:
+                continue
+            item: dict = {"type": "text", "text": {"content": chunk}}
+            if is_code:
+                item["annotations"] = {
+                    "bold": False,
+                    "italic": False,
+                    "strikethrough": False,
+                    "underline": False,
+                    "code": True,
+                    "color": "default",
+                }
+            rich_text.append(item)
+
+    return rich_text or [{"type": "text", "text": {"content": " "}}]
 
 
 def make_text_block(block_type: str, text: str) -> dict:
@@ -440,18 +477,41 @@ def make_code_block(text: str) -> dict:
     }
 
 
+def append_list_item(
+    root_blocks: list[dict],
+    stack: list[tuple[int, dict]],
+    indent: int,
+    block: dict,
+) -> None:
+    while stack and indent <= stack[-1][0]:
+        stack.pop()
+
+    if stack and indent > stack[-1][0]:
+        parent = stack[-1][1]
+        parent_type = parent["type"]
+        parent_payload = parent[parent_type]
+        children = parent_payload.setdefault("children", [])
+        children.append(block)
+    else:
+        root_blocks.append(block)
+
+    stack.append((indent, block))
+
+
 def markdown_to_blocks(markdown: str) -> list[dict]:
     text = strip_frontmatter(markdown).strip("\n")
     if not text:
         return [make_text_block("paragraph", "(empty document)")]
 
     blocks: list[dict] = []
+    list_stack: list[tuple[int, dict]] = []
     in_code_block = False
     code_lines: list[str] = []
 
     for raw_line in text.splitlines():
         line = raw_line.rstrip("\r")
-        stripped = line.strip()
+        expanded = line.expandtabs(4)
+        stripped = expanded.strip()
 
         if stripped.startswith("```"):
             if in_code_block:
@@ -460,40 +520,53 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
                 in_code_block = False
             else:
                 in_code_block = True
+            list_stack.clear()
             continue
 
         if in_code_block:
-            code_lines.append(raw_line)
+            code_lines.append(line)
             continue
 
         if not stripped:
             continue
 
         if stripped.startswith("### "):
+            list_stack.clear()
             blocks.append(make_text_block("heading_3", stripped[4:].strip()))
             continue
 
         if stripped.startswith("## "):
+            list_stack.clear()
             blocks.append(make_text_block("heading_2", stripped[3:].strip()))
             continue
 
         if stripped.startswith("# "):
+            list_stack.clear()
             blocks.append(make_text_block("heading_1", stripped[2:].strip()))
             continue
 
         if stripped.startswith("> "):
+            list_stack.clear()
             blocks.append(make_text_block("quote", stripped[2:].strip()))
             continue
 
-        if stripped.startswith("- ") or stripped.startswith("* "):
-            blocks.append(make_text_block("bulleted_list_item", stripped[2:].strip()))
+        list_match = LIST_ITEM_RE.match(expanded)
+        if list_match:
+            indent = len(list_match.group(1))
+            marker = list_match.group(2)
+            content = list_match.group(3).strip()
+            block_type = (
+                "numbered_list_item" if marker.endswith(".") and marker[0].isdigit() else "bulleted_list_item"
+            )
+            append_list_item(
+                root_blocks=blocks,
+                stack=list_stack,
+                indent=indent,
+                block=make_text_block(block_type, content),
+            )
             continue
 
-        if re.match(r"^\d+\.\s+", stripped):
-            content = re.sub(r"^\d+\.\s+", "", stripped)
-            blocks.append(make_text_block("numbered_list_item", content))
-            continue
-
+        list_stack.clear()
         blocks.append(make_text_block("paragraph", stripped))
 
     if in_code_block:

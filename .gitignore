@@ -1,1 +1,8 @@
 .env.local
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+Dockerfile.agent-bundle

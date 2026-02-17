@@ -1,0 +1,32 @@
+bundle:
+  name: demo-bundle
+  version: 0.1.0
+  description: Local demo bundle
+
+skills:
+  paths:
+    - ./examples/skills
+  registries: []
+  max_loaded: 50
+
+model:
+  provider: dummy
+  model: dummy-v1
+  temperature: 0.2
+  max_tokens: 512
+
+permissions:
+  workspace_root: .
+  allow_shell: false
+  allow_network: true
+
+service:
+  host: 127.0.0.1
+  port: 8787
+  chat_ui: true
+  tui: false
+
+build:
+  image: demo-agent-bundle:latest
+  context: .
+  dockerfile: Dockerfile.agent-bundle

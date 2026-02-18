@@ -4,12 +4,14 @@ import io
 import json
 import os
 import subprocess
+import uuid
 from email.message import Message
 from pathlib import Path
 from typing import Any, Literal, cast
 from urllib import error
 
 import pytest
+import scripts.notion_client as notion_client
 import scripts.sync_docs_to_notion as sync
 
 
@@ -37,6 +39,57 @@ def test_set_frontmatter_value_add_and_update() -> None:
     replaced = sync.set_frontmatter_value(updated, "notion_page_id", "def")
     assert 'notion_page_id: "def"' in replaced
     assert 'notion_page_id: "abc"' not in replaced
+
+
+def test_remove_frontmatter_key() -> None:
+    original = '---\ntitle: Test\nnotion_page_id: "abc"\n---\n\nBody\n'
+    cleaned = sync.remove_frontmatter_key(original, "notion_page_id")
+    assert "notion_page_id" not in cleaned
+    assert "title: Test" in cleaned
+
+
+def test_normalize_doc_sync_id_formats() -> None:
+    assert (
+        sync.normalize_doc_sync_id("11111111222233334444555555555555")
+        == "11111111-2222-3333-4444-555555555555"
+    )
+    assert (
+        sync.normalize_doc_sync_id("11111111-2222-3333-4444-555555555555")
+        == "11111111-2222-3333-4444-555555555555"
+    )
+    assert sync.normalize_doc_sync_id("invalid") is None
+
+
+def test_ensure_doc_sync_id_backfills_and_scrubs_legacy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    markdown = '---\ntitle: T\nnotion_page_id: "abc"\n---\n\nBody\n'
+    writes: dict[str, str] = {}
+    monkeypatch.setattr(
+        sync,
+        "write_and_stage_file",
+        lambda path, content, _root: writes.update({path: content}),
+    )
+    monkeypatch.setattr(
+        sync.uuid, "uuid4", lambda: uuid.UUID("11111111-2222-3333-4444-555555555555")
+    )
+
+    doc_sync_id, updated = sync.ensure_doc_sync_id("docs/a.md", markdown, tmp_path)
+
+    assert doc_sync_id == "11111111-2222-3333-4444-555555555555"
+    assert "doc_sync_id" in updated
+    assert "notion_page_id" not in updated
+    assert "docs/a.md" in writes
+
+
+def test_resolve_page_id_conflict_raises() -> None:
+    with pytest.raises(RuntimeError, match="conflicting page mapping"):
+        sync.resolve_page_id(
+            indexed_page_id="30ab3f79-b3b4-810f-bfc6-d874eca9df02",
+            legacy_page_id="11111111-2222-3333-4444-555555555555",
+            path="docs/a.md",
+            doc_sync_id="11111111-2222-3333-4444-555555555555",
+        )
 
 
 def test_markdown_title_priority() -> None:
@@ -171,8 +224,29 @@ class FakeNotion:
         self.archived.append(page_id)
 
 
+class FakeIndex:
+    def __init__(
+        self,
+        by_sync_id: Any = None,
+        by_path: Any = None,
+    ) -> None:
+        self.by_sync_id = by_sync_id
+        self.by_path = by_path
+        self.upserts: list[dict[str, str]] = []
+
+    def find_by_doc_sync_id(self, _doc_sync_id: str) -> Any:
+        return self.by_sync_id
+
+    def find_by_doc_path(self, _path: str) -> Any:
+        return self.by_path
+
+    def upsert(self, **kwargs: str) -> Any:
+        self.upserts.append(kwargs)
+        return kwargs
+
+
 def test_handle_upsert_existing_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    staged = "---\ntitle: Title\nnotion_page_id: 30ab3f79b3b4810fbfc6d874eca9df02\n---\n\nBody"
+    staged = "---\ntitle: Title\ndoc_sync_id: 11111111-2222-3333-4444-555555555555\n---\n\nBody"
     monkeypatch.setattr(sync, "read_staged_file", lambda _path: staged)
 
     called: dict[str, str] = {}
@@ -193,11 +267,21 @@ def test_handle_upsert_existing_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
             self.updated.append((page_id, title))
 
     notion = UpdateNotion()
+    record = cast(
+        Any,
+        type(
+            "Record",
+            (),
+            {"notion_page_id": "30ab3f79-b3b4-810f-bfc6-d874eca9df02"},
+        )(),
+    )
+    index = FakeIndex(by_sync_id=record)
     op = sync.Operation(kind="upsert", path="docs/proposal.md")
-    sync.handle_upsert(cast(Any, notion), op, "parent-id", tmp_path)
+    sync.handle_upsert(cast(Any, notion), cast(Any, index), op, "parent-id", tmp_path)
 
     assert called["page_id"] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
     assert called["title"] == "Title"
+    assert index.upserts[0]["doc_sync_id"] == "11111111-2222-3333-4444-555555555555"
 
 
 def test_handle_upsert_creates_and_backfills(
@@ -206,11 +290,16 @@ def test_handle_upsert_creates_and_backfills(
     staged = "---\ntitle: Title\n---\n\nBody"
     monkeypatch.setattr(sync, "read_staged_file", lambda _path: staged)
 
-    backfilled_markdown = staged + "\nnotion_page_id: added"
+    backfilled_markdown = (
+        "---\ntitle: Title\ndoc_sync_id: 11111111-2222-3333-4444-555555555555\n---\n\nBody"
+    )
     monkeypatch.setattr(
         sync,
-        "canonicalize_or_backfill_id",
-        lambda _path, _staged, _id, _root: backfilled_markdown,
+        "ensure_doc_sync_id",
+        lambda _path, _staged, _root, preferred=None: (
+            preferred or "11111111-2222-3333-4444-555555555555",
+            backfilled_markdown,
+        ),
     )
 
     captured: dict[str, str] = {}
@@ -223,8 +312,9 @@ def test_handle_upsert_creates_and_backfills(
     )
 
     notion = FakeNotion()
+    index = FakeIndex()
     op = sync.Operation(kind="upsert", path="docs/proposal.md")
-    sync.handle_upsert(cast(Any, notion), op, "parent-id", tmp_path)
+    sync.handle_upsert(cast(Any, notion), cast(Any, index), op, "parent-id", tmp_path)
 
     assert notion.created == [("parent-id", "Title")]
     assert captured["page_id"] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
@@ -232,11 +322,27 @@ def test_handle_upsert_creates_and_backfills(
 
 
 def test_handle_delete_archives(monkeypatch: pytest.MonkeyPatch) -> None:
-    old = "---\nnotion_page_id: 30ab3f79b3b4810fbfc6d874eca9df02\n---\n"
+    old = "---\ndoc_sync_id: 11111111-2222-3333-4444-555555555555\n---\n"
     monkeypatch.setattr(sync, "read_head_file", lambda _path: old)
 
     notion = FakeNotion()
-    sync.handle_delete(cast(Any, notion), sync.Operation(kind="delete", path="docs/a.md"))
+    record = cast(
+        Any,
+        type(
+            "Record",
+            (),
+            {
+                "doc_sync_id": "11111111-2222-3333-4444-555555555555",
+                "notion_page_id": "30ab3f79-b3b4-810f-bfc6-d874eca9df02",
+            },
+        )(),
+    )
+    index = FakeIndex(by_sync_id=record)
+    sync.handle_delete(
+        cast(Any, notion),
+        cast(Any, index),
+        sync.Operation(kind="delete", path="docs/a.md"),
+    )
 
     assert notion.archived == ["30ab3f79-b3b4-810f-bfc6-d874eca9df02"]
 
@@ -244,14 +350,15 @@ def test_handle_delete_archives(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_handle_rename_conflicting_ids_fails(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    old = "---\nnotion_page_id: 30ab3f79b3b4810fbfc6d874eca9df02\n---\n"
-    new = "---\nnotion_page_id: 11111111-2222-3333-4444-555555555555\n---\n"
+    old = "---\ndoc_sync_id: 30ab3f79-b3b4-810f-bfc6-d874eca9df02\n---\n"
+    new = "---\ndoc_sync_id: 11111111-2222-3333-4444-555555555555\n---\n"
     monkeypatch.setattr(sync, "read_head_file", lambda _path: old)
     monkeypatch.setattr(sync, "read_staged_file", lambda _path: new)
 
-    with pytest.raises(RuntimeError, match="conflicting notion_page_id"):
+    with pytest.raises(RuntimeError, match="conflicting doc_sync_id"):
         sync.handle_rename(
             cast(Any, FakeNotion()),
+            cast(Any, FakeIndex()),
             sync.Operation(kind="rename", old_path="docs/old.md", new_path="docs/new.md"),
             "parent-id",
             tmp_path,
@@ -355,9 +462,9 @@ def test_request_json_success(monkeypatch: pytest.MonkeyPatch) -> None:
         def read(self) -> bytes:
             return json.dumps({"ok": True}).encode("utf-8")
 
-    monkeypatch.setattr(sync.request, "urlopen", lambda *_args, **_kwargs: DummyResponse())
+    monkeypatch.setattr(notion_client.request, "urlopen", lambda *_args, **_kwargs: DummyResponse())
 
-    client = sync.NotionClient(token="token", version="2022-06-28")
+    client = notion_client.NotionClient(token="token", version="2022-06-28")
     result = client.request_json("GET", "/users/me")
     assert result == {"ok": True}
 
@@ -373,10 +480,10 @@ def test_request_json_http_error_raises(monkeypatch: pytest.MonkeyPatch) -> None
             fp=io.BytesIO(b'{"message":"invalid"}'),
         )
 
-    monkeypatch.setattr(sync.request, "urlopen", raise_http_error)
-    client = sync.NotionClient(token="token", version="2022-06-28")
+    monkeypatch.setattr(notion_client.request, "urlopen", raise_http_error)
+    client = notion_client.NotionClient(token="token", version="2022-06-28")
 
-    with pytest.raises(sync.NotionAPIError, match="invalid"):
+    with pytest.raises(notion_client.NotionAPIError, match="invalid"):
         client.request_json("GET", "/users/me", retries=1)
 
 
@@ -407,9 +514,9 @@ def test_request_json_retries_on_429(monkeypatch: pytest.MonkeyPatch) -> None:
             )
         return DummyResponse()
 
-    monkeypatch.setattr(sync.request, "urlopen", flaky_urlopen)
-    monkeypatch.setattr(sync.time, "sleep", lambda _seconds: None)
-    client = sync.NotionClient(token="token", version="2022-06-28")
+    monkeypatch.setattr(notion_client.request, "urlopen", flaky_urlopen)
+    monkeypatch.setattr(notion_client.time, "sleep", lambda _seconds: None)
+    client = notion_client.NotionClient(token="token", version="2022-06-28")
 
     assert client.request_json("GET", "/users/me", retries=2) == {"ok": True}
     assert call_count["n"] == 2
@@ -417,14 +524,14 @@ def test_request_json_retries_on_429(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_request_json_url_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        sync.request,
+        notion_client.request,
         "urlopen",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(error.URLError("offline")),
     )
-    monkeypatch.setattr(sync.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(notion_client.time, "sleep", lambda _seconds: None)
 
-    client = sync.NotionClient(token="token", version="2022-06-28")
-    with pytest.raises(sync.NotionAPIError, match="network error"):
+    client = notion_client.NotionClient(token="token", version="2022-06-28")
+    with pytest.raises(notion_client.NotionAPIError, match="network error"):
         client.request_json("GET", "/users/me", retries=1)
 
 
@@ -564,15 +671,18 @@ def test_run_git_raises_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_handle_rename_reuses_old_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    old_markdown = "---\nnotion_page_id: 30ab3f79b3b4810fbfc6d874eca9df02\n---\n"
+    old_markdown = "---\ndoc_sync_id: 11111111-2222-3333-4444-555555555555\n---\n"
     new_markdown = "---\ntitle: New Title\n---\n\nBody"
     monkeypatch.setattr(sync, "read_head_file", lambda _path: old_markdown)
     monkeypatch.setattr(sync, "read_staged_file", lambda _path: new_markdown)
 
     monkeypatch.setattr(
         sync,
-        "canonicalize_or_backfill_id",
-        lambda _path, _staged, page_id, _root: f"with-id:{page_id}",
+        "ensure_doc_sync_id",
+        lambda _path, _staged, _root, preferred=None: (
+            preferred or "11111111-2222-3333-4444-555555555555",
+            "---\ntitle: New Title\ndoc_sync_id: 11111111-2222-3333-4444-555555555555\n---\n\nBody",
+        ),
     )
 
     called: dict[str, str] = {}
@@ -584,8 +694,17 @@ def test_handle_rename_reuses_old_id(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         ),
     )
 
+    record = cast(
+        Any,
+        type(
+            "Record",
+            (),
+            {"notion_page_id": "30ab3f79-b3b4-810f-bfc6-d874eca9df02"},
+        )(),
+    )
     sync.handle_rename(
         cast(Any, FakeNotion()),
+        cast(Any, FakeIndex(by_sync_id=record)),
         sync.Operation(kind="rename", old_path="docs/old.md", new_path="docs/new.md"),
         "parent-id",
         tmp_path,

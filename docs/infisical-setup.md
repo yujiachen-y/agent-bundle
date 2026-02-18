@@ -1,7 +1,6 @@
 ---
-notion_page_id: "30ab3f79-b3b4-81b9-ad81-debda931fa0e"
+doc_sync_id: "10db22c2-c922-4b83-940e-a6bfdc40b611"
 ---
-
 # Infisical Setup
 
 This repository uses environment variables for Notion integration:

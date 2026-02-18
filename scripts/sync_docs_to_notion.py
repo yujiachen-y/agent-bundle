@@ -3,32 +3,53 @@
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess  # nosec B404 - subprocess is required for scoped git CLI usage.
 import sys
-import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, Literal, Optional, overload
-from urllib import error, parse, request
+from typing import TYPE_CHECKING, Callable, Literal, Optional, overload
 
 if TYPE_CHECKING:
     from scripts import markdown_rich_text as _markdown_rich_text
+    from scripts.notion_client import NotionAPIError as _NotionAPIError
+    from scripts.notion_client import NotionClient as _NotionClient
+    from scripts.notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
+    from scripts.notion_doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
+    from scripts.notion_doc_index import NotionDocIndex as _NotionDocIndex
 else:
     try:
         from scripts import markdown_rich_text as _markdown_rich_text
+        from scripts.notion_client import NotionAPIError as _NotionAPIError
+        from scripts.notion_client import NotionClient as _NotionClient
+        from scripts.notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
+        from scripts.notion_doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
+        from scripts.notion_doc_index import NotionDocIndex as _NotionDocIndex
     except ImportError:
         import markdown_rich_text as _markdown_rich_text
+        from notion_client import NotionAPIError as _NotionAPIError
+        from notion_client import NotionClient as _NotionClient
+        from notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
+        from notion_doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
+        from notion_doc_index import NotionDocIndex as _NotionDocIndex
 
 to_rich_text = _markdown_rich_text.to_rich_text
+NotionClient = _NotionClient
+NotionAPIError = _NotionAPIError
+NotionDocIndex = _NotionDocIndex
+STATUS_ACTIVE = _STATUS_ACTIVE
+STATUS_ARCHIVED = _STATUS_ARCHIVED
 
 DEFAULT_NOTION_VERSION = "2022-06-28"
 ENV_FILE = ".env.local"
 DOCS_PREFIX = "docs/"
 LOG_PREFIX = "[docs-notion-sync]"
+DOC_SYNC_ID_KEY = "doc_sync_id"
+LEGACY_NOTION_PAGE_ID_KEY = "notion_page_id"
 SYNC_SCRIPT_TRIGGER_PATHS = {
+    "scripts/notion_doc_index.py",
     "scripts/markdown_rich_text.py",
     "scripts/sync_docs_to_notion.py",
 }
@@ -66,142 +87,6 @@ class Operation:
     path: Optional[str] = None
     old_path: Optional[str] = None
     new_path: Optional[str] = None
-
-
-class NotionAPIError(RuntimeError):
-    """Raised when a Notion API call fails."""
-
-
-class NotionClient:
-    def __init__(self, token: str, version: str) -> None:
-        self.token = token
-        self.version = version
-
-    def request_json(
-        self,
-        method: str,
-        path: str,
-        payload: Optional[dict] = None,
-        query: Optional[dict] = None,
-        retries: int = 3,
-    ) -> dict:
-        url = f"https://api.notion.com/v1{path}"
-        if query:
-            url = f"{url}?{parse.urlencode(query)}"
-
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Notion-Version": self.version,
-            "Content-Type": "application/json",
-        }
-
-        body = None
-        if payload is not None:
-            body = json.dumps(payload).encode("utf-8")
-
-        for attempt in range(retries):
-            req = request.Request(url, data=body, method=method, headers=headers)
-            try:
-                with request.urlopen(req, timeout=30) as resp:  # nosec B310
-                    raw = resp.read().decode("utf-8")
-                    return json.loads(raw) if raw else {}
-            except error.HTTPError as exc:
-                raw_err = exc.read().decode("utf-8", "replace")
-                if exc.code in {429, 500, 502, 503, 504} and attempt < retries - 1:
-                    sleep_seconds = 1.0
-                    if exc.code == 429:
-                        retry_after = exc.headers.get("Retry-After")
-                        if retry_after:
-                            try:
-                                sleep_seconds = max(0.5, float(retry_after))
-                            except ValueError:
-                                sleep_seconds = 1.0
-                    time.sleep(sleep_seconds)
-                    continue
-
-                message = raw_err
-                try:
-                    parsed = json.loads(raw_err)
-                    message = parsed.get("message", raw_err)
-                except json.JSONDecodeError:
-                    pass
-                raise NotionAPIError(f"{method} {path} failed ({exc.code}): {message}") from exc
-            except error.URLError as exc:
-                if attempt < retries - 1:
-                    time.sleep(1.0)
-                    continue
-                reason = getattr(exc, "reason", "unknown")
-                raise NotionAPIError(f"{method} {path} network error: {reason}") from exc
-
-        raise NotionAPIError(f"{method} {path} failed after retries")
-
-    def create_page(self, parent_page_id: str, title: str) -> str:
-        payload = {
-            "parent": {"type": "page_id", "page_id": parent_page_id},
-            "properties": {
-                "title": {
-                    "title": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": safe_text(title, fallback="Untitled")[:2000],
-                            },
-                        }
-                    ]
-                }
-            },
-        }
-        data = self.request_json("POST", "/pages", payload)
-        page_id = data.get("id")
-        if not isinstance(page_id, str) or not page_id:
-            raise NotionAPIError("POST /pages succeeded but no page id returned")
-        return page_id
-
-    def update_page_title(self, page_id: str, title: str) -> None:
-        payload = {
-            "properties": {
-                "title": {
-                    "title": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": safe_text(title, fallback="Untitled")[:2000],
-                            },
-                        }
-                    ]
-                }
-            }
-        }
-        self.request_json("PATCH", f"/pages/{page_id}", payload)
-
-    def archive_page(self, page_id: str) -> None:
-        self.request_json("PATCH", f"/pages/{page_id}", {"archived": True})
-
-    def list_child_ids(self, block_id: str) -> list[str]:
-        ids: list[str] = []
-        cursor: str | None = None
-        while True:
-            query: dict[str, object] = {"page_size": 100}
-            if cursor:
-                query["start_cursor"] = cursor
-            data = self.request_json("GET", f"/blocks/{block_id}/children", query=query)
-            ids.extend(item["id"] for item in data.get("results", []))
-            if not data.get("has_more"):
-                break
-            cursor = data.get("next_cursor")
-        return ids
-
-    def replace_page_content(self, page_id: str, blocks: list[dict]) -> None:
-        child_ids = self.list_child_ids(page_id)
-        for child_id in child_ids:
-            self.request_json("PATCH", f"/blocks/{child_id}", {"archived": True})
-
-        for batch in batched(blocks, 100):
-            self.request_json(
-                "PATCH",
-                f"/blocks/{page_id}/children",
-                {"children": batch},
-            )
 
 
 def info(msg: str) -> None:
@@ -442,6 +327,35 @@ def set_frontmatter_value(text: str, key: str, value: str) -> str:
     return "---\n" + "\n".join(new_lines) + "\n---\n" + body
 
 
+def remove_frontmatter_key(text: str, key: str) -> str:
+    frontmatter, body = split_frontmatter(text)
+    if frontmatter is None:
+        return text
+
+    key_pattern = re.compile(rf"^\s*{re.escape(key)}\s*:")
+    lines = frontmatter.splitlines()
+    filtered = [line for line in lines if not key_pattern.match(line)]
+    if len(filtered) == len(lines):
+        return text
+    if not filtered:
+        return body.lstrip("\n")
+    return "---\n" + "\n".join(filtered) + "\n---\n" + body
+
+
+def normalize_doc_sync_id(value: str) -> Optional[str]:
+    candidate = value.strip()
+    try:
+        return str(uuid.UUID(candidate))
+    except ValueError:
+        hex_match = HEX32_RE.search(candidate)
+        if not hex_match:
+            return None
+        try:
+            return str(uuid.UUID(hex_match.group(1)))
+        except ValueError:
+            return None
+
+
 def normalize_notion_id(value: str) -> Optional[str]:
     candidate = value.strip()
 
@@ -455,6 +369,44 @@ def normalize_notion_id(value: str) -> Optional[str]:
         raw = hex_match.group(1).lower()
 
     return f"{raw[:8]}-{raw[8:12]}-{raw[12:16]}-{raw[16:20]}-{raw[20:32]}"
+
+
+def extract_normalized_frontmatter_id(
+    markdown: Optional[str],
+    path: str,
+    key: str,
+    normalizer: Callable[[str], Optional[str]],
+) -> Optional[str]:
+    if markdown is None:
+        return None
+    raw = extract_frontmatter_value(markdown, key)
+    if not raw:
+        return None
+    normalized = normalizer(raw)
+    if not normalized:
+        raise RuntimeError(f"Invalid {key} in {path}: {raw}")
+    return normalized
+
+
+def ensure_doc_sync_id(
+    path: str, markdown: str, root: Path, preferred: Optional[str] = None
+) -> tuple[str, str]:
+    existing = extract_normalized_frontmatter_id(
+        markdown, path, DOC_SYNC_ID_KEY, normalize_doc_sync_id
+    )
+    if existing and preferred and existing != preferred:
+        raise RuntimeError(
+            f"{path} has conflicting {DOC_SYNC_ID_KEY} ({existing} vs {preferred}) during rename."
+        )
+    doc_sync_id = preferred or existing or str(uuid.uuid4())
+    updated = markdown
+    if existing != doc_sync_id:
+        updated = set_frontmatter_value(updated, DOC_SYNC_ID_KEY, doc_sync_id)
+    updated = remove_frontmatter_key(updated, LEGACY_NOTION_PAGE_ID_KEY)
+    if updated != markdown:
+        write_and_stage_file(path, updated, root)
+        info(f"Updated doc metadata for {path}: {DOC_SYNC_ID_KEY}={doc_sync_id}")
+    return doc_sync_id, updated
 
 
 def safe_text(text: str, fallback: str = " ") -> str:
@@ -649,11 +601,6 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
     return blocks or [make_text_block("paragraph", "(empty document)")]
 
 
-def batched(items: list[dict], size: int) -> Iterable[list[dict]]:
-    for i in range(0, len(items), size):
-        yield items[i : i + size]
-
-
 def read_staged_file(path: str) -> str:
     proc = run_git(["show", f":{path}"], check=True)
     return proc.stdout
@@ -673,25 +620,32 @@ def write_and_stage_file(path: str, content: str, root: Path) -> None:
     run_git(["add", "--", path], check=True)
 
 
-def validate_existing_notion_id(raw_id: str, path: str) -> str:
-    normalized = normalize_notion_id(raw_id)
-    if not normalized:
-        raise RuntimeError(
-            f"Invalid notion_page_id in {path}: {raw_id}. Expected 32-hex or UUID format."
-        )
-    return normalized
+def extract_doc_sync_id(markdown: Optional[str], path: str) -> Optional[str]:
+    return extract_normalized_frontmatter_id(markdown, path, DOC_SYNC_ID_KEY, normalize_doc_sync_id)
 
 
-def canonicalize_or_backfill_id(
+def extract_legacy_notion_page_id(markdown: Optional[str], path: str) -> Optional[str]:
+    return extract_normalized_frontmatter_id(
+        markdown,
+        path,
+        LEGACY_NOTION_PAGE_ID_KEY,
+        normalize_notion_id,
+    )
+
+
+def resolve_page_id(
+    *,
+    indexed_page_id: Optional[str],
+    legacy_page_id: Optional[str],
     path: str,
-    staged_markdown: str,
-    page_id: str,
-    root: Path,
-) -> str:
-    updated = set_frontmatter_value(staged_markdown, "notion_page_id", page_id)
-    write_and_stage_file(path, updated, root)
-    info(f"Backfilled notion_page_id for {path}: {page_id}")
-    return updated
+    doc_sync_id: str,
+) -> Optional[str]:
+    if indexed_page_id and legacy_page_id and indexed_page_id != legacy_page_id:
+        raise RuntimeError(
+            f"{path} has conflicting page mapping for {DOC_SYNC_ID_KEY}={doc_sync_id}: "
+            f"index={indexed_page_id} legacy={legacy_page_id}"
+        )
+    return indexed_page_id or legacy_page_id
 
 
 def sync_page_content(
@@ -707,6 +661,7 @@ def sync_page_content(
 
 def handle_upsert(
     notion: NotionClient,
+    index: NotionDocIndex,
     op: Operation,
     parent_page_id: str,
     root: Path,
@@ -715,23 +670,34 @@ def handle_upsert(
     if not path:
         raise RuntimeError("Invalid upsert operation: missing path")
     staged = read_staged_file(path)
-    raw_id = extract_frontmatter_value(staged, "notion_page_id")
+    legacy_page_id = extract_legacy_notion_page_id(staged, path)
+    doc_sync_id, staged = ensure_doc_sync_id(path, staged, root)
     title = markdown_title(staged, path)
+    record = index.find_by_doc_sync_id(doc_sync_id)
+    page_id = resolve_page_id(
+        indexed_page_id=record.notion_page_id if record else None,
+        legacy_page_id=legacy_page_id,
+        path=path,
+        doc_sync_id=doc_sync_id,
+    )
 
-    if raw_id:
-        page_id = validate_existing_notion_id(raw_id, path)
-        if raw_id != page_id:
-            staged = canonicalize_or_backfill_id(path, staged, page_id, root)
+    if page_id:
         info(f"Updating Notion page for {path}: {page_id}")
     else:
         page_id = notion.create_page(parent_page_id, title)
-        staged = canonicalize_or_backfill_id(path, staged, page_id, root)
         info(f"Created Notion page for {path}: {page_id}")
 
     sync_page_content(notion, page_id, title, staged)
+    index.upsert(
+        doc_sync_id=doc_sync_id,
+        doc_path=path,
+        notion_page_id=page_id,
+        status=STATUS_ACTIVE,
+        title=title,
+    )
 
 
-def handle_delete(notion: NotionClient, op: Operation) -> None:
+def handle_delete(notion: NotionClient, index: NotionDocIndex, op: Operation) -> None:
     path = op.path
     if not path:
         raise RuntimeError("Invalid delete operation: missing path")
@@ -740,18 +706,35 @@ def handle_delete(notion: NotionClient, op: Operation) -> None:
         warn(f"Cannot read {path} from HEAD; skip archive")
         return
 
-    raw_id = extract_frontmatter_value(old_markdown, "notion_page_id")
-    if not raw_id:
-        warn(f"Deleted {path} has no notion_page_id; skip archive")
+    doc_sync_id = extract_doc_sync_id(old_markdown, path)
+    legacy_page_id = extract_legacy_notion_page_id(old_markdown, path)
+    record = index.find_by_doc_sync_id(doc_sync_id) if doc_sync_id else index.find_by_doc_path(path)
+    page_id = resolve_page_id(
+        indexed_page_id=record.notion_page_id if record else None,
+        legacy_page_id=legacy_page_id,
+        path=path,
+        doc_sync_id=doc_sync_id or (record.doc_sync_id if record else "unknown"),
+    )
+    if not page_id:
+        warn(f"Deleted {path} has no mapped Notion page; skip archive")
         return
 
-    page_id = validate_existing_notion_id(raw_id, path)
     notion.archive_page(page_id)
     info(f"Archived Notion page for deleted doc {path}: {page_id}")
+    known_sync_id = doc_sync_id or (record.doc_sync_id if record else None)
+    if known_sync_id:
+        index.upsert(
+            doc_sync_id=known_sync_id,
+            doc_path=path,
+            notion_page_id=page_id,
+            status=STATUS_ARCHIVED,
+            title=Path(path).stem,
+        )
 
 
 def handle_rename(
     notion: NotionClient,
+    index: NotionDocIndex,
     op: Operation,
     parent_page_id: str,
     root: Path,
@@ -762,36 +745,51 @@ def handle_rename(
         raise RuntimeError("Invalid rename operation: missing old/new path")
 
     old_markdown = read_head_file(old_path)
-    old_raw_id = extract_frontmatter_value(old_markdown, "notion_page_id") if old_markdown else None
-
     new_markdown = read_staged_file(new_path)
-    new_raw_id = extract_frontmatter_value(new_markdown, "notion_page_id")
-
-    old_id = validate_existing_notion_id(old_raw_id, old_path) if old_raw_id else None
-    new_id = validate_existing_notion_id(new_raw_id, new_path) if new_raw_id else None
-
-    if old_id and new_id and old_id != new_id:
+    old_doc_sync_id = extract_doc_sync_id(old_markdown, old_path)
+    new_doc_sync_id = extract_doc_sync_id(new_markdown, new_path)
+    if old_doc_sync_id and new_doc_sync_id and old_doc_sync_id != new_doc_sync_id:
         raise RuntimeError(
-            f"Rename {old_path} -> {new_path} has conflicting notion_page_id "
-            f"({old_id} vs {new_id})."
+            f"Rename {old_path} -> {new_path} has conflicting {DOC_SYNC_ID_KEY} "
+            f"({old_doc_sync_id} vs {new_doc_sync_id})."
+        )
+    old_legacy_id = extract_legacy_notion_page_id(old_markdown, old_path)
+    new_legacy_id = extract_legacy_notion_page_id(new_markdown, new_path)
+    if old_legacy_id and new_legacy_id and old_legacy_id != new_legacy_id:
+        raise RuntimeError(
+            f"Rename {old_path} -> {new_path} has conflicting {LEGACY_NOTION_PAGE_ID_KEY} "
+            f"({old_legacy_id} vs {new_legacy_id})."
         )
 
+    preferred_sync_id = new_doc_sync_id or old_doc_sync_id
+    doc_sync_id, new_markdown = ensure_doc_sync_id(
+        new_path,
+        new_markdown,
+        root,
+        preferred=preferred_sync_id,
+    )
     title = markdown_title(new_markdown, new_path)
-
-    if old_id:
-        page_id = old_id
-        if not new_id:
-            new_markdown = canonicalize_or_backfill_id(new_path, new_markdown, page_id, root)
+    record = index.find_by_doc_sync_id(doc_sync_id)
+    page_id = resolve_page_id(
+        indexed_page_id=record.notion_page_id if record else None,
+        legacy_page_id=new_legacy_id or old_legacy_id,
+        path=new_path,
+        doc_sync_id=doc_sync_id,
+    )
+    if page_id:
         info(f"Renamed doc uses existing Notion page {page_id}: {old_path} -> {new_path}")
-    elif new_id:
-        page_id = new_id
-        info(f"Rename fallback to existing new-file notion_page_id for {new_path}: {page_id}")
     else:
         page_id = notion.create_page(parent_page_id, title)
-        new_markdown = canonicalize_or_backfill_id(new_path, new_markdown, page_id, root)
         info(f"Rename created new Notion page for {new_path}: {page_id}")
 
     sync_page_content(notion, page_id, title, new_markdown)
+    index.upsert(
+        doc_sync_id=doc_sync_id,
+        doc_path=new_path,
+        notion_page_id=page_id,
+        status=STATUS_ACTIVE,
+        title=title,
+    )
 
 
 def main() -> int:
@@ -825,14 +823,15 @@ def main() -> int:
             return 1
 
         notion = NotionClient(notion_token, notion_version)
+        index = NotionDocIndex(notion, parent_page_id)
 
         for op in operations:
             if op.kind == "upsert":
-                handle_upsert(notion, op, parent_page_id, root)
+                handle_upsert(notion, index, op, parent_page_id, root)
             elif op.kind == "delete":
-                handle_delete(notion, op)
+                handle_delete(notion, index, op)
             elif op.kind == "rename":
-                handle_rename(notion, op, parent_page_id, root)
+                handle_rename(notion, index, op, parent_page_id, root)
 
         info("Docs sync to Notion completed")
         return 0

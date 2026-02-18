@@ -4,7 +4,7 @@ author: ""
 createdAt: 2026-02-17
 updatedAt: 2026-02-17
 status: draft
-notion_page_id: "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
+doc_sync_id: "c9ec52be-fc83-49d5-aec5-c720b5cf0674"
 ---
 # Agent Bundle Proposal
 

@@ -28,6 +28,10 @@ DEFAULT_NOTION_VERSION = "2022-06-28"
 ENV_FILE = ".env.local"
 DOCS_PREFIX = "docs/"
 LOG_PREFIX = "[docs-notion-sync]"
+SYNC_SCRIPT_TRIGGER_PATHS = {
+    "scripts/markdown_rich_text.py",
+    "scripts/sync_docs_to_notion.py",
+}
 
 FRONTMATTER_PATTERN = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 UUID_RE = re.compile(
@@ -291,12 +295,33 @@ def is_docs_path(path: str) -> bool:
     return path.startswith(DOCS_PREFIX)
 
 
+def is_sync_script_path(path: str) -> bool:
+    return path in SYNC_SCRIPT_TRIGGER_PATHS
+
+
+def list_docs_paths_for_sync() -> list[str]:
+    proc = run_git(["ls-files", "-z", "--", DOCS_PREFIX], text=False)
+    chunks = proc.stdout.split(b"\x00")
+    paths = [chunk.decode("utf-8", "replace") for chunk in chunks if chunk]
+    return sorted(path for path in paths if is_docs_path(path))
+
+
 def build_operations(changes: list[Change]) -> list[Operation]:
     operations: list[Operation] = []
     seen: set[tuple[str, str, str]] = set()
+    sync_scripts_changed = False
 
     for change in changes:
         code = change.status[0]
+        if code in {"A", "M", "D", "T"} and change.path and is_sync_script_path(change.path):
+            sync_scripts_changed = True
+        elif (
+            code in {"R", "C"}
+            and change.old_path
+            and change.new_path
+            and (is_sync_script_path(change.old_path) or is_sync_script_path(change.new_path))
+        ):
+            sync_scripts_changed = True
 
         if code in {"A", "M", "T"} and change.path and is_docs_path(change.path):
             op = Operation(kind="upsert", path=change.path)
@@ -321,6 +346,14 @@ def build_operations(changes: list[Change]) -> list[Operation]:
             continue
         seen.add(key)
         operations.append(op)
+
+    if sync_scripts_changed:
+        for path in list_docs_paths_for_sync():
+            key = ("upsert", path, "")
+            if key in seen:
+                continue
+            seen.add(key)
+            operations.append(Operation(kind="upsert", path=path))
 
     return operations
 

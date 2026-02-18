@@ -113,6 +113,31 @@ def test_build_operations_maps_changes() -> None:
     assert ("upsert", "docs/imported.md", None, None) in kinds
 
 
+def test_build_operations_triggers_full_sync_on_sync_script_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sync, "list_docs_paths_for_sync", lambda: ["docs/a.md", "docs/b.md"])
+    changes = [sync.Change(status="M", path="scripts/sync_docs_to_notion.py")]
+    ops = sync.build_operations(changes)
+    kinds = [(op.kind, op.path, op.old_path, op.new_path) for op in ops]
+    assert ("upsert", "docs/a.md", None, None) in kinds
+    assert ("upsert", "docs/b.md", None, None) in kinds
+
+
+def test_build_operations_script_change_keeps_doc_delete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sync, "list_docs_paths_for_sync", lambda: ["docs/keep.md"])
+    changes = [
+        sync.Change(status="M", path="scripts/markdown_rich_text.py"),
+        sync.Change(status="D", path="docs/deleted.md"),
+    ]
+    ops = sync.build_operations(changes)
+    kinds = {(op.kind, op.path, op.old_path, op.new_path) for op in ops}
+    assert ("delete", "docs/deleted.md", None, None) in kinds
+    assert ("upsert", "docs/keep.md", None, None) in kinds
+
+
 def test_load_env_file_parses_lines(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     env_file = tmp_path / ".env.local"
     env_file.write_text(

@@ -56,6 +56,17 @@ def test_to_rich_text_supports_inline_code() -> None:
     assert any(item.get("annotations", {}).get("code") for item in items)
 
 
+def test_to_rich_text_supports_escape_and_bold() -> None:
+    items = sync.to_rich_text(r"\* TUI and **WebUI** are available")
+    rendered = "".join(item["text"]["content"] for item in items)
+    assert rendered == "* TUI and WebUI are available"
+
+    bold_text = "".join(
+        item["text"]["content"] for item in items if item.get("annotations", {}).get("bold")
+    )
+    assert bold_text == "WebUI"
+
+
 def test_markdown_to_blocks_nested_lists_and_quote() -> None:
     md = """
 # Title
@@ -478,6 +489,23 @@ def test_markdown_to_blocks_empty_and_code_block() -> None:
     assert "Line<br/>Two" in rendered
     assert "A -->|request| C" in rendered
     assert "B -->|request| C" in rendered
+
+    literal_code = sync.markdown_to_blocks("```\n**not bold** \\* literal\n```")
+    literal_rendered = "".join(
+        item["text"]["content"] for item in literal_code[0]["code"]["rich_text"]
+    )
+    assert literal_rendered == "**not bold** \\* literal"
+    assert not any(
+        item.get("annotations", {}).get("bold") for item in literal_code[0]["code"]["rich_text"]
+    )
+
+
+def test_markdown_to_blocks_list_item_parses_inline_bold() -> None:
+    blocks = sync.markdown_to_blocks("1. **pre-mount** — seed files")
+    rich_text = blocks[0]["numbered_list_item"]["rich_text"]
+    rendered = "".join(item["text"]["content"] for item in rich_text)
+    assert rendered == "pre-mount — seed files"
+    assert any(item.get("annotations", {}).get("bold") for item in rich_text)
 
 
 def test_staged_changes_parses_z_output(monkeypatch: pytest.MonkeyPatch) -> None:

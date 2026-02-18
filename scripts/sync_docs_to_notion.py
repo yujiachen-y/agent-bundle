@@ -11,8 +11,18 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Literal, Optional, overload
+from typing import TYPE_CHECKING, Iterable, Literal, Optional, overload
 from urllib import error, parse, request
+
+if TYPE_CHECKING:
+    from scripts import markdown_rich_text as _markdown_rich_text
+else:
+    try:
+        from scripts import markdown_rich_text as _markdown_rich_text
+    except ImportError:
+        import markdown_rich_text as _markdown_rich_text
+
+to_rich_text = _markdown_rich_text.to_rich_text
 
 DEFAULT_NOTION_VERSION = "2022-06-28"
 ENV_FILE = ".env.local"
@@ -25,7 +35,6 @@ UUID_RE = re.compile(
 )
 HEX32_RE = re.compile(r"([0-9a-fA-F]{32})")
 LIST_ITEM_RE = re.compile(r"^(\s*)([-*+]|\d+\.)\s+(.*)$")
-INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 QUOTE_LINE_RE = re.compile(r"^\s*>\s?(.*)$")
 CODE_FENCE_RE = re.compile(r"^\s*```(?P<lang>[^\s`]+)?\s*$")
 NOTION_CODE_LANGUAGES = {"bash", "json", "markdown", "mermaid", "plain text", "python", "yaml"}
@@ -437,48 +446,6 @@ def markdown_title(markdown: str, path: str) -> str:
     return fallback or "Untitled"
 
 
-def to_rich_text(text: str) -> list[dict]:
-    content = safe_text(text)
-    rich_text: list[dict] = []
-    max_len = 1800
-
-    cursor = 0
-    tokens: list[tuple[str, bool]] = []
-    for match in INLINE_CODE_RE.finditer(content):
-        if match.start() > cursor:
-            tokens.append((content[cursor : match.start()], False))
-        tokens.append((match.group(1), True))
-        cursor = match.end()
-
-    if cursor < len(content):
-        tokens.append((content[cursor:], False))
-
-    if not tokens:
-        tokens.append((content, False))
-
-    for raw_chunk, is_code in tokens:
-        if not raw_chunk:
-            continue
-
-        for i in range(0, len(raw_chunk), max_len):
-            chunk = raw_chunk[i : i + max_len]
-            if not chunk:
-                continue
-            item: dict = {"type": "text", "text": {"content": chunk}}
-            if is_code:
-                item["annotations"] = {
-                    "bold": False,
-                    "italic": False,
-                    "strikethrough": False,
-                    "underline": False,
-                    "code": True,
-                    "color": "default",
-                }
-            rich_text.append(item)
-
-    return rich_text or [{"type": "text", "text": {"content": " "}}]
-
-
 def make_text_block(block_type: str, text: str) -> dict:
     return {
         "object": "block",
@@ -504,7 +471,7 @@ def make_code_block(text: str, language: str = "plain text") -> dict:
         "object": "block",
         "type": "code",
         "code": {
-            "rich_text": to_rich_text(text),
+            "rich_text": to_rich_text(text, parse_markdown=False),
             "language": language,
         },
     }

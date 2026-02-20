@@ -640,6 +640,27 @@ def test_markdown_to_blocks_list_item_parses_inline_bold() -> None:
     assert any(item.get("annotations", {}).get("bold") for item in rich_text)
 
 
+def test_markdown_to_blocks_parses_table_and_heading_4() -> None:
+    markdown = """
+#### Providers
+| Provider | start() | exec() / file.* | shutdown() |
+| --- | --- | --- | --- |
+| E2B | sandbox.create(template) | commands.run(), files.read/write() | sandbox.kill() |
+| Kubernetes | Create pod from image | execd HTTP endpoints: /command/run, /files/* | Delete pod |
+""".strip()
+    blocks = sync.markdown_to_blocks(markdown)
+    assert blocks[0]["type"] == "heading_3"
+    assert blocks[1]["type"] == "table"
+    table = blocks[1]["table"]
+    assert table["table_width"] == 4
+    assert table["has_column_header"] is True
+    assert len(table["children"]) == 3
+    header_cells = table["children"][0]["table_row"]["cells"]
+    assert "".join(item["text"]["content"] for item in header_cells[0]) == "Provider"
+    body_cells = table["children"][1]["table_row"]["cells"]
+    assert "".join(item["text"]["content"] for item in body_cells[0]) == "E2B"
+
+
 def test_staged_changes_parses_z_output(monkeypatch: pytest.MonkeyPatch) -> None:
     payload = b"A\x00docs/a.md\x00M\x00docs/b.md\x00R100\x00docs/old.md\x00docs/new.md\x00"
 

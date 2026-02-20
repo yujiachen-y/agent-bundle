@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Callable, Literal, Optional, overload
 
 if TYPE_CHECKING:
     from scripts import markdown_rich_text as _markdown_rich_text
+    from scripts import markdown_table as _markdown_table
     from scripts.notion_client import NotionAPIError as _NotionAPIError
     from scripts.notion_client import NotionClient as _NotionClient
     from scripts.notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 else:
     try:
         from scripts import markdown_rich_text as _markdown_rich_text
+        from scripts import markdown_table as _markdown_table
         from scripts.notion_client import NotionAPIError as _NotionAPIError
         from scripts.notion_client import NotionClient as _NotionClient
         from scripts.notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
@@ -29,6 +31,7 @@ else:
         from scripts.notion_doc_index import NotionDocIndex as _NotionDocIndex
     except ImportError:
         import markdown_rich_text as _markdown_rich_text
+        import markdown_table as _markdown_table
         from notion_client import NotionAPIError as _NotionAPIError
         from notion_client import NotionClient as _NotionClient
         from notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
@@ -36,6 +39,8 @@ else:
         from notion_doc_index import NotionDocIndex as _NotionDocIndex
 
 to_rich_text = _markdown_rich_text.to_rich_text
+parse_markdown_table = _markdown_table.parse_markdown_table
+parse_heading_line = _markdown_table.parse_heading_line
 NotionClient = _NotionClient
 NotionAPIError = _NotionAPIError
 NotionDocIndex = _NotionDocIndex
@@ -49,6 +54,7 @@ LOG_PREFIX = "[docs-notion-sync]"
 DOC_SYNC_ID_KEY = "doc_sync_id"
 LEGACY_NOTION_PAGE_ID_KEY = "notion_page_id"
 SYNC_SCRIPT_TRIGGER_PATHS = {
+    "scripts/markdown_table.py",
     "scripts/notion_doc_index.py",
     "scripts/markdown_rich_text.py",
     "scripts/sync_docs_to_notion.py",
@@ -66,11 +72,7 @@ NOTION_CODE_LANGUAGES = {"bash", "json", "markdown", "mermaid", "plain text", "p
 MERMAID_MULTI_SOURCE_EDGE_RE = re.compile(
     r"^(\s*)([A-Za-z_][A-Za-z0-9_]*(?:\s*&\s*[A-Za-z_][A-Za-z0-9_]*)+)\s*-->\s*(.+)$"
 )
-CODE_LANGUAGE_ALIASES = {
-    "plaintext": "plain text",
-    "text": "plain text",
-    "yml": "yaml",
-}
+CODE_LANGUAGE_ALIASES = {"plaintext": "plain text", "text": "plain text", "yml": "yaml"}
 
 
 @dataclass
@@ -409,11 +411,6 @@ def ensure_doc_sync_id(
     return doc_sync_id, updated
 
 
-def safe_text(text: str, fallback: str = " ") -> str:
-    stripped = text.strip()
-    return stripped if stripped else fallback
-
-
 def markdown_title(markdown: str, path: str) -> str:
     title = extract_frontmatter_value(markdown, "title")
     if title:
@@ -518,14 +515,17 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
     if not text:
         return [make_text_block("paragraph", "(empty document)")]
 
+    lines = [raw.rstrip("\r") for raw in text.splitlines()]
     blocks: list[dict] = []
     list_stack: list[tuple[int, dict]] = []
     in_code_block = False
     code_language = "plain text"
     code_lines: list[str] = []
+    skip_until = 0
 
-    for raw_line in text.splitlines():
-        line = raw_line.rstrip("\r")
+    for line_no, line in enumerate(lines):
+        if line_no < skip_until:
+            continue
         expanded = line.expandtabs(4)
         stripped = expanded.strip()
         leading_spaces = len(expanded) - len(expanded.lstrip(" "))
@@ -547,17 +547,17 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
             continue
         if not stripped:
             continue
-        if stripped.startswith("### "):
+        table_block, table_end = parse_markdown_table(lines, line_no, to_rich_text)
+        if table_block is not None:
             list_stack.clear()
-            blocks.append(make_text_block("heading_3", stripped[4:].strip()))
+            blocks.append(table_block)
+            skip_until = table_end
             continue
-        if stripped.startswith("## "):
+        heading_meta = parse_heading_line(stripped)
+        if heading_meta:
+            block_type, heading_text = heading_meta
             list_stack.clear()
-            blocks.append(make_text_block("heading_2", stripped[3:].strip()))
-            continue
-        if stripped.startswith("# "):
-            list_stack.clear()
-            blocks.append(make_text_block("heading_1", stripped[2:].strip()))
+            blocks.append(make_text_block(block_type, heading_text))
             continue
         quote_match = QUOTE_LINE_RE.match(expanded)
         if quote_match:

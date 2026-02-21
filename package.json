@@ -7,15 +7,18 @@
     "agent-bundle": "dist/cli/index.js"
   },
   "scripts": {
-    "ts:build": "tsc -p tsconfig.json",
-    "ts:lint": "eslint \"spikes/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\" \"src/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\"",
-    "ts:duplicate": "jscpd --config .jscpd.json",
-    "ts:test": "vitest run --coverage",
-    "ts:test:skills-e2e": "SKILLS_LOADER_E2E=1 vitest run src/skills/loader.e2e.test.ts",
-    "ts:test:e2b-e2e": "E2B_SANDBOX_E2E=1 vitest run src/sandbox/providers/e2b.e2e.test.ts",
-    "ts:test:k8s-e2e": "K8S_SANDBOX_E2E=1 vitest run src/sandbox/providers/kubernetes.e2e.test.ts",
-    "ts:test:pi-mono-e2e": "PI_MONO_E2E=1 vitest run src/agent-loop/pi-mono/pi-mono-loop.e2e.test.ts",
-    "ts:quality": "pnpm run ts:lint && pnpm run ts:duplicate && pnpm run ts:test"
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint \"spikes/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\" \"src/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\"",
+    "duplicate": "jscpd --config .jscpd.json",
+    "test": "vitest run --coverage",
+    "test:e2e:skills": "SKILLS_LOADER_E2E=1 vitest run src/skills/loader.e2e.test.ts",
+    "test:e2e:e2b": "E2B_SANDBOX_E2E=1 vitest run src/sandbox/providers/e2b.e2e.test.ts",
+    "test:e2e:k8s": "K8S_SANDBOX_E2E=1 vitest run src/sandbox/providers/kubernetes.e2e.test.ts",
+    "test:e2e:pi-mono": "PI_MONO_E2E=1 vitest run src/agent-loop/pi-mono/pi-mono-loop.e2e.test.ts",
+    "test:e2e": "pnpm run test:e2e:skills && pnpm run test:e2e:e2b && pnpm run test:e2e:k8s && pnpm run test:e2e:pi-mono",
+    "quality": "pnpm run lint && pnpm run duplicate && pnpm run test",
+    "ci": "pnpm run quality",
+    "ci:full": "pnpm run quality && pnpm run test:e2e"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

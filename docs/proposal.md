@@ -550,7 +550,7 @@ Tasks are grouped into phases. Tasks within a phase can proceed in parallel. Eac
 - `typescript` devDependency, `tsconfig.json` targeting ESM (`"module": "nodenext"`, `"target": "es2022"`)
 - `src/cli/index.ts` CLI entrypoint with lightweight arg parser (e.g. `citty`). Two commands: `agent-bundle serve [--config path]` and `agent-bundle build [--config path]`, defaulting to `./agent-bundle.yaml`
 - Both commands are stubs: load + validate YAML (using F2's schema) and print parsed config
-- `"bin"` field in `package.json`, `yaml` dependency, `"ts:build"` script using `tsc`
+- `"bin"` field in `package.json`, `yaml` dependency, `"build"` script using `tsc`
 - Use `pnpm` as the package manager (`pnpm-lock.yaml` in repo root, `pnpm run` for scripts)
 - Update `eslint.config.mjs` and `vitest.config.ts` to include `src/**`
 

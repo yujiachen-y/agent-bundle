@@ -92,34 +92,38 @@ The following items are intentionally excluded from the initial scope but may be
 graph TD
     subgraph External Interfaces
         direction LR
-        HTTP["HTTP\n(Chat Completions)"]
+        HTTP["Responses API\n(Open Responses)"]
         MCP["MCP Server"]
         TUI["TUI *"]
         WebUI["WebUI *"]
     end
 
-    subgraph Agent Runtime
+    subgraph Agent
+        direction TB
+        ORCH["Agent Orchestrator\nroutes tool calls · manages lifecycle"]
+
         subgraph Agent Loop
             direction LR
             PROMPT["System Prompt\n+ skill metadata"]
             TOOLS["Built-in Tools\nBash · Read · Write · Edit"]
         end
         LLM["LLM Provider Layer\nAnthropic · OpenAI · Gemini · OpenRouter · Ollama · …"]
-    end
 
-    subgraph Sandbox Filesystem
-        subgraph Volume
-            SKILLS["/skills/ (read-only)\nSKILL.md + scripts/"]
-            WORKSPACE["/workspace/ (read-write)\nagent working directory"]
+        subgraph Sandbox
+            subgraph Volume
+                SKILLS["/skills/\nSKILL.md + scripts/"]
+                WORKSPACE["/workspace/\nagent working directory"]
+            end
+            HOOKS["Lifecycle Hooks\npreMount · postMount · preUnmount · postUnmount"]
         end
-        HOOKS["Lifecycle Hooks\npreMount · postMount · preUnmount · postUnmount"]
     end
 
-    HTTP & MCP & TUI & WebUI -->|request| PROMPT
+    HTTP & MCP & TUI & WebUI -->|request| ORCH
+    ORCH -->|user message| PROMPT
     PROMPT --> TOOLS
     TOOLS -->|LLM calls| LLM
-    TOOLS -->|tool I/O| SKILLS
-    TOOLS -->|tool I/O| WORKSPACE
+    ORCH -->|tool routing| SKILLS
+    ORCH -->|tool routing| WORKSPACE
     HOOKS <-->|mount · unmount| Volume
 ```
 
@@ -244,12 +248,74 @@ interface Sandbox extends SandboxIO {
 | **E2B** | `Sandbox.create(template)` | E2B SDK: `commands.run()`, `files.read/write()`. Streaming via native `onStdout`/`onStderr` callbacks. | `sandbox.kill()` |
 | **Kubernetes** | Create pod from image, wait for ready | execd HTTP endpoints: `/command/run`, `/files/*`. Streaming via SSE on the `/command/run` endpoint. | Delete pod |
 
-#### Agent-Loop Integration
+### Agent Loop
 
-The agent loop (pi-mono/coding-agent) runs on the **host**. Only tool execution happens inside the sandbox. The integration point is at pi-mono's **operations layer** — each tool delegates its low-level IO to the sandbox via pluggable operation interfaces.
+The agent loop handles LLM interaction: it sends the system prompt and user messages to the LLM, receives tool call decisions, and returns the final response. It does **not** own the sandbox — the Agent orchestrator (see below) wires tool calls from the loop to the sandbox.
+
+#### Interface
+
+```typescript
+interface AgentLoop {
+  init(config: {
+    systemPrompt: string;
+    model: ModelConfig;
+    toolHandler: (call: ToolCall) => Promise<ToolResult>;
+  }): Promise<void>;
+
+  run(input: ResponseInput): AsyncIterable<ResponseEvent>;
+  dispose(): Promise<void>;
+}
+```
+
+`toolHandler` is a callback provided by the Agent orchestrator. When the LLM decides to call a tool (Bash, Read, Write, Edit), the agent loop invokes `toolHandler`, which routes the call to the sandbox. The loop does not know what sandbox is or how it works.
+
+#### LLM Provider
+
+Follows pi-mono's conventions. Provider and model are specified in the bundle YAML; API keys are resolved from environment variables automatically (e.g., `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`). No secrets in YAML.
+
+```yaml
+model:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+```
+
+pi-mono's `@mariozechner/pi-ai` package handles provider initialization, auth methods (API keys, OAuth tokens, `claude setup-token`), and request routing. agent-bundle passes through the configuration without building its own provider layer.
+
+#### System Prompt
+
+The system prompt is generated at build time from the bundle YAML and skill metadata. User-defined variables are declared in the YAML and filled at runtime.
+
+```yaml
+prompt:
+  system: |
+    You are an expert invoice processing assistant.
+    Current user: {{user_name}}
+    Timezone: {{timezone}}
+
+  variables:
+    - user_name
+    - timezone
+```
+
+Skills are automatically appended to the system prompt at build time (not via a placeholder). Each skill's SKILL.md frontmatter (name + description) is injected by default. The agent reads full SKILL.md content on demand via its tools during the session.
+
+At runtime, only variables need to be filled. Build-time generation freezes the prompt template — zero runtime cost for prompt assembly.
+
+#### Providers
+
+v1 ships with pi-mono. The interface supports future agent loops via direct integration (TypeScript) or process bridges (CLI-based tools).
+
+| Agent Loop | Language | Integration | Status |
+|---|---|---|---|
+| **pi-mono** | TypeScript | In-process, sandbox-backed Operations | v1 |
+| Other TS loops | TypeScript | In-process or fork | Future |
+| Claude Code | CLI (Node) | Bridge: spawn process, message protocol | Future |
+| Codex | CLI (Rust) | Bridge: spawn process, message protocol | Future |
+
+For pi-mono specifically, the `toolHandler` is implemented by injecting sandbox-backed operation interfaces into pi-mono's tool layer:
 
 ```
-Agent Loop (host)
+pi-mono Tool Layer (host)
   │
   ├── Read tool  ──► ReadOperations  ──► sandbox.file.read()
   ├── Write tool ──► WriteOperations ──► sandbox.file.write()
@@ -257,12 +323,135 @@ Agent Loop (host)
   │                  (pi-mono handles fuzzy matching, BOM, line endings;
   │                   file IO delegates to sandbox)
   └── Bash tool  ──► BashOperations  ──► sandbox.exec()
-                                              │
-                                              ▼
-                                     Sandbox (E2B or K8s pod)
 ```
 
-This approach preserves pi-mono's full tool logic (Edit's fuzzy matching, output truncation, etc.) while routing all filesystem and process operations to the sandbox. Adding a new sandbox provider requires only implementing the `Sandbox` interface — no changes to the agent loop or tools.
+This preserves pi-mono's full tool logic (Edit's fuzzy matching, output truncation, etc.) while routing all IO to the sandbox.
+
+### Agent
+
+The Agent is the top-level orchestrator. It owns both the sandbox and the agent loop, wires them together, and exposes the client-facing API.
+
+```
+Agent (orchestrator)
+  ├── Sandbox (tool execution environment)
+  ├── AgentLoop (LLM interaction)
+  └── wiring: loop.toolHandler → sandbox.exec / sandbox.file.*
+```
+
+#### Build Pipeline
+
+The bundle YAML is a build-time input. `agent-bundle build` produces two artifacts:
+
+1. **Sandbox image** — pushed to E2B (template) or Docker registry (image). Contains skills and base tools.
+2. **Agent factory** — generated TypeScript code with all configuration baked in (system prompt template, model config, sandbox image reference, typed variables).
+
+```
+agent-bundle.yaml + skills/
+        │
+        ▼
+  agent-bundle build
+        │
+        ├── push sandbox image/template
+        └── generate code artifact
+                │
+                ▼
+        dist/invoice-processor/
+          ├── index.ts          generated agent factory
+          ├── bundle.json       config snapshot
+          └── types.ts          variable types
+```
+
+No YAML is loaded at runtime. The generated artifact is self-contained.
+
+#### Agent Factory
+
+`agent-bundle build` generates a typed agent factory:
+
+```typescript
+// generated: dist/invoice-processor/index.ts
+import { defineAgent } from "agent-bundle/runtime";
+
+export const InvoiceProcessor = defineAgent({
+  name: "invoice-processor",
+  sandbox: { provider: "e2b", template: "invoice-processor:a3f8c2d" },
+  model: { provider: "anthropic", model: "claude-sonnet-4-20250514" },
+  systemPrompt: "You are an expert...\n\n## Skills\n...",
+  variables: ["user_name", "timezone"] as const,
+});
+
+// generated: dist/invoice-processor/types.ts
+export interface InvoiceProcessorVariables {
+  user_name: string;
+  timezone: string;
+}
+```
+
+Usage:
+
+```typescript
+import { InvoiceProcessor } from "./dist/invoice-processor";
+
+const agent = await InvoiceProcessor.init({
+  variables: { user_name: "Alice", timezone: "UTC+8" },
+  hooks: {
+    preMount: async (io) => {
+      await io.file.write("/workspace/invoice.pdf", pdfBuffer);
+    },
+    postUnmount: async (io) => {
+      const result = await io.file.read("/workspace/output.json");
+      await uploadToS3(result);
+    },
+  },
+});
+```
+
+`InvoiceProcessor` is an agent factory (reusable). `.init()` creates an Agent instance (has a running sandbox + agent loop).
+
+#### Agent Interface
+
+```typescript
+interface Agent {
+  readonly name: string;
+  readonly status: "ready" | "running" | "stopped";
+
+  respond(input: ResponseInput): Promise<ResponseOutput>;
+  respondStream(input: ResponseInput): AsyncIterable<ResponseEvent>;
+  shutdown(): Promise<void>;
+}
+```
+
+`respond` waits for the full agent response. `respondStream` returns an async iterable of SSE-compatible events following the [Open Responses](https://github.com/open-responses/open-responses) spec.
+
+#### Init Sequence
+
+```
+InvoiceProcessor.init({ variables, hooks })
+  │
+  ├── 1. Fill system prompt template (replace variables, skills already baked in)
+  ├── 2. Create Sandbox (image ref baked in)
+  │       └── sandbox.start() → preMount → postMount → ready
+  ├── 3. Create AgentLoop (pi-mono for v1)
+  │       └── loop.init({ systemPrompt, model, toolHandler })
+  │           toolHandler routes to sandbox.exec / sandbox.file.*
+  └── 4. Return Agent instance
+```
+
+#### HTTP Interface
+
+In `serve` mode, agent-bundle exposes an [Open Responses](https://github.com/open-responses/open-responses)-compatible HTTP API. Any OpenAI SDK can connect by overriding `baseURL`.
+
+```
+POST /v1/responses
+{
+  "input": "Extract all line items from the uploaded invoice",
+  "stream": true
+}
+
+// SSE events:
+data: {"type": "response.created", ...}
+data: {"type": "response.output_text.delta", "delta": "The invoice contains..."}
+data: {"type": "response.completed", ...}
+```
 
 ## Implementation Plan
 

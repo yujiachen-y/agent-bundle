@@ -134,19 +134,34 @@ def test_markdown_to_blocks_nested_lists_and_quote() -> None:
 """.strip()
 
     blocks = sync.markdown_to_blocks(md)
-    assert blocks[0]["type"] == "heading_1"
-    assert blocks[1]["type"] == "quote"
+    assert blocks[0]["type"] == "quote"
 
-    first_item = blocks[2]
+    first_item = blocks[1]
     assert first_item["type"] == "numbered_list_item"
     children = first_item["numbered_list_item"]["children"]
     assert children[0]["type"] == "paragraph"
     assert children[1]["type"] == "quote"
 
-    second_item = blocks[3]
+    second_item = blocks[2]
     assert second_item["type"] == "numbered_list_item"
     child_types = [c["type"] for c in second_item["numbered_list_item"]["children"]]
     assert "bulleted_list_item" in child_types
+
+
+def test_markdown_to_blocks_skips_first_h1_and_promotes_following_headings() -> None:
+    markdown = """
+# Document Title
+## Section
+### Subsection
+#### Detail
+""".strip()
+    blocks = sync.markdown_to_blocks(markdown)
+    assert [block["type"] for block in blocks] == ["heading_1", "heading_2", "heading_3"]
+    heading_texts = [
+        "".join(item["text"]["content"] for item in block[block["type"]]["rich_text"])
+        for block in blocks
+    ]
+    assert heading_texts == ["Section", "Subsection", "Detail"]
 
 
 def test_build_operations_maps_changes() -> None:

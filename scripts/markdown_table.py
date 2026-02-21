@@ -7,6 +7,7 @@ from typing import Callable
 
 TABLE_SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 UNESCAPED_PIPE_RE = re.compile(r"(?<!\\)\|")
+ATX_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 
 
 def split_table_cells(line: str) -> list[str]:
@@ -46,6 +47,23 @@ def parse_heading_line(stripped: str) -> tuple[str, str] | None:
     if stripped.startswith("# "):
         return "heading_1", stripped[2:].strip()
     return None
+
+
+def normalize_heading_for_notion(
+    stripped_line: str,
+    skipped_first_h1: bool,
+) -> tuple[str | None, bool]:
+    match = ATX_HEADING_RE.match(stripped_line)
+    if not match:
+        return stripped_line, skipped_first_h1
+    level = len(match.group(1))
+    text = match.group(2).strip()
+    if not text:
+        return stripped_line, skipped_first_h1
+    if level == 1 and not skipped_first_h1:
+        return None, True
+    notion_level = min(level - 1, 3) if level >= 2 else 1
+    return f"{'#' * notion_level} {text}", skipped_first_h1
 
 
 def make_table_block(rows: list[list[str]], to_rich_text: Callable[[str], list[dict]]) -> dict:

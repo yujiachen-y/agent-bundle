@@ -46,6 +46,7 @@ normalize_code_language = _markdown_codeblock.normalize_code_language
 to_rich_text = _markdown_rich_text.to_rich_text
 parse_markdown_table = _markdown_table.parse_markdown_table
 parse_heading_line = _markdown_table.parse_heading_line
+normalize_heading_for_notion = _markdown_table.normalize_heading_for_notion
 NotionClient = _NotionClient
 NotionAPIError = _NotionAPIError
 NotionDocIndex = _NotionDocIndex
@@ -480,6 +481,34 @@ def append_child_to_current_list_item(stack: list[tuple[int, dict]], block: dict
     return True
 
 
+def handle_code_fence_state(
+    expanded: str,
+    line: str,
+    in_code_block: bool,
+    code_language: str,
+    code_lines: list[str],
+    blocks: list[dict],
+    list_stack: list[tuple[int, dict]],
+) -> tuple[bool, bool, str]:
+    fence_match = CODE_FENCE_RE.match(expanded)
+    if fence_match:
+        if in_code_block:
+            code_content = normalize_code_content("\n".join(code_lines), code_language)
+            blocks.append(make_code_block(code_content, code_language))
+            code_lines.clear()
+            in_code_block = False
+            code_language = "plain text"
+        else:
+            in_code_block = True
+            code_language = normalize_code_language(fence_match.group("lang"))
+        list_stack.clear()
+        return True, in_code_block, code_language
+    if in_code_block:
+        code_lines.append(line)
+        return True, in_code_block, code_language
+    return False, in_code_block, code_language
+
+
 def markdown_to_blocks(markdown: str) -> list[dict]:
     text = strip_frontmatter(markdown).strip("\n")
     if not text:
@@ -492,6 +521,7 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
     code_language = "plain text"
     code_lines: list[str] = []
     skip_until = 0
+    skipped_first_h1 = False
 
     for line_no, line in enumerate(lines):
         if line_no < skip_until:
@@ -499,21 +529,10 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
         expanded = line.expandtabs(4)
         stripped = expanded.strip()
         leading_spaces = len(expanded) - len(expanded.lstrip(" "))
-        fence_match = CODE_FENCE_RE.match(expanded)
-        if fence_match:
-            if in_code_block:
-                code_content = normalize_code_content("\n".join(code_lines), code_language)
-                blocks.append(make_code_block(code_content, code_language))
-                code_lines = []
-                in_code_block = False
-                code_language = "plain text"
-            else:
-                in_code_block = True
-                code_language = normalize_code_language(fence_match.group("lang"))
-            list_stack.clear()
-            continue
-        if in_code_block:
-            code_lines.append(line)
+        handled, in_code_block, code_language = handle_code_fence_state(
+            expanded, line, in_code_block, code_language, code_lines, blocks, list_stack
+        )
+        if handled:
             continue
         if not stripped:
             continue
@@ -523,7 +542,13 @@ def markdown_to_blocks(markdown: str) -> list[dict]:
             blocks.append(table_block)
             skip_until = table_end
             continue
-        heading_meta = parse_heading_line(stripped)
+        normalized_heading_line, skipped_first_h1 = normalize_heading_for_notion(
+            stripped, skipped_first_h1
+        )
+        if normalized_heading_line is None:
+            list_stack.clear()
+            continue
+        heading_meta = parse_heading_line(normalized_heading_line)
         if heading_meta:
             block_type, heading_text = heading_meta
             list_stack.clear()

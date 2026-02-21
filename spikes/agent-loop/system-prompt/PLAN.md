@@ -44,13 +44,6 @@ skills:
 
 ---
 
-## Prerequisites (Owner: @user)
-
-- [ ] Prepare 2-3 sample skills with SKILL.md files (frontmatter with `name` and `description`, plus a body section)
-- [ ] Confirm the SKILL.md frontmatter format (YAML frontmatter? key names?)
-
----
-
 ## Research Tasks (Owner: executor)
 
 ### R1. SKILL.md format
@@ -61,6 +54,7 @@ skills:
 - [ ] Document the frontmatter schema: which fields exist? (`name`, `description`, others?)
 - [ ] Document how pi-mono currently builds its system prompt from skills (code path, template format)
 - [ ] Identify what pi-mono includes in the system prompt vs what it leaves for on-demand reading
+- [ ] Create 2-3 sample skills with SKILL.md files for testing (frontmatter with `name` and `description`, plus body)
 
 ### R2. pi-mono system prompt assembly
 

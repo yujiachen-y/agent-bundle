@@ -11,6 +11,10 @@
     "ts:lint": "eslint \"spikes/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\" \"src/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\"",
     "ts:duplicate": "jscpd --config .jscpd.json",
     "ts:test": "vitest run --coverage",
+    "ts:test:skills-e2e": "SKILLS_LOADER_E2E=1 vitest run src/skills/loader.e2e.test.ts",
+    "ts:test:e2b-e2e": "E2B_SANDBOX_E2E=1 vitest run src/sandbox/providers/e2b.e2e.test.ts",
+    "ts:test:k8s-e2e": "K8S_SANDBOX_E2E=1 vitest run src/sandbox/providers/kubernetes.e2e.test.ts",
+    "ts:test:pi-mono-e2e": "PI_MONO_E2E=1 vitest run src/agent-loop/pi-mono/pi-mono-loop.e2e.test.ts",
     "ts:quality": "pnpm run ts:lint && pnpm run ts:duplicate && pnpm run ts:test"
   },
   "devDependencies": {
@@ -26,7 +30,11 @@
   },
   "dependencies": {
     "@kubernetes/client-node": "^1.4.0",
+    "@mariozechner/pi-agent-core": "^0.54.0",
+    "@mariozechner/pi-ai": "^0.54.0",
+    "@mariozechner/pi-coding-agent": "^0.14.2",
     "citty": "^0.2.1",
+    "dotenv": "^16.6.1",
     "e2b": "^2.12.1",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"

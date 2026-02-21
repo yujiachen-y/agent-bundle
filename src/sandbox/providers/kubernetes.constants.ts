@@ -1,0 +1,3 @@
+export const READY_POLL_INTERVAL_MS = 500;
+export const DEFAULT_HEALTH_TIMEOUT_MS = 30_000;
+export const DIRECT_POD_HEALTH_TIMEOUT_MS = 2_500;

@@ -1,52 +1,36 @@
 # System Prompt Pre-generation Spike Conclusion
 
-## Verdict: Validated, ready for implementation
+## Verdict: Validated
 
-Build-time system prompt generation works as designed. All evaluation criteria pass.
+Build-time system prompt generation works. pi-mono supports direct prompt injection, bypassing its built-in prompt assembly entirely.
 
 ## Key Numbers
 
 | Metric | Value |
 |---|---|
-| Runtime replacement cost | 0.001 ms (well under 1ms target) |
+| Runtime replacement cost | 0.001 ms |
 | Base prompt tokens | 136 |
 | Description-only (3 skills) | 254 tokens |
 | Full-body (3 skills) | 742 tokens |
-| Token savings (10 skills, description-only vs full) | ~1,627 tokens saved |
+| Token savings (10 skills, description-only vs full) | ~1,627 tokens |
 
-## What was validated
+## Findings
 
-### 1. Build-time generation works
+### Build-time generation
 
-The generator reads a bundle YAML, parses SKILL.md frontmatter, and produces a system prompt template. Per-skill `prompt: full` configuration works — skills default to description-only, opt-in for full body.
+The generator reads a bundle YAML, parses SKILL.md frontmatter, and produces a system prompt template with `{{session_context}}` placeholder. Per-skill `prompt: full` is opt-in; default is description-only.
 
-Produced artifacts:
-- `dist/system-prompt.txt` (mixed mode)
-- `dist/system-prompt.description-only.txt`
-- `dist/system-prompt.full.txt`
+### pi-mono prompt model
 
-### 2. Runtime cost is negligible
+pi-mono already uses progressive disclosure — system prompt includes only `name`, `description`, `location` per skill. Full SKILL.md body is read on demand. This matches our default description-only behavior.
 
-Single `{{session_context}}` placeholder replacement: **0.001 ms**. No file scanning, no SKILL.md parsing, no frontmatter extraction at runtime.
+The difference: pi-mono builds this dynamically at startup. We freeze it at build time. Same output, zero runtime cost.
 
-### 3. Agent behavior is correct
+### Direct prompt injection path
 
-E2E test confirmed:
-- Agent knows skill names and descriptions from the pre-generated prompt (no file reads needed).
-- Agent can list available skills without tool calls.
-- Agent reads full SKILL.md on demand when it needs detailed instructions (via `read` tool → sandbox file read).
-- Without the pre-generated prompt, the agent does not know about the custom skills (baseline comparison passed).
+The spike confirmed a clean injection path: `session.agent.setSystemPrompt(prompt)` followed by `session.agent.prompt(messages)`. This bypasses pi-mono's `buildSystemPrompt()` entirely — pi-mono is used only as the execution loop and tool runtime. See PLAN.md "Direct Prompt Injection Example" for the full code.
 
-### 4. pi-mono's prompt model confirms our approach
-
-pi-mono already uses progressive disclosure:
-- System prompt includes only `name`, `description`, `location` per skill.
-- Full SKILL.md body is read on demand.
-- This matches our default `description-only` behavior.
-
-The key difference: pi-mono builds this dynamically at startup. We freeze it at build time. Same output, zero runtime cost.
-
-## Token budget analysis
+### Token budget
 
 | Config | 3 skills | 5 skills (est.) | 10 skills (est.) |
 |---|---|---|---|
@@ -54,24 +38,24 @@ The key difference: pi-mono builds this dynamically at startup. We freeze it at 
 | Full-body | 742 | ~1,146 | ~2,156 |
 | **Savings** | **488** | **~813** | **~1,627** |
 
-Description-only is the right default. For most bundles (5-10 skills), it keeps the system prompt under 600 tokens. Full-body should be opt-in for skills where the agent needs detailed instructions without a round-trip.
+Description-only keeps the system prompt under 600 tokens for most bundles.
 
-## Dynamic context that cannot be pre-generated
+### Dynamic context
 
-pi-mono injects some runtime-only context into the system prompt:
+pi-mono injects runtime-only context (date/time, cwd, tool set, AGENTS files). In our model:
 
-| Context | pi-mono behavior | agent-bundle approach |
-|---|---|---|
-| Current date/time | Injected at startup | `{{session_context}}` placeholder, filled at runtime |
-| Working directory | Injected at startup | Fixed to `/workspace/` in sandbox — can be pre-generated |
-| Active tool set | Injected at startup | Fixed (Bash, Read, Write, Edit) — can be pre-generated |
-| AGENTS/CLAUDE files | Scanned from cwd | Not applicable — skills are the equivalent, already in prompt |
+- **cwd**: fixed to `/workspace/` — pre-generatable
+- **tool set**: fixed (Bash, Read, Write, Edit) — pre-generatable
+- **date/time**: `{{session_context}}` placeholder, filled at runtime
+- **AGENTS/CLAUDE files**: not applicable — skills replace this
 
-Only date/time truly needs runtime injection. Everything else is known at build time.
+Only date/time needs runtime injection.
 
-## Recommendation for agent-bundle
+## Evaluation
 
-1. **`agent-bundle build`** generates `system-prompt.txt` as part of the build artifact, alongside the sandbox template/image.
-2. **Runtime** reads the pre-generated template and replaces `{{session_context}}` (date/time, any per-session context). Cost: < 0.01ms.
-3. **Default to description-only.** Users opt in to full-body per skill via `prompt: full` in bundle YAML.
-4. **The agent can always `sandbox.file.read("/skills/<name>/SKILL.md")`** for full details on demand. This is consistent with pi-mono's progressive disclosure model.
+| Criteria | Result |
+|---|---|
+| Build-time generation | Pass — configurable per-skill (description vs full) |
+| Runtime cost | Pass — 0.001ms (< 1ms target) |
+| Agent behavior | Pass — agent knows skills, reads SKILL.md on demand |
+| Token efficiency | Pass — description-only saves ~1,627 tokens at 10 skills |

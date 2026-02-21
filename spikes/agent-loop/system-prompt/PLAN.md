@@ -224,3 +224,45 @@ skills:
   - Agent lists skills without file reads.
   - Agent reads full SKILL.md on demand via `read` tool.
   - Baseline dynamic behavior (without injected prompt) does not expose the custom skill list.
+
+### Direct Prompt Injection Example (Bypass Prompt Assembly)
+
+```ts
+import { SessionManager, createAgentSession } from "@mariozechner/pi-coding-agent";
+import { readFile } from "node:fs/promises";
+
+async function run() {
+  // 1) Load your pre-generated prompt template and replace placeholders yourself
+  const promptTemplate = await readFile("./dist/system-prompt.txt", "utf8");
+  const systemPrompt = promptTemplate.replace("{{session_context}}", "cwd=/workspace");
+
+  // 2) Create a normal session (tools/model wiring still comes from pi-mono)
+  const { session } = await createAgentSession({
+    sessionManager: SessionManager.inMemory(),
+  });
+
+  // 3) Force-inject system prompt directly into underlying Agent state
+  //    This bypasses pi-mono's buildSystemPrompt() assembly path for this turn.
+  session.agent.setSystemPrompt(systemPrompt);
+
+  // 4) Call Agent directly instead of session.prompt(), so no prompt-template expansion
+  //    or session-layer prompt rewriting is applied.
+  await session.agent.prompt([
+    {
+      role: "user",
+      content: [{ type: "text", text: "List available skills." }],
+      timestamp: Date.now(),
+    },
+  ]);
+
+  await session.agent.waitForIdle();
+  session.dispose();
+}
+
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+```
+
+This approach is the most direct injection path in pi-mono: prompt generation is done externally, and pi-mono is used only as the execution loop/tool runtime.

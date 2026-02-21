@@ -7,6 +7,9 @@ import { config as loadEnv } from "dotenv";
 import { generateSystemPromptFromBundle, writePromptTemplate } from "./lib/system-prompt-builder.mjs";
 import { applySessionContext } from "./runtime-prompt.mjs";
 
+const LIST_SKILLS_PROMPT =
+  "List the available skills and one-line descriptions from your instructions only. Do not call tools.";
+
 /**
  * @param {string} stdout
  * @returns {Array<Record<string, unknown>>}
@@ -116,31 +119,62 @@ function selectProviderAndModel() {
   return null;
 }
 
-async function main() {
+/**
+ * @returns {{ srcDir: string, spikeDir: string, resultsPath: string, promptPath: string, envPaths: string[] }}
+ */
+function resolveRuntimePaths() {
   const srcDir = dirname(new URL(import.meta.url).pathname);
   const spikeDir = resolve(srcDir, "..");
-  const resultsPath = resolve(spikeDir, "results/e2e-smoke.json");
-  const promptPath = resolve(spikeDir, "dist/system-prompt.e2e.txt");
+  return {
+    srcDir,
+    spikeDir,
+    resultsPath: resolve(spikeDir, "results/e2e-smoke.json"),
+    promptPath: resolve(spikeDir, "dist/system-prompt.e2e.txt"),
+    envPaths: [resolve(spikeDir, ".env"), resolve(spikeDir, "../llm-provider/.env")],
+  };
+}
 
-  [resolve(spikeDir, ".env"), resolve(spikeDir, "../llm-provider/.env")].forEach((envPath) => {
+/**
+ * @param {string[]} envPaths
+ */
+function loadEnvironmentFiles(envPaths) {
+  envPaths.forEach((envPath) => {
     if (existsSync(envPath)) {
       loadEnv({ path: envPath, override: false });
     }
   });
+}
 
-  const selected = selectProviderAndModel();
-  if (!selected) {
-    const skipped = {
-      status: "skipped",
-      reason: "No supported API key found (OPENAI_API_KEY or ANTHROPIC_API_KEY).",
-      checkedAt: new Date().toISOString(),
-    };
-    await mkdir(dirname(resultsPath), { recursive: true });
-    await writeFile(resultsPath, `${JSON.stringify(skipped, null, 2)}\n`, "utf8");
-    console.log(JSON.stringify(skipped, null, 2));
-    return;
-  }
+/**
+ * @param {string} resultsPath
+ * @param {Record<string, unknown>} payload
+ * @returns {Promise<void>}
+ */
+async function writeResultFile(resultsPath, payload) {
+  await mkdir(dirname(resultsPath), { recursive: true });
+  await writeFile(resultsPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
 
+/**
+ * @param {string} resultsPath
+ * @returns {Promise<void>}
+ */
+async function writeSkippedResult(resultsPath) {
+  const skipped = {
+    status: "skipped",
+    reason: "No supported API key found (OPENAI_API_KEY or ANTHROPIC_API_KEY).",
+    checkedAt: new Date().toISOString(),
+  };
+  await writeResultFile(resultsPath, skipped);
+  console.log(JSON.stringify(skipped, null, 2));
+}
+
+/**
+ * @param {string} spikeDir
+ * @param {string} promptPath
+ * @returns {Promise<void>}
+ */
+async function preparePromptFile(spikeDir, promptPath) {
   const { prompt: templatePrompt } = await generateSystemPromptFromBundle(resolve(spikeDir, "bundle.sample.yaml"), {
     locationMode: "local",
   });
@@ -149,22 +183,32 @@ async function main() {
     "Session context: end-to-end verification with pre-generated prompt.",
   );
   await writePromptTemplate(promptPath, finalPrompt);
+}
 
-  const started = performance.now();
+/**
+ * @param {{ exitCode: number | null, stdout: string, stderr: string }} run
+ * @param {string} label
+ */
+function assertRunSucceeded(run, label) {
+  if (run.exitCode !== 0) {
+    throw new Error(`${label}: ${run.stderr || run.stdout}`);
+  }
+}
 
-  const listSkillsPrompt =
-    "List the available skills and one-line descriptions from your instructions only. Do not call tools.";
+/**
+ * @param {string} spikeDir
+ * @param {{ provider: string, model: string }} selected
+ * @param {string} promptPath
+ */
+async function executeSmokeRuns(spikeDir, selected, promptPath) {
   const listSkillsRun = await runPiCommand({
     cwd: spikeDir,
     provider: selected.provider,
     model: selected.model,
-    userPrompt: listSkillsPrompt,
+    userPrompt: LIST_SKILLS_PROMPT,
     systemPromptPath: promptPath,
   });
-
-  if (listSkillsRun.exitCode !== 0) {
-    throw new Error(`Pre-generated prompt skill listing run failed: ${listSkillsRun.stderr || listSkillsRun.stdout}`);
-  }
+  assertRunSucceeded(listSkillsRun, "Pre-generated prompt skill listing run failed");
 
   const readTarget = resolve(spikeDir, "sample-skills/data-validator/SKILL.md");
   const readSkillPrompt = `Use the read tool to read this SKILL.md and return only section headings:\n${readTarget}`;
@@ -175,41 +219,47 @@ async function main() {
     userPrompt: readSkillPrompt,
     systemPromptPath: promptPath,
   });
-
-  if (readSkillRun.exitCode !== 0) {
-    throw new Error(`Pre-generated prompt read-on-demand run failed: ${readSkillRun.stderr || readSkillRun.stdout}`);
-  }
+  assertRunSucceeded(readSkillRun, "Pre-generated prompt read-on-demand run failed");
 
   const baselineRun = await runPiCommand({
     cwd: spikeDir,
     provider: selected.provider,
     model: selected.model,
-    userPrompt: listSkillsPrompt,
+    userPrompt: LIST_SKILLS_PROMPT,
   });
+  assertRunSucceeded(baselineRun, "Baseline dynamic run failed");
 
-  if (baselineRun.exitCode !== 0) {
-    throw new Error(`Baseline dynamic run failed: ${baselineRun.stderr || baselineRun.stdout}`);
-  }
+  return { listSkillsRun, readSkillRun, baselineRun };
+}
 
-  const listSkillToolCalls = listSkillsRun.events.filter((event) => event.type === "tool_execution_start");
-  const readSkillToolCalls = readSkillRun.events.filter((event) => event.type === "tool_execution_start");
+/**
+ * @param {{ provider: string, model: string }} selected
+ * @param {number} startedAt
+ * @param {{
+ *  listSkillsRun: { events: Array<Record<string, unknown>>, assistantText: string };
+ *  readSkillRun: { events: Array<Record<string, unknown>>, assistantText: string };
+ *  baselineRun: { assistantText: string };
+ * }} runData
+ * @returns {Record<string, unknown>}
+ */
+function buildE2eResult(selected, startedAt, runData) {
+  const listSkillToolCalls = runData.listSkillsRun.events.filter((event) => event.type === "tool_execution_start");
+  const readSkillToolCalls = runData.readSkillRun.events.filter((event) => event.type === "tool_execution_start");
   const readToolCalls = readSkillToolCalls.filter((event) => event.toolName === "read");
 
-  const listText = listSkillsRun.assistantText;
-  const readText = readSkillRun.assistantText;
-  const baselineText = baselineRun.assistantText;
+  const listText = runData.listSkillsRun.assistantText;
+  const readText = runData.readSkillRun.assistantText;
+  const baselineText = runData.baselineRun.assistantText;
+  const elapsedMs = performance.now() - startedAt;
 
-  const elapsedMs = performance.now() - started;
-  const result = {
+  return {
     status: "ok",
     checkedAt: new Date().toISOString(),
     model: `${selected.provider}/${selected.model}`,
     elapsedMs: Number(elapsedMs.toFixed(2)),
     checks: {
       knowsSkillsFromPrompt:
-        listText.includes("pdf-extractor") &&
-        listText.includes("data-validator") &&
-        listText.includes("release-notes"),
+        listText.includes("pdf-extractor") && listText.includes("data-validator") && listText.includes("release-notes"),
       listSkillsWithoutFileRead: listSkillToolCalls.length === 0,
       readsSkillOnDemand: readToolCalls.length > 0 && readText.length > 0,
       dynamicPromptHasDifferentBehavior:
@@ -230,23 +280,40 @@ async function main() {
       },
     },
   };
+}
 
-  await mkdir(dirname(resultsPath), { recursive: true });
-  await writeFile(resultsPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+async function main() {
+  const { spikeDir, resultsPath, promptPath, envPaths } = resolveRuntimePaths();
+  loadEnvironmentFiles(envPaths);
+
+  const selected = selectProviderAndModel();
+  if (!selected) {
+    await writeSkippedResult(resultsPath);
+    return;
+  }
+
+  await preparePromptFile(spikeDir, promptPath);
+  const startedAt = performance.now();
+  const runData = await executeSmokeRuns(spikeDir, selected, promptPath);
+  const result = buildE2eResult(selected, startedAt, runData);
+  await writeResultFile(resultsPath, result);
   console.log(JSON.stringify(result, null, 2));
 }
 
-main().catch(async (error) => {
-  const srcDir = dirname(new URL(import.meta.url).pathname);
-  const spikeDir = resolve(srcDir, "..");
-  const resultsPath = resolve(spikeDir, "results/e2e-smoke.json");
+/**
+ * @param {unknown} error
+ * @returns {Promise<void>}
+ */
+async function handleMainError(error) {
+  const { resultsPath } = resolveRuntimePaths();
   const failure = {
     status: "failed",
     checkedAt: new Date().toISOString(),
     error: error instanceof Error ? error.message : String(error),
   };
-  await mkdir(dirname(resultsPath), { recursive: true });
-  await writeFile(resultsPath, `${JSON.stringify(failure, null, 2)}\n`, "utf8");
+  await writeResultFile(resultsPath, failure);
   console.error(JSON.stringify(failure, null, 2));
   process.exit(1);
-});
+}
+
+main().catch(handleMainError);

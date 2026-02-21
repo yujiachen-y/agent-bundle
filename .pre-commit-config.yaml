@@ -17,6 +17,13 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: typescript-quality-gates
+        name: typescript size complexity duplicate and coverage gates
+        entry: npm run ts:quality
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: pytest-coverage
         name: pytest coverage gate
         entry: pytest

@@ -6,6 +6,7 @@
   "scripts": {
     "build:image": "docker build -t sandbox:spike .",
     "import:image": "k3d image import sandbox:spike -c agent-sandbox",
+    "test:unit": "npx tsx --test src/lib/sandbox.test.ts",
     "test:lifecycle": "tsx src/test-lifecycle.ts",
     "test:session": "tsx src/test-session.ts",
     "test:coldstart": "tsx src/test-coldstart.ts",

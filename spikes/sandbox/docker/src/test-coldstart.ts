@@ -133,10 +133,8 @@ async function run(): Promise<void> {
     .map((r) => r.total)
     .filter((value): value is number => typeof value === 'number');
 
-  // eslint-disable-next-line no-console
   console.log(`Cold start results for image=${image}`);
   for (const result of results) {
-    // eslint-disable-next-line no-console
     console.log(
       [
         `run=${result.runIndex}`,
@@ -149,14 +147,11 @@ async function run(): Promise<void> {
     );
   }
 
-  // eslint-disable-next-line no-console
   console.log(`p50 TOTAL: ${percentile(totals, 50)}ms`);
-  // eslint-disable-next-line no-console
   console.log(`p90 TOTAL: ${percentile(totals, 90)}ms`);
 }
 
 run().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exitCode = 1;
 });

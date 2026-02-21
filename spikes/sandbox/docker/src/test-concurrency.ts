@@ -120,15 +120,12 @@ async function run(): Promise<void> {
 
   const failures = results.filter((result) => result.status === 'rejected');
 
-  // eslint-disable-next-line no-console
   console.log(`Concurrency wall time: ${end - start}ms`);
-  // eslint-disable-next-line no-console
   console.log(`Total sessions: ${results.length}, failures: ${failures.length}`);
 
   if (failures.length > 0) {
     for (const failure of failures) {
       if (failure.status === 'rejected') {
-        // eslint-disable-next-line no-console
         console.error(failure.reason);
       }
     }
@@ -137,7 +134,6 @@ async function run(): Promise<void> {
 }
 
 run().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exitCode = 1;
 });

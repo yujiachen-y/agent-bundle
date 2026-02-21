@@ -75,27 +75,18 @@ async function run(): Promise<void> {
   const cleanupOutput = await cleanupAgentSandboxPods(namespace);
   await waitForPodDeleted(handles, orphanPodName);
 
-  // eslint-disable-next-line no-console
   console.log('Lifecycle timing summary:');
-  // eslint-disable-next-line no-console
   console.log(`T0 create request -> T1 scheduled: ${formatDuration(marks.t0CreateRequested, marks.t1Scheduled)}`);
-  // eslint-disable-next-line no-console
   console.log(`T1 scheduled -> T2 running: ${formatDuration(marks.t1Scheduled ?? marks.t0CreateRequested, marks.t2Running)}`);
-  // eslint-disable-next-line no-console
   console.log(`T2 running -> T3 ready: ${formatDuration(marks.t2Running ?? marks.t0CreateRequested, marks.t3Ready)}`);
-  // eslint-disable-next-line no-console
   console.log(`T3 ready -> T4 health-ok: ${formatDuration(marks.t3Ready ?? marks.t0CreateRequested, marks.t4HealthOk)}`);
-  // eslint-disable-next-line no-console
   console.log(`Total T0 -> T4: ${formatDuration(marks.t0CreateRequested, marks.t4HealthOk)}`);
 
-  // eslint-disable-next-line no-console
   console.log('Cleanup command output:');
-  // eslint-disable-next-line no-console
   console.log(cleanupOutput || '(no pods matched)');
 }
 
 run().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exitCode = 1;
 });

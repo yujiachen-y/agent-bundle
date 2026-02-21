@@ -1,0 +1,18 @@
+{
+  "path": [
+    "spikes"
+  ],
+  "pattern": "**/src/**/*.{ts,mjs}",
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/results/**",
+    "**/artifacts/**"
+  ],
+  "minLines": 6,
+  "threshold": 2,
+  "reporters": [
+    "console"
+  ],
+  "absolute": false
+}

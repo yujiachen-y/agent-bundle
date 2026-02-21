@@ -12,6 +12,14 @@ import {
   getOAuthApiKey,
   getOAuthProviders,
 } from "@mariozechner/pi-ai";
+import { buildProviderInventory, pickModelId } from "./lib/provider_helpers.mjs";
+import {
+  buildOAuthCredentialMap,
+  buildSkippedTestResult,
+  getAssistantText,
+  hasTokenCounting,
+  withTemporaryEnvVar,
+} from "./lib/runtime_helpers.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,64 +30,6 @@ const envPath = join(spikeDir, ".env");
 dotenv.config({ path: envPath });
 
 const runId = new Date().toISOString().replace(/[.:]/g, "-");
-
-const ENV_VAR_HINTS = {
-  "amazon-bedrock":
-    "AWS_PROFILE | AWS_ACCESS_KEY_ID+AWS_SECRET_ACCESS_KEY | AWS_BEARER_TOKEN_BEDROCK | AWS_CONTAINER_CREDENTIALS_* | AWS_WEB_IDENTITY_TOKEN_FILE",
-  anthropic: "ANTHROPIC_OAUTH_TOKEN | ANTHROPIC_API_KEY",
-  google: "GEMINI_API_KEY",
-  "google-vertex": "GOOGLE_APPLICATION_CREDENTIALS (or ADC) + GOOGLE_CLOUD_PROJECT + GOOGLE_CLOUD_LOCATION",
-  openai: "OPENAI_API_KEY",
-  "azure-openai-responses": "AZURE_OPENAI_API_KEY (+ AZURE_OPENAI_BASE_URL or AZURE_OPENAI_RESOURCE_NAME)",
-  xai: "XAI_API_KEY",
-  groq: "GROQ_API_KEY",
-  cerebras: "CEREBRAS_API_KEY",
-  openrouter: "OPENROUTER_API_KEY",
-  "vercel-ai-gateway": "AI_GATEWAY_API_KEY",
-  zai: "ZAI_API_KEY",
-  mistral: "MISTRAL_API_KEY",
-  minimax: "MINIMAX_API_KEY",
-  "minimax-cn": "MINIMAX_CN_API_KEY",
-  huggingface: "HF_TOKEN",
-  opencode: "OPENCODE_API_KEY",
-  "kimi-coding": "KIMI_API_KEY",
-  "github-copilot": "COPILOT_GITHUB_TOKEN | GH_TOKEN | GITHUB_TOKEN",
-};
-
-const preferredModels = {
-  openai: ["gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini", "gpt-4.1"],
-  anthropic: ["claude-sonnet-4-5", "claude-sonnet-4", "claude-3-7-sonnet"],
-  "openai-codex": ["gpt-5.3-codex", "gpt-5.2-codex"],
-};
-
-function pickModelId(provider) {
-  const models = getModels(provider);
-  if (!models.length) {
-    throw new Error(`No models found for provider: ${provider}`);
-  }
-
-  const preferred = preferredModels[provider] || [];
-  for (const candidate of preferred) {
-    const match = models.find((model) => model.id.includes(candidate));
-    if (match) {
-      return match.id;
-    }
-  }
-
-  return models[0].id;
-}
-
-function getAssistantText(message) {
-  if (!message || message.role !== "assistant") {
-    return "";
-  }
-
-  return message.content
-    .filter((content) => content.type === "text")
-    .map((content) => content.text)
-    .join("")
-    .trim();
-}
 
 function loadPiAuthFile() {
   const authPath = join(homedir(), ".pi", "agent", "auth.json");
@@ -99,24 +49,8 @@ function loadPiAuthFile() {
   }
 }
 
-function buildOAuthCredentialMap(auth) {
-  const credentials = {};
-  if (!auth || typeof auth !== "object") {
-    return credentials;
-  }
-
-  for (const [provider, value] of Object.entries(auth)) {
-    if (value && typeof value === "object" && value.type === "oauth") {
-      const { type: _type, ...rest } = value;
-      credentials[provider] = rest;
-    }
-  }
-
-  return credentials;
-}
-
 async function runAgentSmoke({ provider, apiKey, keyMode, prompt }) {
-  const modelId = pickModelId(provider);
+  const modelId = pickModelId(provider, getModels(provider));
   const model = getModel(provider, modelId);
 
   const agent = new Agent({
@@ -151,12 +85,6 @@ async function runAgentSmoke({ provider, apiKey, keyMode, prompt }) {
     const elapsedMs = performance.now() - timer;
     const assistantMessage = [...agent.state.messages].reverse().find((message) => message.role === "assistant");
     const usage = assistantMessage?.usage || null;
-    const tokenCounting =
-      usage &&
-      Number.isFinite(usage.input) &&
-      Number.isFinite(usage.output) &&
-      Number.isFinite(usage.totalTokens) &&
-      usage.totalTokens > 0;
 
     return {
       ok: true,
@@ -169,7 +97,7 @@ async function runAgentSmoke({ provider, apiKey, keyMode, prompt }) {
       responseText: getAssistantText(assistantMessage),
       streamedTextLength: streamText.length,
       usage,
-      tokenCounting,
+      tokenCounting: hasTokenCounting(usage),
     };
   } catch (error) {
     return {
@@ -185,20 +113,22 @@ async function runAgentSmoke({ provider, apiKey, keyMode, prompt }) {
   }
 }
 
-async function maybeRunCodexWithStoredOAuth() {
-  const { authPath, auth, parseError } = loadPiAuthFile();
-  const oauthProviders = getOAuthProviders().map((provider) => provider.id);
-
-  const result = {
-    supportedInPiMono: oauthProviders.includes("openai-codex"),
+function createCodexOAuthResult({ authPath, auth, parseError, oauthProviderIds }) {
+  return {
+    supportedInPiMono: oauthProviderIds.includes("openai-codex"),
     authPath,
-    authFileReadable: !!auth,
+    authFileReadable: Boolean(auth),
     parseError: parseError || null,
     attempted: false,
     skipped: false,
     skipReason: null,
     smoke: null,
   };
+}
+
+async function maybeRunCodexWithStoredOAuth(oauthProviderIds) {
+  const { authPath, auth, parseError } = loadPiAuthFile();
+  const result = createCodexOAuthResult({ authPath, auth, parseError, oauthProviderIds });
 
   if (!result.supportedInPiMono) {
     result.skipped = true;
@@ -206,13 +136,13 @@ async function maybeRunCodexWithStoredOAuth() {
     return result;
   }
 
-  if (!auth || !auth["openai-codex"] || auth["openai-codex"].type !== "oauth") {
+  const credentialMap = buildOAuthCredentialMap(auth);
+  if (!credentialMap["openai-codex"]) {
     result.skipped = true;
     result.skipReason = "No openai-codex OAuth credential in ~/.pi/agent/auth.json.";
     return result;
   }
 
-  const credentialMap = buildOAuthCredentialMap(auth);
   result.attempted = true;
 
   try {
@@ -239,28 +169,65 @@ async function maybeRunCodexWithStoredOAuth() {
   }
 }
 
-function buildProviderInventory() {
-  const providers = getProviders().sort();
-  const oauthProviders = new Set(getOAuthProviders().map((provider) => provider.id));
+async function runAnthropicClaudeSetupSmoke(claudeSetupToken) {
+  if (!claudeSetupToken) {
+    return buildSkippedTestResult("CLAUDE_CODE_OAUTH_TOKEN is missing in .env");
+  }
 
-  return providers.map((provider) => ({
-    provider,
-    modelCount: getModels(provider).length,
-    oauth: oauthProviders.has(provider),
-    envOrCredentialHints: ENV_VAR_HINTS[provider] || null,
+  return withTemporaryEnvVar("ANTHROPIC_OAUTH_TOKEN", claudeSetupToken, async () => runAgentSmoke({
+    provider: "anthropic",
+    apiKey: undefined,
+    keyMode: "env",
+    prompt: "Reply with exactly: anthropic-ok",
   }));
 }
 
+async function runOpenAiApiKeySmoke(openAiKey) {
+  if (!openAiKey) {
+    return buildSkippedTestResult("OPENAI_API_KEY is missing in .env");
+  }
+
+  return runAgentSmoke({
+    provider: "openai",
+    apiKey: openAiKey,
+    keyMode: "callback",
+    prompt: "Reply with exactly: openai-ok",
+  });
+}
+
+function writeResultFile(result) {
+  if (!existsSync(resultDir)) {
+    mkdirSync(resultDir, { recursive: true });
+  }
+
+  const outputPath = join(resultDir, `${runId}.json`);
+  writeFileSync(outputPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  return outputPath;
+}
+
+function printSummary(result, outputPath) {
+  console.log(`runId: ${runId}`);
+  console.log(`result: ${outputPath}`);
+  console.log(`openaiApiKey.ok: ${Boolean(result.tests.openaiApiKey?.ok)}`);
+  console.log(`anthropicClaudeSetupToken.ok: ${Boolean(result.tests.anthropicClaudeSetupToken?.ok)}`);
+  console.log(`openaiCodexOAuth.supportedInPiMono: ${Boolean(result.tests.openaiCodexOAuth?.supportedInPiMono)}`);
+  console.log(`openaiCodexOAuth.skipped: ${Boolean(result.tests.openaiCodexOAuth?.skipped)}`);
+}
+
 async function main() {
-  const openAiKey = process.env.OPENAI_API_KEY;
-  const claudeSetupToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  const oauthProviders = getOAuthProviders();
+  const oauthProviderIds = oauthProviders.map((provider) => provider.id);
 
   const result = {
     runId,
     executedAt: new Date().toISOString(),
     envFile: envPath,
-    providerInventory: buildProviderInventory(),
-    oauthProviders: getOAuthProviders().map((provider) => ({ id: provider.id, name: provider.name })),
+    providerInventory: buildProviderInventory({
+      providers: getProviders(),
+      oauthProviderIds,
+      getModelsForProvider: getModels,
+    }),
+    oauthProviders: oauthProviders.map((provider) => ({ id: provider.id, name: provider.name })),
     tests: {
       openaiApiKey: null,
       anthropicClaudeSetupToken: null,
@@ -268,60 +235,12 @@ async function main() {
     },
   };
 
-  if (openAiKey) {
-    result.tests.openaiApiKey = await runAgentSmoke({
-      provider: "openai",
-      apiKey: openAiKey,
-      keyMode: "callback",
-      prompt: "Reply with exactly: openai-ok",
-    });
-  } else {
-    result.tests.openaiApiKey = {
-      ok: false,
-      skipped: true,
-      reason: "OPENAI_API_KEY is missing in .env",
-    };
-  }
+  result.tests.openaiApiKey = await runOpenAiApiKeySmoke(process.env.OPENAI_API_KEY);
+  result.tests.anthropicClaudeSetupToken = await runAnthropicClaudeSetupSmoke(process.env.CLAUDE_CODE_OAUTH_TOKEN);
+  result.tests.openaiCodexOAuth = await maybeRunCodexWithStoredOAuth(oauthProviderIds);
 
-  if (claudeSetupToken) {
-    const original = process.env.ANTHROPIC_OAUTH_TOKEN;
-    process.env.ANTHROPIC_OAUTH_TOKEN = claudeSetupToken;
-
-    result.tests.anthropicClaudeSetupToken = await runAgentSmoke({
-      provider: "anthropic",
-      apiKey: undefined,
-      keyMode: "env",
-      prompt: "Reply with exactly: anthropic-ok",
-    });
-
-    if (original === undefined) {
-      delete process.env.ANTHROPIC_OAUTH_TOKEN;
-    } else {
-      process.env.ANTHROPIC_OAUTH_TOKEN = original;
-    }
-  } else {
-    result.tests.anthropicClaudeSetupToken = {
-      ok: false,
-      skipped: true,
-      reason: "CLAUDE_CODE_OAUTH_TOKEN is missing in .env",
-    };
-  }
-
-  result.tests.openaiCodexOAuth = await maybeRunCodexWithStoredOAuth();
-
-  if (!existsSync(resultDir)) {
-    mkdirSync(resultDir, { recursive: true });
-  }
-
-  const outputPath = join(resultDir, `${runId}.json`);
-  writeFileSync(outputPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
-
-  console.log(`runId: ${runId}`);
-  console.log(`result: ${outputPath}`);
-  console.log(`openaiApiKey.ok: ${Boolean(result.tests.openaiApiKey?.ok)}`);
-  console.log(`anthropicClaudeSetupToken.ok: ${Boolean(result.tests.anthropicClaudeSetupToken?.ok)}`);
-  console.log(`openaiCodexOAuth.supportedInPiMono: ${Boolean(result.tests.openaiCodexOAuth?.supportedInPiMono)}`);
-  console.log(`openaiCodexOAuth.skipped: ${Boolean(result.tests.openaiCodexOAuth?.skipped)}`);
+  const outputPath = writeResultFile(result);
+  printSummary(result, outputPath);
 }
 
 await main();

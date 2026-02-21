@@ -300,9 +300,11 @@ def test_handle_upsert_existing_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     op = sync.Operation(kind="upsert", path="docs/proposal.md")
     sync.handle_upsert(cast(Any, notion), cast(Any, index), op, "parent-id", tmp_path)
 
-    assert notion.archived == ["30ab3f79-b3b4-810f-bfc6-d874eca9df02"]
-    assert notion.created == [("parent-id", "Title")]
-    assert notion.appended[0][0] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
+    assert notion.updated == [("30ab3f79-b3b4-810f-bfc6-d874eca9df02", "Title")]
+    assert notion.replaced[0][0] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
+    assert notion.archived == []
+    assert notion.created == []
+    assert notion.appended == []
     assert called["markdown"] == staged
     assert index.upserts[0]["doc_sync_id"] == "11111111-2222-3333-4444-555555555555"
     assert index.upserts[0]["existing"] is record
@@ -322,6 +324,7 @@ def test_handle_upsert_skips_replace_when_hash_matches(
     sync.handle_upsert(cast(Any, notion), cast(Any, index), op, "parent-id", tmp_path)
 
     assert notion.appended == []
+    assert notion.replaced == []
     assert notion.archived == []
     assert notion.created == []
     assert index.upserts[0]["content_hash"] == "same-hash"
@@ -754,9 +757,11 @@ def test_handle_rename_reuses_old_id(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         "parent-id",
         tmp_path,
     )
-    assert notion.archived == ["30ab3f79-b3b4-810f-bfc6-d874eca9df02"]
-    assert notion.created == [("parent-id", "New Title")]
-    assert notion.appended[0][0] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
+    assert notion.updated == [("30ab3f79-b3b4-810f-bfc6-d874eca9df02", "New Title")]
+    assert notion.replaced[0][0] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
+    assert notion.archived == []
+    assert notion.created == []
+    assert notion.appended == []
     assert called["markdown"].startswith("---\ntitle: New Title")
     assert index.upserts[0]["existing"] is record
 

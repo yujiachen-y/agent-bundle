@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import time
 from typing import Optional
@@ -143,15 +144,26 @@ class NotionClient:
             )
             print(f"{LOG_PREFIX} Appended chunk {(i // 100) + 1}/{total} to {page_id}")
 
+    def _archive_block(self, block_id: str) -> None:
+        try:
+            self.request_json("PATCH", f"/blocks/{block_id}", {"archived": True})
+        except NotionAPIError as exc:
+            if "archived" in str(exc).lower():
+                return  # block already archived — skip
+            raise
+
     def replace_page_content(self, page_id: str, blocks: list[dict]) -> None:
         child_ids = self.list_child_ids(page_id)
         archive_total = len(child_ids)
         if archive_total:
             print(f"{LOG_PREFIX} Replacing page {page_id}: archiving {archive_total} block(s)")
-        for idx, child_id in enumerate(child_ids, start=1):
-            self.request_json("PATCH", f"/blocks/{child_id}", {"archived": True})
-            if idx % ARCHIVE_PROGRESS_STEP == 0 or idx == archive_total:
-                print(f"{LOG_PREFIX} Replacing page {page_id}: archived {idx}/{archive_total}")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+                futs = {pool.submit(self._archive_block, cid): cid for cid in child_ids}
+                for fut in concurrent.futures.as_completed(futs):
+                    fut.result()
+            print(
+                f"{LOG_PREFIX} Replacing page {page_id}: archived {archive_total}/{archive_total}"
+            )
 
         chunk_total = (len(blocks) + 99) // 100
         if chunk_total:

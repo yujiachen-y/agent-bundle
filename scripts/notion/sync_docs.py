@@ -651,10 +651,12 @@ def handle_upsert(
         info(f"Skipping unchanged {path}")
     else:
         if page_id:
-            notion.archive_page(page_id)
-        page_id = notion.create_page(parent_page_id, title)
+            notion.update_page_title(page_id, title)
+            notion.replace_page_content(page_id, markdown_to_blocks(staged))
+        else:
+            page_id = notion.create_page(parent_page_id, title)
+            notion.append_blocks(page_id, markdown_to_blocks(staged))
         info(f"Synced {path} -> {page_id}")
-        notion.append_blocks(page_id, markdown_to_blocks(staged))
     index.upsert(
         doc_sync_id=doc_sync_id,
         doc_path=path,
@@ -744,10 +746,12 @@ def handle_rename(
         doc_sync_id=doc_sync_id,
     )
     if page_id:
-        notion.archive_page(page_id)
-    page_id = notion.create_page(parent_page_id, title)
+        notion.update_page_title(page_id, title)
+        notion.replace_page_content(page_id, markdown_to_blocks(new_markdown))
+    else:
+        page_id = notion.create_page(parent_page_id, title)
+        notion.append_blocks(page_id, markdown_to_blocks(new_markdown))
     info(f"Renamed {old_path} -> {new_path}: {page_id}")
-    notion.append_blocks(page_id, markdown_to_blocks(new_markdown))
     index.upsert(
         doc_sync_id=doc_sync_id,
         doc_path=new_path,

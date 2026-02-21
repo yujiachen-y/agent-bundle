@@ -2,7 +2,7 @@
 title: "Agent Bundle Proposal"
 author: ""
 createdAt: 2026-02-17
-updatedAt: 2026-02-17
+updatedAt: 2026-02-21
 status: draft
 doc_sync_id: "c9ec52be-fc83-49d5-aec5-c720b5cf0674"
 ---
@@ -34,20 +34,18 @@ We propose a lightweight, self-contained agent runtime that loads a curated set 
 
 The runtime consists of the following core components:
 
-1. Skill Manager
-   Discovers, loads, and manages Agent Skills from local directories or remote registries. Each skill runs within a scoped permission boundary controlling filesystem, network, and execution access. Detailed permission model design is deferred to a later stage.
-2. Built-in Agent Loop
-   A lightweight loop that handles skill matching, tool calling, and structured output for each incoming request.
-3. LLM Provider Layer
+1. Built-in Agent Loop
+   A lightweight loop that handles tool calling and structured output for each incoming request. Skills are plain SKILL.md files seeded into the sandbox at build time; skill summaries are baked into the system prompt, and the agent reads full skill content on demand via built-in tools.
+2. LLM Provider Layer
    Supports major providers natively (Anthropic, OpenAI, Gemini) and accepts third-party provider proxies such as LiteLLM and OpenRouter. For local development and personal use, it also supports Ollama, Codex OAuth, and Claude `setup-token` for accessing local or third-party compute.
-4. Service Interface
-   Exposes a minimal external API surface (an OpenAI-style Chat Completions endpoint and an MCP server) for external integration. Encapsulates internal mechanics including agent-loop orchestration, sandbox management, and filesystem setup.
+3. Service Interface
+   Exposes a minimal external API surface (an Open Responses-compatible HTTP API) for external integration. Encapsulates internal mechanics including agent-loop orchestration, sandbox management, and filesystem setup.
 
 The runtime is packaged into a Docker image via a YAML-driven configuration, producing a single deployable artifact ready for cloud or local use.
 
 ## What This Is Not
 
-Agent Bundle is not a wrapper around existing agent tools such as Claude Code, Codex, or Cursor. It does not embed or adapt third-party agent loops. Instead, it provides its own lightweight runtime purpose-built for loading and serving Agent Skills as deployable services.
+Agent Bundle is not a wrapper around existing user-facing agent tools such as Claude Code, Codex, or Cursor. The v1 built-in agent loop is implemented using pi-mono as an internal library; this is a deliberate implementation choice, not a user-facing dependency. The service interface, sandbox abstraction, and build pipeline are all agent-bundle's own design.
 
 ## Goals and Non-Goals
 
@@ -56,12 +54,12 @@ Agent Bundle is not a wrapper around existing agent tools such as Claude Code, C
 1. Provide a YAML-driven tool that declares a bundle (skills, model, permissions) and produces a runnable agent in two modes:
    - `serve` — runs as a local process for development and testing
    - `build` — produces a Docker image for online deployment
-2. Include a simple, basic built-in runtime in both modes:
+2. Include a built-in runtime in both modes:
    - a simple Agent Loop for request execution
-   - a basic local sandbox service
+   - a k3d-based sandbox for `serve` mode; E2B or Kubernetes for `build` mode
 3. Expose built-in service interfaces appropriate to each mode:
-   - a minimal Chat Completions-compatible interface and an MCP server (available in both modes)
-   - terminal/TUI and lightweight chat UI (local `serve` mode only)
+   - a minimal Open Responses-compatible HTTP API (available in both modes)
+   - terminal/TUI and WebUI with live file tree and terminal output (local `serve` mode only)
 4. Keep token and model-consumption strategy externally configurable by users.
 
 ### Non-Goals
@@ -93,7 +91,6 @@ graph TD
     subgraph External Interfaces
         direction LR
         HTTP["Responses API\n(Open Responses)"]
-        MCP["MCP Server"]
         TUI["TUI *"]
         WebUI["WebUI *"]
     end
@@ -118,12 +115,14 @@ graph TD
         end
     end
 
-    HTTP & MCP & TUI & WebUI -->|request| ORCH
+    EXT_MCP["External MCP Servers\n(permission-scoped via token)"]
+
+    HTTP & TUI & WebUI -->|request| ORCH
     ORCH -->|user message| PROMPT
     PROMPT --> TOOLS
     TOOLS -->|LLM calls| LLM
-    ORCH -->|tool routing| SKILLS
     ORCH -->|tool routing| WORKSPACE
+    ORCH -->|mcp tool calls| EXT_MCP
     HOOKS <-->|mount · unmount| Volume
 ```
 
@@ -451,6 +450,85 @@ POST /v1/responses
 data: {"type": "response.created", ...}
 data: {"type": "response.output_text.delta", "delta": "The invoice contains..."}
 data: {"type": "response.completed", ...}
+```
+
+#### Session Model
+
+Sessions support error recovery. If an agent crashes mid-execution, the session can be resumed by passing the saved conversation history into a new `init()` call.
+
+```typescript
+interface SessionState {
+  conversationHistory: ResponseInput;
+}
+```
+
+The `session` field is an optional parameter in `InitOptions`:
+
+```typescript
+const agent = await InvoiceProcessor.init({
+  variables: { user_name: "Alice", timezone: "UTC+8" },
+  session: savedState,  // omit for a fresh session
+});
+```
+
+**What is and is not restored on resume:**
+
+- **Conversation history** — restored from `SessionState`. The LLM has full context of previous work.
+- **Sandbox files** — not automatically restored. The sandbox is re-provisioned from scratch (`preMount` runs again). Restoring sandbox files from a previous session is the caller's responsibility via `preMount` (e.g., re-fetch artifacts from external storage).
+
+Session persistence is the caller's responsibility. agent-bundle provides the `SessionState` interface and accepts it at `init()`; storage and retrieval are left to the business layer.
+
+### MCP Integration
+
+The agent can invoke tools on external MCP servers to access internal services (e.g., user data, domain operations) from within the sandbox.
+
+#### Accessing Internal Services
+
+External MCP servers are declared in the bundle YAML. At session creation, the caller injects per-user tokens; the agent runtime uses these tokens when establishing MCP connections.
+
+```yaml
+mcp:
+  servers:
+    - name: refund-service
+      url: https://internal.example.com/mcp/refund
+      auth: bearer
+    - name: inventory-service
+      url: https://internal.example.com/mcp/inventory
+      auth: bearer
+```
+
+Tokens are passed at `init()` time:
+
+```typescript
+const agent = await InvoiceProcessor.init({
+  variables: { user_name: "Alice", timezone: "UTC+8" },
+  mcpTokens: {
+    "refund-service": userRefundToken,
+    "inventory-service": userInventoryToken,
+  },
+});
+```
+
+#### Security Model
+
+The agent runs inside a sandbox (high-privilege compute environment). External MCP servers sit outside the sandbox as controlled gateways:
+
+```
+Sandbox (agent execution)
+  └── MCP client (in agent runtime process, outside sandbox)
+        └── External MCP server (validates token, scopes to current user)
+```
+
+The token passed to each MCP server scopes all operations to the current user's resources. Even if the agent is subject to prompt injection, it cannot exceed what the MCP server permits for that token. This is defense-in-depth: sandbox isolation bounds compute, MCP token scoping bounds data access.
+
+#### Tool Routing
+
+MCP tool calls are routed by the Agent Orchestrator alongside built-in sandbox tools:
+
+```
+Agent Orchestrator (toolHandler)
+  ├── Built-in tools (Bash, Read, Write, Edit) → sandbox.exec / sandbox.file.*
+  └── MCP tools (declared in YAML)            → MCP client → external MCP server
 ```
 
 ## Implementation Plan

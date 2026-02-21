@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Literal, Optional, overload
 
 if TYPE_CHECKING:
+    from scripts import markdown_codeblock as _markdown_codeblock
     from scripts import markdown_rich_text as _markdown_rich_text
     from scripts import markdown_table as _markdown_table
     from scripts.notion_client import NotionAPIError as _NotionAPIError
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from scripts.notion_doc_index import NotionDocIndex as _NotionDocIndex
 else:
     try:
+        from scripts import markdown_codeblock as _markdown_codeblock
         from scripts import markdown_rich_text as _markdown_rich_text
         from scripts import markdown_table as _markdown_table
         from scripts.notion_client import NotionAPIError as _NotionAPIError
@@ -30,6 +32,7 @@ else:
         from scripts.notion_doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
         from scripts.notion_doc_index import NotionDocIndex as _NotionDocIndex
     except ImportError:
+        import markdown_codeblock as _markdown_codeblock
         import markdown_rich_text as _markdown_rich_text
         import markdown_table as _markdown_table
         from notion_client import NotionAPIError as _NotionAPIError
@@ -38,6 +41,8 @@ else:
         from notion_doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
         from notion_doc_index import NotionDocIndex as _NotionDocIndex
 
+normalize_code_content = _markdown_codeblock.normalize_code_content
+normalize_code_language = _markdown_codeblock.normalize_code_language
 to_rich_text = _markdown_rich_text.to_rich_text
 parse_markdown_table = _markdown_table.parse_markdown_table
 parse_heading_line = _markdown_table.parse_heading_line
@@ -53,12 +58,11 @@ DOCS_PREFIX = "docs/"
 LOG_PREFIX = "[docs-notion-sync]"
 DOC_SYNC_ID_KEY = "doc_sync_id"
 LEGACY_NOTION_PAGE_ID_KEY = "notion_page_id"
-SYNC_SCRIPT_TRIGGER_PATHS = {
-    "scripts/markdown_table.py",
-    "scripts/notion_doc_index.py",
-    "scripts/markdown_rich_text.py",
-    "scripts/sync_docs_to_notion.py",
-}
+SYNC_SCRIPT_TRIGGER_PATHS = set(
+    "scripts/markdown_codeblock.py|scripts/markdown_table.py|"
+    "scripts/notion_doc_index.py|scripts/markdown_rich_text.py|"
+    "scripts/sync_docs_to_notion.py".split("|")
+)
 
 FRONTMATTER_PATTERN = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 UUID_RE = re.compile(
@@ -68,11 +72,6 @@ HEX32_RE = re.compile(r"([0-9a-fA-F]{32})")
 LIST_ITEM_RE = re.compile(r"^(\s*)([-*+]|\d+\.)\s+(.*)$")
 QUOTE_LINE_RE = re.compile(r"^\s*>\s?(.*)$")
 CODE_FENCE_RE = re.compile(r"^\s*```(?P<lang>[^\s`]+)?\s*$")
-NOTION_CODE_LANGUAGES = {"bash", "json", "markdown", "mermaid", "plain text", "python", "yaml"}
-MERMAID_MULTI_SOURCE_EDGE_RE = re.compile(
-    r"^(\s*)([A-Za-z_][A-Za-z0-9_]*(?:\s*&\s*[A-Za-z_][A-Za-z0-9_]*)+)\s*-->\s*(.+)$"
-)
-CODE_LANGUAGE_ALIASES = {"plaintext": "plain text", "text": "plain text", "yml": "yaml"}
 
 
 @dataclass
@@ -438,16 +437,6 @@ def make_text_block(block_type: str, text: str) -> dict:
     }
 
 
-def normalize_code_language(language_hint: str | None) -> str:
-    if not language_hint:
-        return "plain text"
-    normalized = language_hint.strip().lower()
-    mapped = CODE_LANGUAGE_ALIASES.get(normalized, normalized)
-    if mapped in NOTION_CODE_LANGUAGES:
-        return mapped
-    return "plain text"
-
-
 def make_code_block(text: str, language: str = "plain text") -> dict:
     return {
         "object": "block",
@@ -457,25 +446,6 @@ def make_code_block(text: str, language: str = "plain text") -> dict:
             "language": language,
         },
     }
-
-
-def normalize_code_content(text: str, language: str) -> str:
-    if language != "mermaid":
-        return text
-
-    normalized = text.replace("\\n", "<br/>")
-    lines: list[str] = []
-    for raw_line in normalized.splitlines():
-        match = MERMAID_MULTI_SOURCE_EDGE_RE.match(raw_line)
-        if not match:
-            lines.append(raw_line)
-            continue
-        indent, sources, target = match.groups()
-        target_normalized = target.lstrip()
-        spacer = "" if target_normalized.startswith("|") else " "
-        for source in (item.strip() for item in sources.split("&")):
-            lines.append(f"{indent}{source} -->{spacer}{target_normalized}")
-    return "\n".join(lines)
 
 
 def append_list_item(

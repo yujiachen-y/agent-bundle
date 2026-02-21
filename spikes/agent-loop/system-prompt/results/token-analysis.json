@@ -1,0 +1,29 @@
+{
+  "tokenizer": "gpt-4o (fallback: cl100k_base)",
+  "skillCount": 3,
+  "basePromptTokens": 136,
+  "promptVariants": {
+    "descriptionOnly": 254,
+    "mixed": 549,
+    "fullBody": 742
+  },
+  "perSkillDelta": {
+    "descriptionOnly": 39.33,
+    "fullBody": 202,
+    "savings": 162.67
+  },
+  "estimates": [
+    {
+      "skills": 5,
+      "descriptionOnlyEstimate": 333,
+      "fullBodyEstimate": 1146,
+      "estimatedSavings": 813
+    },
+    {
+      "skills": 10,
+      "descriptionOnlyEstimate": 529,
+      "fullBodyEstimate": 2156,
+      "estimatedSavings": 1627
+    }
+  ]
+}

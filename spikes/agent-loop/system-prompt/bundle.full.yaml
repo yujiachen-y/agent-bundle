@@ -1,0 +1,7 @@
+skills:
+  - path: ./sample-skills/pdf-extractor
+    prompt: full
+  - path: ./sample-skills/data-validator
+    prompt: full
+  - path: ./sample-skills/release-notes
+    prompt: full

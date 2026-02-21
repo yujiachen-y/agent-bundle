@@ -1,0 +1,26 @@
+{
+  "status": "ok",
+  "checkedAt": "2026-02-21T05:14:16.990Z",
+  "model": "openai/gpt-4o-mini",
+  "elapsedMs": 21918.15,
+  "checks": {
+    "knowsSkillsFromPrompt": true,
+    "listSkillsWithoutFileRead": true,
+    "readsSkillOnDemand": true,
+    "dynamicPromptHasDifferentBehavior": true
+  },
+  "runs": {
+    "listSkills": {
+      "toolCalls": 0,
+      "assistantText": "Here are the available skills and their descriptions:\n\n1. **pdf-extractor**: Extract text, tables, and form fields from PDF files for parsing and conversion to structured JSON.\n2. **data-validator**: Validate datasets against schemas, ensuring data quality before promotion to downstream systems.\n3. **release-notes**: Draft release notes from git history and issue labels for weekly or versioned changelogs."
+    },
+    "readSkill": {
+      "toolCalls": 1,
+      "readToolCalls": 1,
+      "assistantText": "Here are the section headings from the SKILL.md:\n\n1. Data Validator\n2. Goal\n3. Inputs\n4. Setup\n5. Workflow\n6. Commands\n7. Output Contract\n8. Failure Handling"
+    },
+    "baselineDynamic": {
+      "assistantText": "I am designed to assist with the following skills:\n\n1. **Read**: Examine the contents of files.\n2. **Execute Bash Commands**: Run shell commands for file operations and other tasks.\n3. **Edit**: Make precise text changes in files.\n4. **Write**: Create or overwrite files with specified content."
+    }
+  }
+}

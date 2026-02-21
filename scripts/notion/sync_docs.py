@@ -12,43 +12,25 @@ import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Literal, Optional, overload
+from typing import Callable, Literal, Optional, overload
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-
-if TYPE_CHECKING:
-    from scripts import markdown_codeblock as _markdown_codeblock
-    from scripts import markdown_rich_text as _markdown_rich_text
-    from scripts import markdown_table as _markdown_table
-    from scripts import sync_content_hash as _sync_content_hash
-    from scripts.notion.client import NotionAPIError as _NotionAPIError
-    from scripts.notion.client import NotionClient as _NotionClient
-    from scripts.notion.doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
-    from scripts.notion.doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
-    from scripts.notion.doc_index import NotionDocIndex as _NotionDocIndex
-else:
-    from scripts import markdown_codeblock as _markdown_codeblock
-    from scripts import markdown_rich_text as _markdown_rich_text
-    from scripts import markdown_table as _markdown_table
-    from scripts import sync_content_hash as _sync_content_hash
-    from scripts.notion.client import NotionAPIError as _NotionAPIError
-    from scripts.notion.client import NotionClient as _NotionClient
-    from scripts.notion.doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
-    from scripts.notion.doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
-    from scripts.notion.doc_index import NotionDocIndex as _NotionDocIndex
-
-normalize_code_content = _markdown_codeblock.normalize_code_content
-normalize_code_language = _markdown_codeblock.normalize_code_language
-to_rich_text = _markdown_rich_text.to_rich_text
-parse_markdown_table = _markdown_table.parse_markdown_table
-parse_heading_line = _markdown_table.parse_heading_line
-normalize_heading_for_notion = _markdown_table.normalize_heading_for_notion
-hash_synced_markdown = _sync_content_hash.hash_synced_markdown
-NotionClient = _NotionClient
-NotionAPIError = _NotionAPIError
-NotionDocIndex = _NotionDocIndex
-STATUS_ACTIVE = _STATUS_ACTIVE
-STATUS_ARCHIVED = _STATUS_ARCHIVED
+from scripts.notion.client import NotionClient
+from scripts.notion.doc_index import (
+    STATUS_ACTIVE,
+    STATUS_ARCHIVED,
+    NotionDocIndex,
+)
+from scripts.notion.markdown_codeblock import (
+    normalize_code_content,
+    normalize_code_language,
+)
+from scripts.notion.markdown_rich_text import to_rich_text
+from scripts.notion.markdown_table import (
+    normalize_heading_for_notion,
+    parse_heading_line,
+    parse_markdown_table,
+)
+from scripts.notion.sync_content_hash import hash_synced_markdown
 
 DEFAULT_NOTION_VERSION = "2022-06-28"
 ENV_FILE = ".env.local"
@@ -57,8 +39,9 @@ LOG_PREFIX = "[docs-notion-sync]"
 DOC_SYNC_ID_KEY = "doc_sync_id"
 LEGACY_NOTION_PAGE_ID_KEY = "notion_page_id"
 SYNC_SCRIPT_TRIGGER_PATHS = set(
-    "scripts/markdown_codeblock.py|scripts/markdown_table.py|scripts/notion/doc_index.py|"
-    "scripts/markdown_rich_text.py|scripts/notion/sync_docs.py".split("|")
+    "scripts/notion/markdown_codeblock.py|scripts/notion/markdown_table.py|"
+    "scripts/notion/doc_index.py|scripts/notion/markdown_rich_text.py|"
+    "scripts/notion/sync_docs.py".split("|")
 )
 
 _git_lock = threading.Lock()

@@ -197,7 +197,7 @@ def test_build_operations_script_change_keeps_doc_delete(
 ) -> None:
     monkeypatch.setattr(sync, "list_docs_paths_for_sync", lambda: ["docs/keep.md"])
     changes = [
-        sync.Change(status="M", path="scripts/markdown_rich_text.py"),
+        sync.Change(status="M", path="scripts/notion/markdown_rich_text.py"),
         sync.Change(status="D", path="docs/deleted.md"),
     ]
     ops = sync.build_operations(changes)

@@ -4,7 +4,7 @@ repos:
     hooks:
       - id: sync-docs-to-notion
         name: sync docs to notion on main
-        entry: python3 scripts/notion/sync_docs.py
+        entry: python3 -m scripts.notion.sync_docs
         language: system
         pass_filenames: false
         always_run: true

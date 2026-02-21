@@ -1,8 +1,15 @@
 .env*
 !.env.example
 .infisical.json
+
 __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.DS_Store

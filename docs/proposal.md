@@ -533,7 +533,400 @@ Agent Orchestrator (toolHandler)
 
 ## Implementation Plan
 
-<!-- Break down the work into phases or milestones. -->
+Tasks are grouped into phases. Tasks within a phase can proceed in parallel. Each task targets a single PR with ≤ 1000 lines of diff.
+
+---
+
+### Phase 1: Foundation
+
+*No dependencies. All tasks in this phase can proceed in parallel.*
+
+#### F1: Project Scaffold and CLI Skeleton
+
+**Scope**: Set up `src/` directory structure, TypeScript build config, CLI entrypoint with `serve`/`build` command routing, and YAML file loading.
+
+**Details**:
+- `typescript` devDependency, `tsconfig.json` targeting ESM (`"module": "nodenext"`, `"target": "es2022"`)
+- `src/cli/index.ts` CLI entrypoint with lightweight arg parser (e.g. `citty`). Two commands: `agent-bundle serve [--config path]` and `agent-bundle build [--config path]`, defaulting to `./agent-bundle.yaml`
+- Both commands are stubs: load + validate YAML (using F2's schema) and print parsed config
+- `"bin"` field in `package.json`, `yaml` dependency, `"ts:build"` script using `tsc`
+- Update `eslint.config.mjs` and `vitest.config.ts` to include `src/**`
+
+**Depends on**: none
+
+**Produces**: CLI entrypoint (`src/cli/index.ts`), `loadBundleConfig(path)` function, updated build/lint/test config.
+
+---
+
+#### F2: Bundle YAML Schema (Zod)
+
+**Scope**: Define and export a Zod schema for the full `agent-bundle.yaml` configuration.
+
+**Details**:
+- `zod` dependency. Create `src/schema/bundle.ts`
+- Top-level shape: `name` (required, kebab-case), `model` (`{ provider, model }`), `prompt` (`{ system, variables? }`), `sandbox` (provider, timeout, resources, provider-specific keys, serve override), `skills` (union: `{ path }` | `{ github, skill?, ref? }` | `{ url, version? }`), `mcp?` (servers array: `{ name, url, auth }`)
+- Export `BundleConfig` inferred type, `parseBundleConfig(raw): BundleConfig`, and `bundleSchema`
+- Tests: valid config, missing required fields, invalid provider, skill union discrimination, sandbox defaults
+
+**Depends on**: none
+
+**Produces**: `BundleConfig` type, `parseBundleConfig()`, `bundleSchema`. Used by F1, F3, S1, S2, S3.
+
+---
+
+#### L1: AgentLoop Interface and Core Types
+
+**Scope**: Define the `AgentLoop` interface and all types shared across the agent loop boundary.
+
+**Details**:
+- `src/agent-loop/types.ts`: `ModelConfig`, `ToolCall`, `ToolResult`, `ResponseInput` (array of role+content messages with tool_calls/tool_results for round-trip), `ResponseEvent` (discriminated union: `response.created`, `response.output_text.delta`, `response.output_text.done`, `response.tool_call.created`, `response.tool_call.done`, `tool_execution_update`, `response.completed`, `response.error`), `ResponseOutput` (`{ id, output, usage }`)
+- `src/agent-loop/agent-loop.ts`: `AgentLoopConfig` (`{ systemPrompt, model, toolHandler }`), `AgentLoop` interface (`init`, `run`, `dispose`)
+- Pure type definitions — no implementation. Barrel export from `src/agent-loop/index.ts`
+
+**Depends on**: none
+
+**Produces**: All types consumed by L2, L3, A1, SV1, B1.
+
+---
+
+#### S1: Sandbox Abstraction (Interfaces)
+
+**Scope**: Define and export all sandbox-related TypeScript interfaces and types.
+
+**Details**:
+- `src/sandbox/types.ts`: `SandboxIO` (exec + file CRUD), `SandboxHooks` (preMount/postMount/preUnmount/postUnmount), `ExecResult`, `FileEntry`, `SandboxStatus`, `Sandbox` (extends `SandboxIO` with `id`, `status`, `start()`, `shutdown()`)
+- `SandboxConfig` type derived from the bundle schema sandbox section
+- Factory signature: `type CreateSandbox = (config: SandboxConfig, hooks: SandboxHooks) => Sandbox`
+- Barrel export from `src/sandbox/index.ts`
+- Pure type definitions — no tests needed
+
+**Depends on**: none (mirrors F2's sandbox schema section but is just types)
+
+**Produces**: All sandbox types/interfaces. Used by S2, S3, S4, A1, UI2.
+
+---
+
+#### L2: System Prompt Generation
+
+**Scope**: Build-time template generator and runtime variable filler for system prompts.
+
+**Details**:
+- Build-time generator (`src/agent-loop/system-prompt/generate.ts`): `generateSystemPromptTemplate({ basePrompt, skills: SkillSummary[] }): string`. Appends `## Skills` section listing each skill's name, description, and location (`/skills/<name>/SKILL.md`). Variables remain as `{{var_name}}` placeholders
+- Runtime filler (`src/agent-loop/system-prompt/fill.ts`): `fillSystemPrompt(template, variables): string`. Simple `{{key}}` replacement; throws on unfilled required placeholders
+- Tests: template generation with 0/1/N skills, variable filling with complete/partial/extra variables, error on missing required variables
+
+**Depends on**: none
+
+**Produces**: `generateSystemPromptTemplate` (used by B1), `fillSystemPrompt` (used by A1).
+
+---
+
+### Phase 2: Providers and Skill Loading
+
+*Depends on Phase 1 types being available.*
+
+#### F3: Skill Loader
+
+**Scope**: Parse SKILL.md frontmatter, load skill content from local/GitHub/URL sources, cache remote skills.
+
+**Details**:
+- `src/skills/loader.ts`. `Skill` type: `{ name, description, content, sourcePath }`
+- `loadSkill(entry: SkillEntry): Promise<Skill>` — dispatches by entry variant:
+  - `path`: read SKILL.md from local fs relative to bundle YAML location
+  - `github`: fetch from `raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}/SKILL.md`, default `ref` to `"main"`
+  - `url`: fetch URL directly, append `/SKILL.md` if URL doesn't end with `.md`
+- `loadAllSkills(entries, basePath): Promise<Skill[]>` — parallel loading
+- Cache remote fetches to `node_modules/.cache/agent-bundle/skills/{sha256-hash}`. Cache option `{ cache?: boolean }` defaults to true
+- Tests: local path loading (mock fs), frontmatter parsing (valid/missing fields), cache hit/miss (mock fetch). No live network calls
+
+**Depends on**: F2 (`SkillEntry` type from bundle schema)
+
+**Produces**: `Skill` type, `loadSkill()`, `loadAllSkills()`. Used by B1 (build pipeline), L2 (system prompt).
+
+---
+
+#### S2: E2B Sandbox Provider
+
+**Scope**: Implement `Sandbox` using the E2B SDK.
+
+**Details**:
+- `@e2b/code-interpreter` dependency. `src/sandbox/providers/e2b.ts`
+- `E2BSandbox implements Sandbox`: constructor receives `SandboxConfig` + `SandboxHooks`, sets `status = "idle"`, id = `e2b-{nanoid()}`
+- `start()`: create E2B sandbox via SDK, run preMount/postMount hooks, transition to `"ready"`
+- `exec()`: `sandbox.commands.run()` with `onStdout`/`onStderr` wired to `onChunk`
+- `file.*`: delegate to E2B SDK `files.read/write/list`, delete via `commands.run("rm -rf ...")`
+- `shutdown()`: run preUnmount/postUnmount hooks, call `sandbox.kill()`
+- Error during `start()` → cleanup + rethrow
+- Tests: mock E2B SDK. Lifecycle transitions, hook invocation order, exec delegation, error cleanup
+
+**Depends on**: S1 (sandbox interfaces)
+
+**Produces**: `E2BSandbox` class. Used by S4 (sandbox factory).
+
+---
+
+#### S3: Kubernetes Sandbox Provider
+
+**Scope**: Implement `Sandbox` using Kubernetes pod lifecycle and execd HTTP daemon.
+
+**Details**:
+- `@kubernetes/client-node` dependency. `src/sandbox/providers/kubernetes.ts`
+- `K8sSandbox implements Sandbox`: constructor receives `SandboxConfig` + `SandboxHooks`, sets `status = "idle"`, id = `k8s-{nanoid()}`
+- `start()`: build pod spec from config (namespace, nodeSelector, image, resource limits), create pod via `CoreV1Api.createNamespacedPod()`, poll until Ready, resolve execd base URL (pod IP or port-forward), health check `GET /health`, run preMount/postMount
+- `exec()`: POST `{baseUrl}/command/run`, SSE streaming via `onChunk`
+- `file.*`: REST endpoints on execd (`/files/read`, `/files/write`, `/files/list`, `/files/delete`)
+- `shutdown()`: run preUnmount/postUnmount hooks, delete pod, stop port-forward
+- Pod labels: `{ app: "agent-sandbox", "sandbox-id": id }`
+- Tests: mock K8s client + fetch. Lifecycle transitions, pod spec construction, exec delegation, shutdown cleanup
+
+**Depends on**: S1 (sandbox interfaces)
+
+**Produces**: `K8sSandbox` class. Used by S4 (sandbox factory).
+
+---
+
+### Phase 3: Sandbox Factory and Agent Loop Implementation
+
+*Depends on Phase 2 providers being available.*
+
+#### S4: Sandbox Provider Registry
+
+**Scope**: Factory function that maps a `provider` string from config to the correct `Sandbox` class.
+
+**Details**:
+- `src/sandbox/factory.ts`
+- `createSandbox(config: SandboxConfig, hooks: SandboxHooks): Sandbox` — dispatches on `config.provider`:
+  - `"e2b"` → `new E2BSandbox(config, hooks)`
+  - `"kubernetes"` → `new K8sSandbox(config, hooks)`
+  - Unknown → throw with actionable error message listing supported providers
+- Handles `serve` mode override: if `config.serve?.provider` is set and mode is `"serve"`, use the override provider
+- Export from `src/sandbox/index.ts` barrel
+- Tests: correct class instantiated for each provider string, error on unknown provider, serve override applies
+
+**Depends on**: S2 (E2BSandbox), S3 (K8sSandbox)
+
+**Produces**: `createSandbox()` — consumed by A1 to create sandboxes from config.
+
+---
+
+#### L3: pi-mono AgentLoop Implementation
+
+**Scope**: Implement `AgentLoop` using `@mariozechner/pi-ai`, with tool calls routed via the `toolHandler` callback.
+
+**Details**:
+- `src/agent-loop/pi-mono/pi-mono-loop.ts` — `PiMonoAgentLoop implements AgentLoop`
+- `init()`: create pi-mono session, inject system prompt via `session.agent.setSystemPrompt()` (bypass pi-mono's built-in prompt assembly per spike finding). Wire pi-mono's tool layer to sandbox-backed operations via `toolHandler`:
+  - `ReadOperations.readFile(path)` → `toolHandler({ name: "Read", input: { path } })`
+  - `WriteOperations.writeFile(path, content)` → `toolHandler({ name: "Write", input: { path, content } })`
+  - `BashOperations.exec(command)` → `toolHandler({ name: "Bash", input: { command } })`
+  - Edit tool: pi-mono handles fuzzy matching/BOM/line-endings internally; file IO delegates via Read/WriteOperations
+- `run(input)`: convert `ResponseInput` to pi-mono's format, call streaming API, map callbacks to `ResponseEvent` yields via async generator
+- `dispose()`: clean up pi-mono session
+- `ModelConfig` passed through to pi-mono's provider init (API keys from env vars)
+
+**Depends on**: L1 (AgentLoop interface/types)
+
+**Produces**: `PiMonoAgentLoop` — the only `AgentLoop` implementation in v1. Used by A1.
+
+---
+
+### Phase 4: Agent Orchestrator
+
+*Depends on sandbox factory and agent loop implementation.*
+
+#### A1: Agent Factory (`defineAgent`) and Session Model
+
+**Scope**: Implement `defineAgent`, the `Agent` orchestrator that wires sandbox + agent loop, and the `SessionState` type for session recovery.
+
+**Details**:
+- `src/agent/define-agent.ts`:
+  - `defineAgent<V extends string>(config: AgentConfig<V>): AgentFactory<V>`
+  - `AgentConfig<V>`: `{ name, sandbox: SandboxConfig, model: ModelConfig, systemPrompt: string, variables: readonly V[], mcp?: McpServerConfig[] }`
+  - `AgentFactory<V>`: `{ name, init(options: InitOptions<V>): Promise<Agent> }`
+  - `InitOptions<V>`: `{ variables: Record<V, string>, hooks?: SandboxHooks, session?: SessionState, mcpTokens?: Record<string, string> }`
+- `src/agent/session.ts`: `SessionState`: `{ conversationHistory: ResponseInput }`
+- `src/agent/agent.ts` — `AgentImpl` init sequence:
+  1. `fillSystemPrompt(template, variables)` (L2)
+  2. `createSandbox(config, hooks)` → `sandbox.start()` (S4)
+  3. Create `PiMonoAgentLoop`, call `loop.init({ systemPrompt, model, toolHandler })` (L3)
+  4. `toolHandler` routes: `Read` → `sandbox.file.read()`, `Write` → `sandbox.file.write()`, `Bash` → `sandbox.exec({ onChunk })`, MCP tools → `mcpClientManager.callTool()` (no-op if M1 not wired)
+  5. If `session` provided, pass `session.conversationHistory` as prior context to loop
+  6. Return `Agent` in `ready` state
+  - `respond()`: collect all events from `respondStream()`, return `ResponseOutput`
+  - `respondStream()`: `loop.run(input)`, yield events, manage status transitions
+  - `shutdown()`: `loop.dispose()`, `mcpClientManager?.dispose()`, `sandbox.shutdown()`, set status to `stopped`
+- Barrel export from `src/agent/index.ts`
+- Tests: init sequence ordering, respond delegates to loop, shutdown call order, session history passed to loop, fresh start without session
+
+**Depends on**: L1 (types), L2 (`fillSystemPrompt`), L3 (`PiMonoAgentLoop`), S4 (`createSandbox`)
+
+**Produces**: `defineAgent`, `Agent`, `AgentFactory`, `SessionState` — public API consumed by B1, SV1, SV3.
+
+---
+
+### Phase 5: Service Layer and MCP
+
+*Depends on Agent being available. All tasks in this phase can proceed in parallel.*
+
+#### SV1: HTTP Server — Open Responses Endpoint
+
+**Scope**: `POST /v1/responses` with JSON and SSE streaming, usable in both `serve` and `build` modes.
+
+**Details**:
+- Hono framework. Single route `POST /v1/responses` accepting `{ input: ResponseInput, stream?: boolean }`
+- Non-streaming: `agent.respond(input)` → JSON `ResponseOutput`
+- Streaming: `agent.respondStream(input)` → SSE `text/event-stream` with `response.created`, `response.output_text.delta`, `response.completed` events
+- `createServer(agent: Agent): HonoApp` — standalone function, embeddable in both CLI modes
+- Request validation (reject missing input, invalid JSON)
+- Health check: `GET /health` → `{ status: "ok" }`
+
+**Depends on**: A1 (Agent interface)
+
+**Produces**: `createServer()` — used by SV3 (serve CLI), B1 (build CLI), UI2 (WebUI).
+
+---
+
+#### UI1: TUI — Interactive Terminal for `serve` Mode
+
+**Scope**: Minimal interactive terminal for `agent-bundle serve`.
+
+**Details**:
+- `serveTUI(agent: Agent)` entry point
+- readline-based prompt (`> `), streams `agent.respondStream(input)` to stdout with incremental text deltas
+- Render `tool_execution_update` events inline (e.g. `[tool: Bash] running...` with live stdout)
+- Ctrl+C cancels running response; double Ctrl+C calls `agent.shutdown()` and exits
+- Plain scrolling output, `chalk` for styling. No heavy TUI frameworks
+- Print agent status transitions (starting sandbox, connecting to LLM, ready)
+
+**Depends on**: A1 (Agent, `respondStream`)
+
+**Produces**: `serveTUI()` — used by SV3.
+
+---
+
+#### UI2: WebUI — Browser Interface for `serve` Mode
+
+**Scope**: Web interface at `localhost:3000` with file tree panel and live terminal output panel.
+
+**Details**:
+- Serve static assets via Hono (extends SV1's server)
+- File tree: poll `sandbox.file.list("/workspace")` every 2-3s via `GET /api/files`
+- Terminal output: WebSocket at `ws://localhost:3000/ws` subscribing to real-time `onChunk` events
+- Internal event bus (`EventEmitter`) bridges `SandboxIO.exec()` `onChunk` callback to WebSocket subscribers
+- Static assets: vanilla HTML + JS, xterm.js for terminal panel. No build step
+- `createWebUIServer(agent: Agent, sandbox: Sandbox): HonoApp`
+
+**Depends on**: SV1 (HTTP server), S1 (SandboxIO for `file.list` and `onChunk`)
+
+**Produces**: `createWebUIServer()` — used by SV3.
+
+---
+
+#### M1: MCP Outbound Client
+
+**Scope**: Connect to external MCP servers and expose their tools to the agent's `toolHandler`.
+
+**Details**:
+- `@modelcontextprotocol/sdk` dependency. `src/mcp/client-manager.ts`
+- At `AgentFactory.init()` time, for each MCP server in config: create MCP client, attach bearer token from `mcpTokens`, call `listTools()` to discover available tools
+- Tools namespaced as `mcp__<server-name>__<tool-name>` to avoid collisions with built-in tools
+- `McpClientManager`: manages connections, tool discovery, `callTool()`, `dispose()`
+- Agent orchestrator (A1) routes MCP-namespaced tool calls to `mcpClientManager.callTool()`
+- If MCP server is unreachable at init, log warning and continue (agent starts without those tools)
+- `dispose()` closes all connections during `Agent.shutdown()`
+
+**Depends on**: A1 (toolHandler routing accepts optional `McpClientManager`)
+
+**Produces**: `McpClientManager` — injected into Agent orchestrator at init time.
+
+---
+
+### Phase 6: Build Pipeline
+
+*Depends on Agent, skill loader, and system prompt generation.*
+
+#### B1: Build CLI Entrypoint and Code Generation
+
+**Scope**: Wire `agent-bundle build` command: YAML parsing, skill loading, system prompt assembly, and TypeScript factory code generation.
+
+**Details**:
+- CLI: `agent-bundle build [--config agent-bundle.yaml] [--output dist/]`
+- Steps:
+  1. Parse and validate YAML via `parseBundleConfig()` (F2)
+  2. Load all skills via `loadAllSkills()` (F3), extract `SkillSummary` from each
+  3. Run sandbox image build — B2 or B3 depending on configured provider — capture `SandboxImageRef`
+  4. Generate system prompt template via `generateSystemPromptTemplate()` (L2)
+  5. Generate factory code (below)
+- `index.ts` generation: uses TypeScript Compiler API (`ts.factory`). Imports `defineAgent` from `agent-bundle/runtime`, exports PascalCase-named const calling `defineAgent({...})` with baked-in config and `SandboxImageRef`
+- `types.ts` generation: exports `<Name>Variables` interface with one string field per variable
+- `bundle.json`: JSON snapshot of resolved config
+- `ResolvedBundleConfig` type: fully resolved config after YAML parsing + skill metadata extraction
+
+**Depends on**: F2 (schema), F3 (skill loader), L2 (system prompt generation), A1 (defineAgent runtime API), B2/B3 (sandbox image build)
+
+**Produces**: `agent-bundle build` command (full end-to-end).
+
+---
+
+#### B2: Sandbox Image Build — E2B Template
+
+**Scope**: Package skills and base tools into an E2B template and push it.
+
+**Details**:
+- Build steps:
+  1. Create temp build context with `/skills/` (SKILL.md + scripts) and `/tools/` (base tool scripts)
+  2. Generate Dockerfile: `FROM e2b-base`, COPY skills and tools
+  3. Call E2B SDK template build API (or shell out to `e2b template build`)
+  4. Capture template ID + version hash (e.g. `invoice-processor:a3f8c2d`)
+- `buildE2BTemplate(config: ResolvedBundleConfig): Promise<SandboxImageRef>`
+- `SandboxImageRef { provider: "e2b" | "kubernetes"; ref: string }` — baked into generated factory code by B1
+
+**Depends on**: B1 (called by build CLI before code gen)
+
+**Produces**: `buildE2BTemplate()`.
+
+---
+
+#### B3: Sandbox Image Build — Kubernetes / Docker
+
+**Scope**: Package skills and base tools into a Docker image and push to registry.
+
+**Details**:
+- Generate Dockerfile: `FROM <base-image>` (configurable, defaults to lightweight Node/Alpine with execd), COPY skills/tools, EXPOSE 8080, CMD execd
+- Shell out to `docker build -t <registry>/<name>:<hash> .` and `docker push`
+- Registry from `sandbox.kubernetes.registry` in YAML. Tag uses content hash for reproducibility
+- `buildKubernetesImage(config: ResolvedBundleConfig): Promise<SandboxImageRef>`
+- Fail fast if `docker` CLI unavailable with actionable error
+
+**Depends on**: B1 (called by build CLI before code gen)
+
+**Produces**: `buildKubernetesImage()`.
+
+---
+
+### Phase 7: CLI Wiring
+
+*Final integration phase.*
+
+#### SV3: Serve CLI Entrypoint
+
+**Scope**: Wire `agent-bundle serve` command that starts the agent with TUI, WebUI, and HTTP server.
+
+**Details**:
+- CLI: `agent-bundle serve [--config agent-bundle.yaml] [--port 3000]`
+- Steps:
+  1. Parse and validate YAML via `parseBundleConfig()` (F2)
+  2. Load skills via `loadAllSkills()` (F3)
+  3. Generate system prompt template via `generateSystemPromptTemplate()` (L2)
+  4. Create Agent via `defineAgent()` with live config (no code gen). Use `sandbox.serve.provider` override if specified
+  5. Call `agent.init({ variables: <from env or CLI args> })`
+  6. Start HTTP server (SV1) and WebUI server (UI2) on specified port
+  7. Start TUI (UI1) for interactive terminal
+- Graceful shutdown: on SIGINT/SIGTERM call `agent.shutdown()`, close servers, exit
+
+**Depends on**: A1 (defineAgent), SV1, UI1, UI2, F3 (skill loader), L2 (system prompt)
+
+**Produces**: Complete `agent-bundle serve` command.
 
 ## Open Questions
 

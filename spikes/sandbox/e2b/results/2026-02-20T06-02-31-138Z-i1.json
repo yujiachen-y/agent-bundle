@@ -1,0 +1,43 @@
+{
+  "sandboxId": "iryjt1168rxcqkta1zh8y",
+  "timings": [
+    {
+      "step": "create_sandbox",
+      "ms": 1595.82
+    },
+    {
+      "step": "write_skill_file",
+      "ms": 943.68
+    },
+    {
+      "step": "write_input_file",
+      "ms": 652.18
+    },
+    {
+      "step": "run_command",
+      "ms": 232.15
+    },
+    {
+      "step": "read_output_file",
+      "ms": 238.96
+    },
+    {
+      "step": "list_workspace",
+      "ms": 233.58
+    },
+    {
+      "step": "destroy_sandbox",
+      "ms": 287.25
+    }
+  ],
+  "command": {
+    "exitCode": 0,
+    "stdout": "# Hello Skill\nThis is a dummy skill file for E2B spike.\n",
+    "stderr": ""
+  },
+  "outputText": "processed\n",
+  "workspaceEntries": [
+    "/workspace/input.txt",
+    "/workspace/output.txt"
+  ]
+}

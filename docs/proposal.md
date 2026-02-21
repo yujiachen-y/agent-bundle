@@ -125,7 +125,11 @@ graph TD
 
 \* TUI and WebUI are available in local `serve` mode only.
 
-### Sandbox Lifecycle
+### Sandbox
+
+The sandbox abstraction provides a provider-agnostic interface for tool execution and file operations. Two providers are supported in v1: **E2B** (managed cloud sandboxes) and **Kubernetes** (self-hosted via k3d or any K8s cluster). Both `serve` and `build` modes run through the sandbox to ensure behavioral consistency; `serve` defaults to a local Docker/k3d sandbox.
+
+#### Lifecycle
 
 All hooks execute while the sandbox is alive and IO is available.
 
@@ -141,10 +145,6 @@ create ──► preMount ──► postMount ──► [agent session] ──�
 5. **preUnmount** — Agent session ends. Collect artifacts, flush logs, snapshot state.
 6. **postUnmount** — Upload artifacts to external storage, notify external systems, clean up.
 7. **destroy** — Sandbox infrastructure is torn down. All resources released.
-
-### Sandbox Interface
-
-The sandbox abstraction provides a provider-agnostic interface for tool execution and file operations. Two providers are supported in v1: **E2B** (managed cloud sandboxes) and **Kubernetes** (self-hosted via k3d or any K8s cluster). Both `serve` and `build` modes run through the sandbox to ensure behavioral consistency; `serve` defaults to a local Docker/k3d sandbox.
 
 #### Configuration
 
@@ -171,7 +171,7 @@ sandbox:
     provider: kubernetes     # defaults to local docker/k3d
 ```
 
-#### Primitives
+#### Interface
 
 **build** (CLI only, offline)
 
@@ -205,6 +205,7 @@ interface SandboxIO {
   exec(command: string, opts?: {
     timeout?: number;
     cwd?: string;
+    onChunk?: (chunk: string) => void;  // real-time output for human consumers (TUI, WebUI, extensions)
   }): Promise<ExecResult>;
   file: {
     read(path: string): Promise<string>;
@@ -230,20 +231,20 @@ interface Sandbox extends SandboxIO {
 }
 ```
 
-#### Design decisions
+#### Design Decisions
 
 - **No path restrictions.** The sandbox is ephemeral (1:1 session model). Skills in `/skills/` are restored on every new session. The agent has full freedom within the sandbox; no write-protection is enforced on any path.
-- **exec is synchronous.** `SandboxIO.exec()` waits for command completion and returns the full result. Streaming is a separate concern handled by the build monitor / observability layer for human consumption, not part of the sandbox primitives.
+- **exec returns the full result on completion, with optional real-time streaming.** The `onChunk` callback provides real-time output chunks for human consumers (TUI, WebUI, extensions) while the command runs. The LLM only sees the final `ExecResult`. This matches pi-mono's Bash tool model: `onChunk` feeds `tool_execution_update` events to the UI layer, while the agent loop waits for the final result to send back to the LLM.
 - **Hooks receive `SandboxIO`, not the full `Sandbox`.** This prevents hooks from accidentally calling `start()` or `shutdown()`. Hooks can use both `exec` and `file` operations without restriction.
 
 #### Providers
 
 | Provider | `start()` | `exec()` / `file.*` | `shutdown()` |
 |---|---|---|---|
-| **E2B** | `Sandbox.create(template)` | E2B SDK: `commands.run()`, `files.read/write()` | `sandbox.kill()` |
-| **Kubernetes** | Create pod from image, wait for ready | execd HTTP endpoints: `/command/run`, `/files/*` | Delete pod |
+| **E2B** | `Sandbox.create(template)` | E2B SDK: `commands.run()`, `files.read/write()`. Streaming via native `onStdout`/`onStderr` callbacks. | `sandbox.kill()` |
+| **Kubernetes** | Create pod from image, wait for ready | execd HTTP endpoints: `/command/run`, `/files/*`. Streaming via SSE on the `/command/run` endpoint. | Delete pod |
 
-### Agent-Loop Integration
+#### Agent-Loop Integration
 
 The agent loop (pi-mono/coding-agent) runs on the **host**. Only tool execution happens inside the sandbox. The integration point is at pi-mono's **operations layer** — each tool delegates its low-level IO to the sandbox via pluggable operation interfaces.
 

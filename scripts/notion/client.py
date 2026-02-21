@@ -131,6 +131,18 @@ class NotionClient:
             cursor = data.get("next_cursor")
         return ids
 
+    def append_blocks(self, page_id: str, blocks: list[dict]) -> None:
+        total = (len(blocks) + 99) // 100
+        if total:
+            print(f"{LOG_PREFIX} Appending {len(blocks)} block(s) in {total} chunk(s)")
+        for i in range(0, len(blocks), 100):
+            self.request_json(
+                "PATCH",
+                f"/blocks/{page_id}/children",
+                {"children": blocks[i : i + 100]},
+            )
+            print(f"{LOG_PREFIX} Appended chunk {(i // 100) + 1}/{total} to {page_id}")
+
     def replace_page_content(self, page_id: str, blocks: list[dict]) -> None:
         child_ids = self.list_child_ids(page_id)
         archive_total = len(child_ids)

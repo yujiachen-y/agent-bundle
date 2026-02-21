@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
-addopts = "-q --cov=scripts.sync_docs_to_notion --cov-report=term-missing --cov-branch --cov-fail-under=80"
+addopts = "-q --cov=scripts.notion.sync_docs --cov-report=term-missing --cov-branch --cov-fail-under=80"
 testpaths = ["tests"]
 
 [tool.ruff]

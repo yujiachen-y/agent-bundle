@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Protocol
@@ -104,6 +105,9 @@ class NotionDocIndex:
         self.parent_page_id = parent_page_id
         self.database_id: str | None = None
         self.schema_checked = False
+        self._cache: dict[str, DocIndexRecord] | None = None
+        self._path_cache: dict[str, DocIndexRecord] | None = None
+        self._lock = threading.Lock()
 
     def _ensure_schema(self, database_id: str) -> None:
         if self.schema_checked:
@@ -198,7 +202,37 @@ class NotionDocIndex:
             cursor = data.get("next_cursor")
         return records
 
+    def preload(self) -> None:
+        """Query all records from the database and populate both caches."""
+        database_id = self.ensure_database()
+        by_id: dict[str, DocIndexRecord] = {}
+        by_path: dict[str, DocIndexRecord] = {}
+        cursor: str | None = None
+        while True:
+            payload: dict[str, object] = {"page_size": 100}
+            if cursor:
+                payload["start_cursor"] = cursor
+            data = self.notion.request_json(
+                "POST",
+                f"/databases/{database_id}/query",
+                payload,
+            )
+            for item in data.get("results", []):
+                record = _to_record(item)
+                if record:
+                    by_id[record.doc_sync_id] = record
+                    if record.doc_path:
+                        by_path[record.doc_path] = record
+            if not data.get("has_more"):
+                break
+            cursor = data.get("next_cursor")
+        with self._lock:
+            self._cache = by_id
+            self._path_cache = by_path
+
     def find_by_doc_sync_id(self, doc_sync_id: str) -> DocIndexRecord | None:
+        if self._cache is not None:
+            return self._cache.get(doc_sync_id)
         records = self._query(
             {
                 "property": "doc_sync_id",
@@ -208,6 +242,8 @@ class NotionDocIndex:
         return records[0] if records else None
 
     def find_by_doc_path(self, doc_path: str) -> DocIndexRecord | None:
+        if self._path_cache is not None:
+            return self._path_cache.get(doc_path)
         records = self._query(
             {
                 "property": "doc_path",
@@ -251,7 +287,7 @@ class NotionDocIndex:
                 f"/pages/{current.entry_page_id}",
                 {"properties": properties},
             )
-            return DocIndexRecord(
+            record = DocIndexRecord(
                 entry_page_id=current.entry_page_id,
                 doc_sync_id=doc_sync_id,
                 doc_path=doc_path,
@@ -259,6 +295,8 @@ class NotionDocIndex:
                 status=status,
                 content_hash=resolved_hash,
             )
+            self._update_caches(record)
+            return record
 
         data = self.notion.request_json(
             "POST",
@@ -272,7 +310,7 @@ class NotionDocIndex:
         if not isinstance(entry_page_id, str) or not entry_page_id:
             raise RuntimeError("Failed to create docs index entry")
 
-        return DocIndexRecord(
+        record = DocIndexRecord(
             entry_page_id=entry_page_id,
             doc_sync_id=doc_sync_id,
             doc_path=doc_path,
@@ -280,3 +318,12 @@ class NotionDocIndex:
             status=status,
             content_hash=resolved_hash,
         )
+        self._update_caches(record)
+        return record
+
+    def _update_caches(self, record: DocIndexRecord) -> None:
+        with self._lock:
+            if self._cache is not None:
+                self._cache[record.doc_sync_id] = record
+            if self._path_cache is not None and record.doc_path:
+                self._path_cache[record.doc_path] = record

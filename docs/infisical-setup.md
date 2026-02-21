@@ -34,7 +34,7 @@ make env-list ENV=dev
 Run any command with injected env secrets:
 
 ```bash
-make env-run ENV=dev CMD="python3 scripts/sync_docs_to_notion.py"
+make env-run ENV=dev CMD="python3 scripts/notion/sync_docs.py"
 make env-run ENV=dev CMD="pre-commit run --all-files"
 ```
 

@@ -14,7 +14,7 @@ endif
 
 env-run:
 ifndef CMD
-	$(error CMD is required. Example: make env-run ENV=dev CMD="python3 scripts/sync_docs_to_notion.py")
+	$(error CMD is required. Example: make env-run ENV=dev CMD="python3 scripts/notion/sync_docs.py")
 endif
 ifeq ($(ENV_PROVIDER),infisical)
 	infisical run --env=$(ENV) -- $(CMD)

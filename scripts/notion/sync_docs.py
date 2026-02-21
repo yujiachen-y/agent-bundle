@@ -3,46 +3,39 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import os
 import re
 import subprocess  # nosec B404 - subprocess is required for scoped git CLI usage.
 import sys
+import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Literal, Optional, overload
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 if TYPE_CHECKING:
     from scripts import markdown_codeblock as _markdown_codeblock
     from scripts import markdown_rich_text as _markdown_rich_text
     from scripts import markdown_table as _markdown_table
     from scripts import sync_content_hash as _sync_content_hash
-    from scripts.notion_client import NotionAPIError as _NotionAPIError
-    from scripts.notion_client import NotionClient as _NotionClient
-    from scripts.notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
-    from scripts.notion_doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
-    from scripts.notion_doc_index import NotionDocIndex as _NotionDocIndex
+    from scripts.notion.client import NotionAPIError as _NotionAPIError
+    from scripts.notion.client import NotionClient as _NotionClient
+    from scripts.notion.doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
+    from scripts.notion.doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
+    from scripts.notion.doc_index import NotionDocIndex as _NotionDocIndex
 else:
-    try:
-        from scripts import markdown_codeblock as _markdown_codeblock
-        from scripts import markdown_rich_text as _markdown_rich_text
-        from scripts import markdown_table as _markdown_table
-        from scripts import sync_content_hash as _sync_content_hash
-        from scripts.notion_client import NotionAPIError as _NotionAPIError
-        from scripts.notion_client import NotionClient as _NotionClient
-        from scripts.notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
-        from scripts.notion_doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
-        from scripts.notion_doc_index import NotionDocIndex as _NotionDocIndex
-    except ImportError:
-        import markdown_codeblock as _markdown_codeblock
-        import markdown_rich_text as _markdown_rich_text
-        import markdown_table as _markdown_table
-        import sync_content_hash as _sync_content_hash
-        from notion_client import NotionAPIError as _NotionAPIError
-        from notion_client import NotionClient as _NotionClient
-        from notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
-        from notion_doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
-        from notion_doc_index import NotionDocIndex as _NotionDocIndex
+    from scripts import markdown_codeblock as _markdown_codeblock
+    from scripts import markdown_rich_text as _markdown_rich_text
+    from scripts import markdown_table as _markdown_table
+    from scripts import sync_content_hash as _sync_content_hash
+    from scripts.notion.client import NotionAPIError as _NotionAPIError
+    from scripts.notion.client import NotionClient as _NotionClient
+    from scripts.notion.doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
+    from scripts.notion.doc_index import STATUS_ARCHIVED as _STATUS_ARCHIVED
+    from scripts.notion.doc_index import NotionDocIndex as _NotionDocIndex
 
 normalize_code_content = _markdown_codeblock.normalize_code_content
 normalize_code_language = _markdown_codeblock.normalize_code_language
@@ -64,9 +57,11 @@ LOG_PREFIX = "[docs-notion-sync]"
 DOC_SYNC_ID_KEY = "doc_sync_id"
 LEGACY_NOTION_PAGE_ID_KEY = "notion_page_id"
 SYNC_SCRIPT_TRIGGER_PATHS = set(
-    "scripts/markdown_codeblock.py|scripts/markdown_table.py|scripts/notion_doc_index.py|"
-    "scripts/markdown_rich_text.py|scripts/sync_docs_to_notion.py".split("|")
+    "scripts/markdown_codeblock.py|scripts/markdown_table.py|scripts/notion/doc_index.py|"
+    "scripts/markdown_rich_text.py|scripts/notion/sync_docs.py".split("|")
 )
+
+_git_lock = threading.Lock()
 
 FRONTMATTER_PATTERN = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 UUID_RE = re.compile(
@@ -615,7 +610,8 @@ def write_and_stage_file(path: str, content: str, root: Path) -> None:
     file_path = root / path
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(content, encoding="utf-8")
-    run_git(["add", "--", path], check=True)
+    with _git_lock:
+        run_git(["add", "--", path], check=True)
 
 
 def extract_doc_sync_id(markdown: Optional[str], path: str) -> Optional[str]:
@@ -668,18 +664,14 @@ def handle_upsert(
         path=path,
         doc_sync_id=doc_sync_id,
     )
-
-    if page_id:
-        info(f"Updating Notion page for {path}: {page_id}")
-    else:
-        page_id = notion.create_page(parent_page_id, title)
-        info(f"Created Notion page for {path}: {page_id}")
-
     if page_id and getattr(record, "content_hash", "") == content_hash:
-        info(f"No content changes for {path}; skip Notion block replacement")
+        info(f"Skipping unchanged {path}")
     else:
-        notion.update_page_title(page_id, title)
-        notion.replace_page_content(page_id, markdown_to_blocks(staged))
+        if page_id:
+            notion.archive_page(page_id)
+        page_id = notion.create_page(parent_page_id, title)
+        info(f"Synced {path} -> {page_id}")
+        notion.append_blocks(page_id, markdown_to_blocks(staged))
     index.upsert(
         doc_sync_id=doc_sync_id,
         doc_path=path,
@@ -699,7 +691,6 @@ def handle_delete(notion: NotionClient, index: NotionDocIndex, op: Operation) ->
     if old_markdown is None:
         warn(f"Cannot read {path} from HEAD; skip archive")
         return
-
     doc_sync_id = extract_doc_sync_id(old_markdown, path)
     legacy_page_id = extract_legacy_notion_page_id(old_markdown, path)
     record = index.find_by_doc_sync_id(doc_sync_id) if doc_sync_id else index.find_by_doc_path(path)
@@ -712,7 +703,6 @@ def handle_delete(notion: NotionClient, index: NotionDocIndex, op: Operation) ->
     if not page_id:
         warn(f"Deleted {path} has no mapped Notion page; skip archive")
         return
-
     notion.archive_page(page_id)
     info(f"Archived Notion page for deleted doc {path}: {page_id}")
     known_sync_id = doc_sync_id or (record.doc_sync_id if record else None)
@@ -738,7 +728,6 @@ def handle_rename(
     new_path = op.new_path
     if not old_path or not new_path:
         raise RuntimeError("Invalid rename operation: missing old/new path")
-
     old_markdown = read_head_file(old_path)
     new_markdown = read_staged_file(new_path)
     old_doc_sync_id = extract_doc_sync_id(old_markdown, old_path)
@@ -755,7 +744,6 @@ def handle_rename(
             f"Rename {old_path} -> {new_path} has conflicting {LEGACY_NOTION_PAGE_ID_KEY} "
             f"({old_legacy_id} vs {new_legacy_id})."
         )
-
     preferred_sync_id = new_doc_sync_id or old_doc_sync_id
     doc_sync_id, new_markdown = ensure_doc_sync_id(
         new_path,
@@ -773,13 +761,10 @@ def handle_rename(
         doc_sync_id=doc_sync_id,
     )
     if page_id:
-        info(f"Renamed doc uses existing Notion page {page_id}: {old_path} -> {new_path}")
-    else:
-        page_id = notion.create_page(parent_page_id, title)
-        info(f"Rename created new Notion page for {new_path}: {page_id}")
-
-    notion.update_page_title(page_id, title)
-    notion.replace_page_content(page_id, markdown_to_blocks(new_markdown))
+        notion.archive_page(page_id)
+    page_id = notion.create_page(parent_page_id, title)
+    info(f"Renamed {old_path} -> {new_path}: {page_id}")
+    notion.append_blocks(page_id, markdown_to_blocks(new_markdown))
     index.upsert(
         doc_sync_id=doc_sync_id,
         doc_path=new_path,
@@ -823,8 +808,9 @@ def main() -> int:
 
         notion = NotionClient(notion_token, notion_version)
         index = NotionDocIndex(notion, parent_page_id)
+        index.preload()
 
-        for op in operations:
+        def _run_op(op: Operation) -> None:
             if op.kind == "upsert":
                 handle_upsert(notion, index, op, parent_page_id, root)
             elif op.kind == "delete":
@@ -832,6 +818,18 @@ def main() -> int:
             elif op.kind == "rename":
                 handle_rename(notion, index, op, parent_page_id, root)
 
+        error_count = 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            fmap = {executor.submit(_run_op, op): op for op in operations}
+            for future in concurrent.futures.as_completed(fmap):
+                try:
+                    future.result()
+                except Exception as exc:  # noqa: BLE001
+                    op = fmap[future]
+                    fail(f"{op.kind} {op.path or op.old_path or ''}: {exc}")
+                    error_count += 1
+        if error_count:
+            return 1
         info("Docs sync to Notion completed")
         return 0
     except Exception as exc:  # noqa: BLE001

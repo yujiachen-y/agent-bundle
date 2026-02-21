@@ -8,7 +8,7 @@ from pathlib import Path
 
 SYNC_HASH_VERSION = "v1"
 SYNC_LOGIC_FILES = (
-    "sync_docs_to_notion.py",
+    "notion/sync_docs.py",
     "markdown_codeblock.py",
     "markdown_rich_text.py",
     "markdown_table.py",

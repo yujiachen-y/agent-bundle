@@ -47,15 +47,21 @@ function expectToolHandlerCalls(toolHandler: ReturnType<typeof vi.fn>): void {
     },
   });
   expect(toolHandler).toHaveBeenNthCalledWith(3, {
-    id: "call-edit",
-    name: "Edit",
+    id: "call-edit:read",
+    name: "Read",
     input: {
       path: "/workspace/a.txt",
-      oldText: "a",
-      newText: "b",
     },
   });
   expect(toolHandler).toHaveBeenNthCalledWith(4, {
+    id: "call-edit:write",
+    name: "Write",
+    input: {
+      path: "/workspace/a.txt",
+      content: "b",
+    },
+  });
+  expect(toolHandler).toHaveBeenNthCalledWith(5, {
     id: "call-bash",
     name: "Bash",
     input: {
@@ -68,7 +74,7 @@ function expectToolHandlerCalls(toolHandler: ReturnType<typeof vi.fn>): void {
 it("maps gemini provider and installs sandbox-backed tools", async () => {
   const toolHandler = vi.fn(async (call) => ({
     toolCallId: call.id,
-    output: `ok:${call.name}`,
+    output: call.id.endsWith(":read") ? "a" : `ok:${call.name}`,
   }));
 
   const loop = new PiMonoAgentLoop();
@@ -176,5 +182,49 @@ it("validates tool input fields and surfaces tool errors", async () => {
   }>;
 
   await expect(tools[0].execute("call-read", {})).rejects.toThrowError(/field "path" must be a string/);
+  await expect(tools[2].execute("call-edit", { path: "/workspace/a.txt" })).rejects.toThrowError(
+    /field "oldText" must be a string/,
+  );
   await expect(tools[3].execute("call-bash", { command: "exit 9" })).rejects.toThrowError(/exitCode: 9/);
+});
+
+it("uses read+write for edit and validates unique match", async () => {
+  const toolHandler = vi.fn(async (call) => {
+    if (call.id.endsWith(":read")) {
+      return {
+        toolCallId: call.id,
+        output: "aa",
+      };
+    }
+
+    return {
+      toolCallId: call.id,
+      output: "ok",
+    };
+  });
+
+  const loop = new PiMonoAgentLoop();
+  await loop.init({
+    systemPrompt: "system",
+    model: {
+      provider: "openai",
+      model: "gpt-5-mini",
+    },
+    toolHandler,
+  });
+
+  const agent = agentInstances[0];
+  const tools = agent.setTools.mock.calls[0][0] as Tool[];
+
+  await expect(
+    tools[2].execute("call-edit", { path: "/workspace/a.txt", oldText: "a", newText: "b" }),
+  ).rejects.toThrowError(/Found 2 occurrences/);
+  expect(toolHandler).toHaveBeenCalledTimes(1);
+  expect(toolHandler).toHaveBeenCalledWith({
+    id: "call-edit:read",
+    name: "Read",
+    input: {
+      path: "/workspace/a.txt",
+    },
+  });
 });

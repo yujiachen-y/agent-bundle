@@ -7,7 +7,13 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 import type { ToolHandler } from "../agent-loop.js";
-import { readNumberField, requireStringField, toInputRecord, toToolOutputText } from "./utils.js";
+import {
+  isRecord,
+  readNumberField,
+  requireStringField,
+  toInputRecord,
+  toToolOutputText,
+} from "./utils.js";
 
 function toBundleToolName(toolName: string): string {
   const normalized = toolName.trim().toLowerCase();
@@ -28,7 +34,7 @@ function toBundleToolName(toolName: string): string {
 }
 
 function createTool(
-  name: "read" | "write" | "edit" | "bash",
+  name: "read" | "write" | "bash",
   description: string,
   parameters: AgentTool["parameters"],
   toHandlerInput: (input: Record<string, unknown>) => Record<string, unknown>,
@@ -59,6 +65,103 @@ function createTool(
   };
 }
 
+function toReadOutputText(output: unknown): string {
+  if (typeof output === "string") {
+    return output;
+  }
+
+  if (isRecord(output) && typeof output.content === "string") {
+    return output.content;
+  }
+
+  throw new Error("Read tool returned non-text output. Edit requires full text file content.");
+}
+
+function replaceTextExactlyOnce(
+  fileContent: string,
+  oldText: string,
+  newText: string,
+  path: string,
+): string {
+  if (!fileContent.includes(oldText)) {
+    throw new Error(
+      `Could not find the exact text in ${path}. The old text must match exactly including whitespace and newlines.`,
+    );
+  }
+
+  const occurrences = fileContent.split(oldText).length - 1;
+  if (occurrences > 1) {
+    throw new Error(
+      `Found ${occurrences} occurrences of the text in ${path}. The text must be unique. Please provide more context to make it unique.`,
+    );
+  }
+
+  const index = fileContent.indexOf(oldText);
+  const updatedContent = fileContent.substring(0, index)
+    + newText
+    + fileContent.substring(index + oldText.length);
+
+  if (updatedContent === fileContent) {
+    throw new Error(
+      `No changes made to ${path}. The replacement produced identical content.`,
+    );
+  }
+
+  return updatedContent;
+}
+
+function createEditTool(toolHandler: ToolHandler): AgentTool {
+  return {
+    name: "edit",
+    label: "edit",
+    description: piEditTool.description,
+    parameters: piEditTool.parameters,
+    execute: async (toolCallId, rawInput): Promise<AgentToolResult<unknown>> => {
+      const input = toInputRecord(rawInput);
+      const path = requireStringField(input, "path", "edit");
+      const oldText = requireStringField(input, "oldText", "edit");
+      const newText = requireStringField(input, "newText", "edit");
+
+      const readResult = await toolHandler({
+        id: `${toolCallId}:read`,
+        name: "Read",
+        input: { path },
+      });
+
+      if (readResult.isError) {
+        throw new Error(toToolOutputText(readResult.output));
+      }
+
+      const fileContent = toReadOutputText(readResult.output);
+      const updatedContent = replaceTextExactlyOnce(fileContent, oldText, newText, path);
+
+      const writeResult = await toolHandler({
+        id: `${toolCallId}:write`,
+        name: "Write",
+        input: {
+          path,
+          content: updatedContent,
+        },
+      });
+
+      if (writeResult.isError) {
+        throw new Error(toToolOutputText(writeResult.output));
+      }
+
+      return {
+        content: [{
+          type: "text",
+          text: `Successfully replaced text in ${path}. Changed ${oldText.length} characters to ${newText.length} characters.`,
+        }],
+        details: {
+          oldLength: fileContent.length,
+          newLength: updatedContent.length,
+        },
+      };
+    },
+  };
+}
+
 export function createPiTools(toolHandler: ToolHandler): AgentTool[] {
   return [
     createTool(
@@ -82,17 +185,7 @@ export function createPiTools(toolHandler: ToolHandler): AgentTool[] {
       }),
       toolHandler,
     ),
-    createTool(
-      "edit",
-      piEditTool.description,
-      piEditTool.parameters,
-      (input) => ({
-        path: requireStringField(input, "path", "edit"),
-        oldText: requireStringField(input, "oldText", "edit"),
-        newText: requireStringField(input, "newText", "edit"),
-      }),
-      toolHandler,
-    ),
+    createEditTool(toolHandler),
     createTool(
       "bash",
       piBashTool.description,

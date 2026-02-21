@@ -47,4 +47,14 @@ export interface Sandbox extends SandboxIO {
   shutdown(): Promise<void>;
 }
 
-export type CreateSandbox = (config: SandboxConfig, hooks: SandboxHooks) => Sandbox;
+export type SandboxMode = "build" | "serve";
+
+export type CreateSandboxOptions = {
+  mode?: SandboxMode;
+};
+
+export type CreateSandbox = (
+  config: SandboxConfig,
+  hooks?: SandboxHooks,
+  options?: CreateSandboxOptions,
+) => Sandbox;

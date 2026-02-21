@@ -230,6 +230,8 @@ class FakeNotion:
     def __init__(self) -> None:
         self.created: list[tuple[str, str]] = []
         self.archived: list[str] = []
+        self.updated: list[tuple[str, str]] = []
+        self.replaced: list[tuple[str, list[dict[str, Any]]]] = []
 
     def create_page(self, parent_page_id: str, title: str) -> str:
         self.created.append((parent_page_id, title))
@@ -237,6 +239,12 @@ class FakeNotion:
 
     def archive_page(self, page_id: str) -> None:
         self.archived.append(page_id)
+
+    def update_page_title(self, page_id: str, title: str) -> None:
+        self.updated.append((page_id, title))
+
+    def replace_page_content(self, page_id: str, blocks: list[dict[str, Any]]) -> None:
+        self.replaced.append((page_id, blocks))
 
 
 class FakeIndex:
@@ -247,7 +255,7 @@ class FakeIndex:
     ) -> None:
         self.by_sync_id = by_sync_id
         self.by_path = by_path
-        self.upserts: list[dict[str, str]] = []
+        self.upserts: list[dict[str, Any]] = []
 
     def find_by_doc_sync_id(self, _doc_sync_id: str) -> Any:
         return self.by_sync_id
@@ -255,7 +263,7 @@ class FakeIndex:
     def find_by_doc_path(self, _path: str) -> Any:
         return self.by_path
 
-    def upsert(self, **kwargs: str) -> Any:
+    def upsert(self, **kwargs: Any) -> Any:
         self.upserts.append(kwargs)
         return kwargs
 
@@ -266,22 +274,17 @@ def test_handle_upsert_existing_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
     called: dict[str, str] = {}
 
-    def fake_sync_page_content(_notion: object, page_id: str, title: str, markdown: str) -> None:
-        called["page_id"] = page_id
-        called["title"] = title
+    def fake_markdown_to_blocks(markdown: str) -> list[dict[str, Any]]:
         called["markdown"] = markdown
+        return [sync.make_text_block("paragraph", "x")]
 
-    monkeypatch.setattr(sync, "sync_page_content", fake_sync_page_content)
+    monkeypatch.setattr(
+        sync,
+        "markdown_to_blocks",
+        fake_markdown_to_blocks,
+    )
 
-    class UpdateNotion(FakeNotion):
-        def __init__(self) -> None:
-            super().__init__()
-            self.updated: list[tuple[str, str]] = []
-
-        def update_page_title(self, page_id: str, title: str) -> None:
-            self.updated.append((page_id, title))
-
-    notion = UpdateNotion()
+    notion = FakeNotion()
     record = cast(
         Any,
         type(
@@ -294,9 +297,39 @@ def test_handle_upsert_existing_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     op = sync.Operation(kind="upsert", path="docs/proposal.md")
     sync.handle_upsert(cast(Any, notion), cast(Any, index), op, "parent-id", tmp_path)
 
-    assert called["page_id"] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
-    assert called["title"] == "Title"
+    assert notion.updated == [("30ab3f79-b3b4-810f-bfc6-d874eca9df02", "Title")]
+    assert notion.replaced[0][0] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
+    assert called["markdown"] == staged
     assert index.upserts[0]["doc_sync_id"] == "11111111-2222-3333-4444-555555555555"
+    assert index.upserts[0]["existing"] is record
+
+
+def test_handle_upsert_skips_replace_when_hash_matches(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    staged = "---\ntitle: Title\ndoc_sync_id: 11111111-2222-3333-4444-555555555555\n---\n\nBody"
+    monkeypatch.setattr(sync, "read_staged_file", lambda _path: staged)
+    monkeypatch.setattr(sync, "hash_synced_markdown", lambda _markdown: "same-hash")
+
+    record = cast(
+        Any,
+        type(
+            "Record",
+            (),
+            {
+                "notion_page_id": "30ab3f79-b3b4-810f-bfc6-d874eca9df02",
+                "content_hash": "same-hash",
+            },
+        )(),
+    )
+    index = FakeIndex(by_sync_id=record)
+    notion = FakeNotion()
+    op = sync.Operation(kind="upsert", path="docs/proposal.md")
+    sync.handle_upsert(cast(Any, notion), cast(Any, index), op, "parent-id", tmp_path)
+
+    assert notion.replaced == []
+    assert notion.updated == []
+    assert index.upserts[0]["content_hash"] == "same-hash"
 
 
 def test_handle_upsert_creates_and_backfills(
@@ -318,12 +351,15 @@ def test_handle_upsert_creates_and_backfills(
     )
 
     captured: dict[str, str] = {}
+
+    def fake_markdown_to_blocks(markdown: str) -> list[dict[str, Any]]:
+        captured["markdown"] = markdown
+        return [sync.make_text_block("paragraph", "x")]
+
     monkeypatch.setattr(
         sync,
-        "sync_page_content",
-        lambda _n, page_id, _t, markdown: captured.update(
-            {"page_id": page_id, "markdown": markdown}
-        ),
+        "markdown_to_blocks",
+        fake_markdown_to_blocks,
     )
 
     notion = FakeNotion()
@@ -332,7 +368,7 @@ def test_handle_upsert_creates_and_backfills(
     sync.handle_upsert(cast(Any, notion), cast(Any, index), op, "parent-id", tmp_path)
 
     assert notion.created == [("parent-id", "Title")]
-    assert captured["page_id"] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
+    assert notion.replaced[0][0] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
     assert captured["markdown"] == backfilled_markdown
 
 
@@ -722,12 +758,15 @@ def test_handle_rename_reuses_old_id(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     )
 
     called: dict[str, str] = {}
+
+    def fake_markdown_to_blocks(markdown: str) -> list[dict[str, Any]]:
+        called["markdown"] = markdown
+        return [sync.make_text_block("paragraph", "x")]
+
     monkeypatch.setattr(
         sync,
-        "sync_page_content",
-        lambda _n, page_id, title, markdown: called.update(
-            {"page_id": page_id, "title": title, "markdown": markdown}
-        ),
+        "markdown_to_blocks",
+        fake_markdown_to_blocks,
     )
 
     record = cast(
@@ -738,15 +777,19 @@ def test_handle_rename_reuses_old_id(monkeypatch: pytest.MonkeyPatch, tmp_path: 
             {"notion_page_id": "30ab3f79-b3b4-810f-bfc6-d874eca9df02"},
         )(),
     )
+    index = FakeIndex(by_sync_id=record)
+    notion = FakeNotion()
     sync.handle_rename(
-        cast(Any, FakeNotion()),
-        cast(Any, FakeIndex(by_sync_id=record)),
+        cast(Any, notion),
+        cast(Any, index),
         sync.Operation(kind="rename", old_path="docs/old.md", new_path="docs/new.md"),
         "parent-id",
         tmp_path,
     )
-    assert called["page_id"] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
-    assert called["title"] == "New Title"
+    assert notion.updated == [("30ab3f79-b3b4-810f-bfc6-d874eca9df02", "New Title")]
+    assert notion.replaced[0][0] == "30ab3f79-b3b4-810f-bfc6-d874eca9df02"
+    assert called["markdown"].startswith("---\ntitle: New Title")
+    assert index.upserts[0]["existing"] is record
 
 
 def test_main_rejects_invalid_parent_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from scripts import markdown_codeblock as _markdown_codeblock
     from scripts import markdown_rich_text as _markdown_rich_text
     from scripts import markdown_table as _markdown_table
+    from scripts import sync_content_hash as _sync_content_hash
     from scripts.notion_client import NotionAPIError as _NotionAPIError
     from scripts.notion_client import NotionClient as _NotionClient
     from scripts.notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
@@ -26,6 +27,7 @@ else:
         from scripts import markdown_codeblock as _markdown_codeblock
         from scripts import markdown_rich_text as _markdown_rich_text
         from scripts import markdown_table as _markdown_table
+        from scripts import sync_content_hash as _sync_content_hash
         from scripts.notion_client import NotionAPIError as _NotionAPIError
         from scripts.notion_client import NotionClient as _NotionClient
         from scripts.notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
@@ -35,6 +37,7 @@ else:
         import markdown_codeblock as _markdown_codeblock
         import markdown_rich_text as _markdown_rich_text
         import markdown_table as _markdown_table
+        import sync_content_hash as _sync_content_hash
         from notion_client import NotionAPIError as _NotionAPIError
         from notion_client import NotionClient as _NotionClient
         from notion_doc_index import STATUS_ACTIVE as _STATUS_ACTIVE
@@ -47,6 +50,7 @@ to_rich_text = _markdown_rich_text.to_rich_text
 parse_markdown_table = _markdown_table.parse_markdown_table
 parse_heading_line = _markdown_table.parse_heading_line
 normalize_heading_for_notion = _markdown_table.normalize_heading_for_notion
+hash_synced_markdown = _sync_content_hash.hash_synced_markdown
 NotionClient = _NotionClient
 NotionAPIError = _NotionAPIError
 NotionDocIndex = _NotionDocIndex
@@ -60,9 +64,8 @@ LOG_PREFIX = "[docs-notion-sync]"
 DOC_SYNC_ID_KEY = "doc_sync_id"
 LEGACY_NOTION_PAGE_ID_KEY = "notion_page_id"
 SYNC_SCRIPT_TRIGGER_PATHS = set(
-    "scripts/markdown_codeblock.py|scripts/markdown_table.py|"
-    "scripts/notion_doc_index.py|scripts/markdown_rich_text.py|"
-    "scripts/sync_docs_to_notion.py".split("|")
+    "scripts/markdown_codeblock.py|scripts/markdown_table.py|scripts/notion_doc_index.py|"
+    "scripts/markdown_rich_text.py|scripts/sync_docs_to_notion.py".split("|")
 )
 
 FRONTMATTER_PATTERN = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
@@ -643,17 +646,6 @@ def resolve_page_id(
     return indexed_page_id or legacy_page_id
 
 
-def sync_page_content(
-    notion: NotionClient,
-    page_id: str,
-    title: str,
-    markdown: str,
-) -> None:
-    notion.update_page_title(page_id, title)
-    blocks = markdown_to_blocks(markdown)
-    notion.replace_page_content(page_id, blocks)
-
-
 def handle_upsert(
     notion: NotionClient,
     index: NotionDocIndex,
@@ -669,6 +661,7 @@ def handle_upsert(
     doc_sync_id, staged = ensure_doc_sync_id(path, staged, root)
     title = markdown_title(staged, path)
     record = index.find_by_doc_sync_id(doc_sync_id)
+    content_hash = hash_synced_markdown(staged)
     page_id = resolve_page_id(
         indexed_page_id=record.notion_page_id if record else None,
         legacy_page_id=legacy_page_id,
@@ -682,13 +675,19 @@ def handle_upsert(
         page_id = notion.create_page(parent_page_id, title)
         info(f"Created Notion page for {path}: {page_id}")
 
-    sync_page_content(notion, page_id, title, staged)
+    if page_id and getattr(record, "content_hash", "") == content_hash:
+        info(f"No content changes for {path}; skip Notion block replacement")
+    else:
+        notion.update_page_title(page_id, title)
+        notion.replace_page_content(page_id, markdown_to_blocks(staged))
     index.upsert(
         doc_sync_id=doc_sync_id,
         doc_path=path,
         notion_page_id=page_id,
         status=STATUS_ACTIVE,
         title=title,
+        content_hash=content_hash,
+        existing=record,
     )
 
 
@@ -724,6 +723,7 @@ def handle_delete(notion: NotionClient, index: NotionDocIndex, op: Operation) ->
             notion_page_id=page_id,
             status=STATUS_ARCHIVED,
             title=Path(path).stem,
+            existing=record,
         )
 
 
@@ -763,6 +763,7 @@ def handle_rename(
         root,
         preferred=preferred_sync_id,
     )
+    content_hash = hash_synced_markdown(new_markdown)
     title = markdown_title(new_markdown, new_path)
     record = index.find_by_doc_sync_id(doc_sync_id)
     page_id = resolve_page_id(
@@ -777,13 +778,16 @@ def handle_rename(
         page_id = notion.create_page(parent_page_id, title)
         info(f"Rename created new Notion page for {new_path}: {page_id}")
 
-    sync_page_content(notion, page_id, title, new_markdown)
+    notion.update_page_title(page_id, title)
+    notion.replace_page_content(page_id, markdown_to_blocks(new_markdown))
     index.upsert(
         doc_sync_id=doc_sync_id,
         doc_path=new_path,
         notion_page_id=page_id,
         status=STATUS_ACTIVE,
         title=title,
+        content_hash=content_hash,
+        existing=record,
     )
 
 

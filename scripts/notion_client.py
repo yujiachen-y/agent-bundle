@@ -7,6 +7,9 @@ import time
 from typing import Optional
 from urllib import error, parse, request
 
+LOG_PREFIX = "[docs-notion-sync]"
+ARCHIVE_PROGRESS_STEP = 25
+
 
 class NotionAPIError(RuntimeError):
     """Raised when a Notion API call fails."""
@@ -130,12 +133,27 @@ class NotionClient:
 
     def replace_page_content(self, page_id: str, blocks: list[dict]) -> None:
         child_ids = self.list_child_ids(page_id)
-        for child_id in child_ids:
+        archive_total = len(child_ids)
+        if archive_total:
+            print(f"{LOG_PREFIX} Replacing page {page_id}: archiving {archive_total} block(s)")
+        for idx, child_id in enumerate(child_ids, start=1):
             self.request_json("PATCH", f"/blocks/{child_id}", {"archived": True})
+            if idx % ARCHIVE_PROGRESS_STEP == 0 or idx == archive_total:
+                print(f"{LOG_PREFIX} Replacing page {page_id}: archived {idx}/{archive_total}")
 
+        chunk_total = (len(blocks) + 99) // 100
+        if chunk_total:
+            print(
+                f"{LOG_PREFIX} Replacing page {page_id}: appending "
+                f"{len(blocks)} block(s) in {chunk_total} chunk(s)"
+            )
         for i in range(0, len(blocks), 100):
             self.request_json(
                 "PATCH",
                 f"/blocks/{page_id}/children",
                 {"children": blocks[i : i + 100]},
+            )
+            chunk_index = (i // 100) + 1
+            print(
+                f"{LOG_PREFIX} Replacing page {page_id}: appended chunk {chunk_index}/{chunk_total}"
             )

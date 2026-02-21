@@ -29,6 +29,7 @@ class DocIndexRecord:
     doc_path: str
     notion_page_id: str
     status: str
+    content_hash: str
 
 
 def _text_property(text: str) -> dict:
@@ -83,6 +84,7 @@ def _to_record(item: dict) -> DocIndexRecord | None:
     doc_path = _read_rich_text(properties, "doc_path")
     notion_page_id = _read_rich_text(properties, "notion_page_id")
     status = _read_select(properties, "status")
+    content_hash = _read_rich_text(properties, "content_hash")
     if not doc_sync_id:
         return None
 
@@ -92,6 +94,7 @@ def _to_record(item: dict) -> DocIndexRecord | None:
         doc_path=doc_path,
         notion_page_id=notion_page_id,
         status=status,
+        content_hash=content_hash,
     )
 
 
@@ -100,6 +103,20 @@ class NotionDocIndex:
         self.notion = notion
         self.parent_page_id = parent_page_id
         self.database_id: str | None = None
+        self.schema_checked = False
+
+    def _ensure_schema(self, database_id: str) -> None:
+        if self.schema_checked:
+            return
+        data = self.notion.request_json("GET", f"/databases/{database_id}")
+        properties = data.get("properties", {})
+        if isinstance(properties, dict) and "content_hash" not in properties:
+            self.notion.request_json(
+                "PATCH",
+                f"/databases/{database_id}",
+                {"properties": {"content_hash": {"rich_text": {}}}},
+            )
+        self.schema_checked = True
 
     def ensure_database(self) -> str:
         if self.database_id:
@@ -125,6 +142,7 @@ class NotionDocIndex:
                 database_id = item.get("id")
                 if isinstance(database_id, str) and database_id:
                     self.database_id = database_id
+                    self._ensure_schema(database_id)
                     return database_id
             if not data.get("has_more"):
                 break
@@ -138,6 +156,7 @@ class NotionDocIndex:
                 "doc_sync_id": {"rich_text": {}},
                 "doc_path": {"rich_text": {}},
                 "notion_page_id": {"rich_text": {}},
+                "content_hash": {"rich_text": {}},
                 "status": {
                     "select": {
                         "options": [
@@ -154,6 +173,7 @@ class NotionDocIndex:
         if not isinstance(database_id, str) or not database_id:
             raise RuntimeError("Failed to create Notion docs index database")
         self.database_id = database_id
+        self.schema_checked = True
         return database_id
 
     def _query(self, filter_payload: dict) -> list[DocIndexRecord]:
@@ -204,33 +224,40 @@ class NotionDocIndex:
         notion_page_id: str,
         status: str,
         title: str,
+        content_hash: str | None = None,
+        existing: DocIndexRecord | None = None,
     ) -> DocIndexRecord:
         database_id = self.ensure_database()
-        existing = self.find_by_doc_sync_id(doc_sync_id)
+        current = existing if existing else self.find_by_doc_sync_id(doc_sync_id)
+        resolved_hash = (
+            content_hash if content_hash is not None else (current.content_hash if current else "")
+        )
 
         properties = {
             "Name": _title_property(title),
             "doc_sync_id": _text_property(doc_sync_id),
             "doc_path": _text_property(doc_path),
             "notion_page_id": _text_property(notion_page_id),
+            "content_hash": _text_property(resolved_hash),
             "status": {"select": {"name": status}},
             "last_synced_at": {
                 "date": {"start": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}
             },
         }
 
-        if existing:
+        if current:
             self.notion.request_json(
                 "PATCH",
-                f"/pages/{existing.entry_page_id}",
+                f"/pages/{current.entry_page_id}",
                 {"properties": properties},
             )
             return DocIndexRecord(
-                entry_page_id=existing.entry_page_id,
+                entry_page_id=current.entry_page_id,
                 doc_sync_id=doc_sync_id,
                 doc_path=doc_path,
                 notion_page_id=notion_page_id,
                 status=status,
+                content_hash=resolved_hash,
             )
 
         data = self.notion.request_json(
@@ -251,4 +278,5 @@ class NotionDocIndex:
             doc_path=doc_path,
             notion_page_id=notion_page_id,
             status=status,
+            content_hash=resolved_hash,
         )

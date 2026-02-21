@@ -1,6 +1,7 @@
 {
   "path": [
-    "spikes"
+    "spikes",
+    "src"
   ],
   "pattern": "**/src/**/*.{ts,mjs}",
   "ignore": [

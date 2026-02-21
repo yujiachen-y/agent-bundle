@@ -28,7 +28,7 @@ bundle.yaml + skills/
 ### 1. Install
 
 ```bash
-npm install -g agent-bundle
+pnpm add -g agent-bundle
 ```
 
 ### 2. Define your bundle
@@ -192,6 +192,8 @@ sandbox:
   serve:
     provider: kubernetes       # local k3d by default
 ```
+
+`resources` is optional. If you provide it, specify both `cpu` and `memory`; partial overrides are rejected. Omit `resources` to use defaults (`cpu: 2`, `memory: 512MB`).
 
 ### Skills
 

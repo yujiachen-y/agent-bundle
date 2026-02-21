@@ -37,9 +37,10 @@ export function percentile(values: number[], p: number): number {
     return 0;
   }
 
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.ceil((p / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, Math.min(sorted.length - 1, index))];
+  const sortedValues = [...values].sort((left, right) => left - right);
+  const rawIndex = Math.ceil((p / 100) * sortedValues.length) - 1;
+  const clampedIndex = Math.max(0, Math.min(sortedValues.length - 1, rawIndex));
+  return sortedValues[clampedIndex];
 }
 
 export async function loadPodTemplate(templatePath: string): Promise<V1Pod> {

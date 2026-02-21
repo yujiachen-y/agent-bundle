@@ -152,6 +152,7 @@ create ──► preMount ──► postMount ──► [agent session] ──�
 #### Configuration
 
 Common fields (timeout, resources) are provider-agnostic. Provider-specific settings go under the provider key only when needed.
+`resources` follows an all-or-nothing override model: omit it to use defaults (`cpu: 2`, `memory: 512MB`), or provide both fields explicitly.
 
 ```yaml
 sandbox:
@@ -550,6 +551,7 @@ Tasks are grouped into phases. Tasks within a phase can proceed in parallel. Eac
 - `src/cli/index.ts` CLI entrypoint with lightweight arg parser (e.g. `citty`). Two commands: `agent-bundle serve [--config path]` and `agent-bundle build [--config path]`, defaulting to `./agent-bundle.yaml`
 - Both commands are stubs: load + validate YAML (using F2's schema) and print parsed config
 - `"bin"` field in `package.json`, `yaml` dependency, `"ts:build"` script using `tsc`
+- Use `pnpm` as the package manager (`pnpm-lock.yaml` in repo root, `pnpm run` for scripts)
 - Update `eslint.config.mjs` and `vitest.config.ts` to include `src/**`
 
 **Depends on**: none

@@ -14,18 +14,20 @@ vi.mock("node:child_process", () => ({
 
 vi.mock("e2b", () => ({
   Sandbox: {
-    kill: killSandboxMock,
     create: createSandboxMock,
+    kill: killSandboxMock,
   },
 }));
 
-vi.mock("../sandbox_helpers.js", () => ({
-  findSandboxById: findSandboxByIdMock,
-}));
+vi.mock("../sandbox_helpers.js", () => {
+  return {
+    findSandboxById: (...args: unknown[]) => findSandboxByIdMock(...args),
+  };
+});
 
 vi.mock("../utils/time.js", () => ({
-  nowIso: () => "2026-02-21T00:00:00.000Z",
-  sleep: sleepMock,
+  nowIso: () => new Date("2026-02-21T00:00:00.000Z").toISOString(),
+  sleep: (...args: unknown[]) => sleepMock(...args),
 }));
 
 const orchestratorCrashModule = await import("./i3_orchestrator_crash.js");

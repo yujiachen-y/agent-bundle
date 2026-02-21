@@ -40,7 +40,7 @@ export default tseslint.config(
     ],
   },
   {
-    files: ["spikes/**/*.{js,mjs,cjs}"],
+    files: ["spikes/**/*.{js,mjs,cjs}", "src/**/*.{js,mjs,cjs}"],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: "latest",
@@ -54,7 +54,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["spikes/**/*.{ts,mts,cts,tsx}"],
+    files: ["spikes/**/*.{ts,mts,cts,tsx}", "src/**/*.{ts,mts,cts,tsx}"],
     extends: [...tseslint.configs.recommended],
     languageOptions: {
       parserOptions: {

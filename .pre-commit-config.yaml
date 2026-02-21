@@ -19,7 +19,7 @@ repos:
 
       - id: typescript-quality-gates
         name: typescript size complexity duplicate and coverage gates
-        entry: npm run ts:quality
+        entry: pnpm run ts:quality
         language: system
         pass_filenames: false
         stages: [pre-commit]

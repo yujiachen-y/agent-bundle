@@ -197,13 +197,26 @@ export function isMcpTool(name: string): boolean {
 }
 
 const MODEL_PROVIDER_CREDENTIAL_ENVS: Partial<Record<ModelProvider, readonly string[]>> = {
-  anthropic: ["ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"],
+  anthropic: ["ANTHROPIC_OAUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"],
   openai: ["OPENAI_API_KEY"],
   gemini: ["GEMINI_API_KEY"],
   openrouter: ["OPENROUTER_API_KEY"],
 };
 
+function applyModelCredentialAliases(provider: ModelProvider): void {
+  if (
+    provider === "anthropic"
+    && (!process.env.ANTHROPIC_OAUTH_TOKEN || process.env.ANTHROPIC_OAUTH_TOKEN.trim().length === 0)
+    && process.env.CLAUDE_CODE_OAUTH_TOKEN
+    && process.env.CLAUDE_CODE_OAUTH_TOKEN.trim().length > 0
+  ) {
+    process.env.ANTHROPIC_OAUTH_TOKEN = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  }
+}
+
 export function validateModelApiKey(provider: ModelProvider): void {
+  applyModelCredentialAliases(provider);
+
   const requiredEnvNames = MODEL_PROVIDER_CREDENTIAL_ENVS[provider];
   if (!requiredEnvNames || requiredEnvNames.length === 0) {
     // Ollama does not require an API key by default.

@@ -87,7 +87,7 @@ dist/my-agent/
 ```
 
 If `sandbox.kubernetes.build` is configured, `agent-bundle build` runs a local `docker build` for that image tag. Image push/import is still an explicit user step.
-If `sandbox.provider` is `e2b`, `agent-bundle build` generates a temporary E2B build context (`/skills`, `/tools`, `e2b.Dockerfile`), runs `e2b template build`, and bakes the resolved template ref into `bundle.json`.
+If `sandbox.provider` is `e2b`, `agent-bundle build` generates a temporary E2B build context (`/skills`, `/tools`, `e2b.Dockerfile`), uses the E2B SDK template build API, and bakes the resolved template ref into `bundle.json`. If SDK build fails and e2b CLI fallback is used, `E2B_API_KEY` is automatically reused as `E2B_ACCESS_TOKEN` when needed.
 
 Integrate into any Node.js service:
 

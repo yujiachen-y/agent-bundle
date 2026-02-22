@@ -4,10 +4,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Readable, Writable } from "node:stream";
 
+import { Template, type TemplateClass } from "e2b";
+
 import type { Skill } from "../skills/loader.js";
 
 type SpawnOptions = {
   stdio: ["ignore", "pipe", "pipe"];
+  env?: NodeJS.ProcessEnv;
 };
 
 type SpawnedProcess = {
@@ -16,6 +19,20 @@ type SpawnedProcess = {
   on(event: "close", listener: (code: number | null) => void): SpawnedProcess;
   on(event: "error", listener: (error: Error) => void): SpawnedProcess;
 };
+
+type TemplateBuildLog = {
+  toString(): string;
+};
+
+type TemplateBuildImpl = (
+  template: TemplateClass,
+  name: string,
+  options?: {
+    onBuildLogs?: (entry: TemplateBuildLog) => void;
+  },
+) => Promise<{
+  name: string;
+}>;
 
 export type SpawnLike = (
   command: string,
@@ -27,6 +44,7 @@ export type BuildE2BTemplateOptions = {
   bundleDir: string;
   template: string;
   skills: Skill[];
+  templateBuildImpl?: TemplateBuildImpl;
   spawnImpl?: SpawnLike;
   stdout?: Writable;
   stderr?: Writable;
@@ -49,6 +67,10 @@ const E2B_DOCKERFILE_CONTENT = [
 
 const defaultSpawn: SpawnLike = (command, args, options) => {
   return spawn(command, args, options);
+};
+
+const defaultTemplateBuild: TemplateBuildImpl = async (template, name, options) => {
+  return await Template.build(template, name, options);
 };
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
@@ -93,6 +115,17 @@ function sanitizeSegment(value: string): string {
 
 function isRemoteSourcePath(path: string): boolean {
   return /^https?:\/\//.test(path);
+}
+
+function toCliSpawnEnv(): NodeJS.ProcessEnv {
+  if (process.env.E2B_ACCESS_TOKEN || !process.env.E2B_API_KEY) {
+    return process.env;
+  }
+
+  return {
+    ...process.env,
+    E2B_ACCESS_TOKEN: process.env.E2B_API_KEY,
+  };
 }
 
 async function copyDirectoryRecursive(sourcePath: string, destinationPath: string): Promise<void> {
@@ -194,7 +227,28 @@ async function createBuildContext(options: BuildE2BTemplateOptions): Promise<str
   return contextDir;
 }
 
-async function runTemplateBuildCommand(input: {
+async function runTemplateBuildSdk(input: {
+  contextDir: string;
+  template: string;
+  templateBuildImpl: TemplateBuildImpl;
+  stdout: Writable;
+}): Promise<BuildE2BTemplateResult> {
+  const template = Template({ fileContextPath: input.contextDir }).fromDockerfile(
+    join(input.contextDir, E2B_DOCKERFILE_NAME),
+  );
+  const buildInfo = await input.templateBuildImpl(template, input.template, {
+    onBuildLogs: (entry) => {
+      input.stdout.write(`${entry.toString()}\n`);
+    },
+  });
+
+  return {
+    templateRef: buildInfo.name || input.template,
+    exitCode: 0,
+  };
+}
+
+async function runTemplateBuildCli(input: {
   contextDir: string;
   template: string;
   spawnImpl: SpawnLike;
@@ -205,7 +259,10 @@ async function runTemplateBuildCommand(input: {
   let commandOutput = "";
 
   return await new Promise<BuildE2BTemplateResult>((resolvePromise, rejectPromise) => {
-    const child = input.spawnImpl("e2b", args, { stdio: DEFAULT_STDIO });
+    const child = input.spawnImpl("e2b", args, {
+      stdio: DEFAULT_STDIO,
+      env: toCliSpawnEnv(),
+    });
 
     pipeIfPresent(child.stdout, input.stdout, (chunk) => {
       commandOutput += chunk.toString();
@@ -231,18 +288,32 @@ export async function buildE2BTemplate(
   options: BuildE2BTemplateOptions,
 ): Promise<BuildE2BTemplateResult> {
   const spawnImpl = options.spawnImpl ?? defaultSpawn;
+  const templateBuildImpl = options.templateBuildImpl ?? defaultTemplateBuild;
   const output = options.stdout ?? process.stdout;
   const errorOutput = options.stderr ?? process.stderr;
   const contextDir = await createBuildContext(options);
 
   try {
-    return await runTemplateBuildCommand({
-      contextDir,
-      template: options.template,
-      spawnImpl,
-      stdout: output,
-      stderr: errorOutput,
-    });
+    try {
+      return await runTemplateBuildSdk({
+        contextDir,
+        template: options.template,
+        templateBuildImpl,
+        stdout: output,
+      });
+    } catch (error) {
+      errorOutput.write(
+        `E2B SDK template build failed (${error instanceof Error ? error.message : String(error)}). Falling back to e2b CLI.\n`,
+      );
+
+      return await runTemplateBuildCli({
+        contextDir,
+        template: options.template,
+        spawnImpl,
+        stdout: output,
+        stderr: errorOutput,
+      });
+    }
   } finally {
     await rm(contextDir, { recursive: true, force: true });
   }

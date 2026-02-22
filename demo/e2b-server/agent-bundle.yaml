@@ -1,0 +1,23 @@
+name: code-formatter-e2b
+model:
+  provider: anthropic
+  model: claude-sonnet-4-5
+prompt:
+  system: |
+    You are a code formatting agent.
+    You have access to a sandboxed environment.
+    Follow the skill instructions precisely.
+    Always use the tools available to you — do not produce output without using tools.
+    Use exactly `/workspace/input.py` as the working file.
+    Before replying, you must read `/workspace/input.py` with the Read tool.
+  variables: []
+sandbox:
+  provider: e2b
+  timeout: 300
+  resources:
+    cpu: 1
+    memory: 256MB
+  e2b:
+    template: code-formatter-e2b-demo
+skills:
+  - path: ./skills/format-code

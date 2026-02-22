@@ -59,7 +59,7 @@ sandbox:
 
 `resources` is optional. If you provide it, specify both `cpu` and `memory`; partial overrides are rejected. Omit `resources` to use defaults (`cpu: 2`, `memory: 512MB`).
 
-When `sandbox.provider` is `e2b`, `agent-bundle build` generates a temporary build context (`/skills`, `/tools`, `e2b.Dockerfile`) and then shells out to `e2b template build --path <generated-context> <sandbox.e2b.template>`. Install and authenticate the [E2B CLI](https://e2b.dev/docs/cli) before running the build command.
+When `sandbox.provider` is `e2b`, `agent-bundle build` generates a temporary build context (`/skills`, `/tools`, `e2b.Dockerfile`) and builds templates via the E2B SDK API. If SDK build fails, it falls back to `e2b template build --path <generated-context> <sandbox.e2b.template>`. If CLI fallback is used and `E2B_ACCESS_TOKEN` is unset while `E2B_API_KEY` is present, the build command reuses `E2B_API_KEY` for CLI auth.
 
 ## Skills
 

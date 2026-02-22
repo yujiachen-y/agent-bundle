@@ -15,6 +15,8 @@
 
 ## Why
 
+**One YAML. Dev-to-prod in minutes, not months.**
+
 Agent Skills work great inside local coding agents. Getting them into production is a different story.
 
 |  | Without agent-bundle | With agent-bundle |

@@ -183,10 +183,8 @@ it("cleans up initialized resources when loop init fails", async () => {
 
 it("fails fast before provisioning sandbox when model api key is missing", async () => {
   const originalOauthToken = process.env.ANTHROPIC_OAUTH_TOKEN;
-  const originalClaudeCodeOauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
   const originalApiKey = process.env.ANTHROPIC_API_KEY;
   delete process.env.ANTHROPIC_OAUTH_TOKEN;
-  delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
   delete process.env.ANTHROPIC_API_KEY;
 
   try {
@@ -202,7 +200,7 @@ it("fails fast before provisioning sandbox when model api key is missing", async
     });
 
     await expect(harness.agent.initialize()).rejects.toThrow(
-      'Missing credentials for provider "anthropic". Set ANTHROPIC_OAUTH_TOKEN or CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY before starting the agent.',
+      'Missing credentials for provider "anthropic". Set ANTHROPIC_OAUTH_TOKEN or ANTHROPIC_API_KEY before starting the agent.',
     );
     expect(order).toEqual([]);
     expect(harness.sandbox.startCount).toBe(0);
@@ -215,12 +213,6 @@ it("fails fast before provisioning sandbox when model api key is missing", async
       process.env.ANTHROPIC_OAUTH_TOKEN = originalOauthToken;
     }
 
-    if (originalClaudeCodeOauthToken === undefined) {
-      delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
-    } else {
-      process.env.CLAUDE_CODE_OAUTH_TOKEN = originalClaudeCodeOauthToken;
-    }
-
     if (originalApiKey === undefined) {
       delete process.env.ANTHROPIC_API_KEY;
     } else {
@@ -231,10 +223,8 @@ it("fails fast before provisioning sandbox when model api key is missing", async
 
 it("accepts Anthropic OAuth token during startup validation", async () => {
   const originalOauthToken = process.env.ANTHROPIC_OAUTH_TOKEN;
-  const originalClaudeCodeOauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
   const originalApiKey = process.env.ANTHROPIC_API_KEY;
   process.env.ANTHROPIC_OAUTH_TOKEN = "oauth-token";
-  delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
   delete process.env.ANTHROPIC_API_KEY;
 
   try {
@@ -256,12 +246,6 @@ it("accepts Anthropic OAuth token during startup validation", async () => {
       delete process.env.ANTHROPIC_OAUTH_TOKEN;
     } else {
       process.env.ANTHROPIC_OAUTH_TOKEN = originalOauthToken;
-    }
-
-    if (originalClaudeCodeOauthToken === undefined) {
-      delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
-    } else {
-      process.env.CLAUDE_CODE_OAUTH_TOKEN = originalClaudeCodeOauthToken;
     }
 
     if (originalApiKey === undefined) {

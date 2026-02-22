@@ -9,7 +9,7 @@ This demo skill formats Python with `black` (available in the default E2B base i
 - Node.js >= 20 and pnpm
 - API secrets:
   - `E2B_API_KEY` (for E2B sandbox + template build)
-  - one model key (`ANTHROPIC_OAUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, or `ANTHROPIC_API_KEY` by default in this demo)
+  - one model key (`ANTHROPIC_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` by default in this demo)
 
 `agent-bundle build` uses the E2B SDK template build API by default. e2b CLI is only used as a fallback when SDK build fails.
 
@@ -34,6 +34,12 @@ pnpm build:demo:e2b-server
 
 ```bash
 infisical run --env=dev -- sh -lc 'PORT=3001 pnpm demo:e2b-server'
+```
+
+If your secret store only has `CLAUDE_CODE_OAUTH_TOKEN`, map it explicitly in the launch command:
+
+```bash
+infisical run --env=dev -- sh -lc 'export ANTHROPIC_OAUTH_TOKEN="${ANTHROPIC_OAUTH_TOKEN:-${CLAUDE_CODE_OAUTH_TOKEN:-}}"; PORT=3001 pnpm demo:e2b-server'
 ```
 
 Expected log:

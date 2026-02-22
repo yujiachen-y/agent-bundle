@@ -24,11 +24,11 @@ import {
   isMcpTool,
   readFieldError,
   readFieldTypeError,
-  resolveAndValidateModelApiKey,
   toConversationInput,
   toErrorMessage,
   toNextConversationHistory,
   toToolError,
+  validateModelApiKey,
 } from "./internals.js";
 import type { Agent, AgentConfig, AgentStatus, InitOptions, RespondStreamOptions } from "./types.js";
 
@@ -55,7 +55,7 @@ export class AgentImpl<V extends string> implements Agent {
 
   public async initialize(): Promise<void> {
     const systemPrompt = fillSystemPrompt(this.config.systemPrompt, this.options.variables);
-    resolveAndValidateModelApiKey(this.config.model.provider);
+    validateModelApiKey(this.config.model.provider);
     const sandbox = this.dependencies.createSandbox(this.config.sandbox, this.options.hooks ?? {});
     const loop = this.dependencies.createLoop();
 

@@ -12,34 +12,31 @@ afterEach(() => {
 });
 
 describe("validateModelApiKey", () => {
-  it("accepts CLAUDE_CODE_OAUTH_TOKEN for anthropic provider", () => {
+  it("accepts ANTHROPIC_OAUTH_TOKEN for anthropic provider", () => {
     RESTORES.push(
       withTemporaryEnv({
-        ANTHROPIC_OAUTH_TOKEN: undefined,
+        ANTHROPIC_OAUTH_TOKEN: "oauth-token",
         ANTHROPIC_API_KEY: undefined,
-        CLAUDE_CODE_OAUTH_TOKEN: "claude-code-oauth-token",
       }),
     );
 
     expect(() => {
       validateModelApiKey("anthropic");
     }).not.toThrow();
-    expect(process.env.ANTHROPIC_OAUTH_TOKEN).toBe("claude-code-oauth-token");
   });
 
-  it("includes CLAUDE_CODE_OAUTH_TOKEN in missing credential error", () => {
+  it("includes ANTHROPIC credential env names in missing credential error", () => {
     RESTORES.push(
       withTemporaryEnv({
         ANTHROPIC_OAUTH_TOKEN: undefined,
         ANTHROPIC_API_KEY: undefined,
-        CLAUDE_CODE_OAUTH_TOKEN: undefined,
       }),
     );
 
     expect(() => {
       validateModelApiKey("anthropic");
     }).toThrow(
-      'Missing credentials for provider "anthropic". Set ANTHROPIC_OAUTH_TOKEN or CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY before starting the agent.',
+      'Missing credentials for provider "anthropic". Set ANTHROPIC_OAUTH_TOKEN or ANTHROPIC_API_KEY before starting the agent.',
     );
   });
 });

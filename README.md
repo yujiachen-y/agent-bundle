@@ -6,31 +6,27 @@
 [![Node](https://img.shields.io/badge/Node-%3E%3D20-green.svg)](https://nodejs.org/)
 [![Website](https://img.shields.io/badge/Website-agent--bundle.com-8b5cf6)](https://agent-bundle.com)
 
-> Bundle skills into a single deployable agent.
+> Define skills in YAML. Develop with a live sandbox UI. Ship as a typed TypeScript package.
 
-*Sandboxed execution. Token-scoped data access.*
+**Anthropic · OpenAI · Gemini · Ollama · OpenRouter** — **E2B · Kubernetes sandboxes**
 
-<!-- TODO: demo GIF — `agent-bundle serve` opening TUI + WebUI showing file tree and live terminal -->
+<p align="center">
+  <img src=".github/demo.gif" alt="agent-bundle generate, serve with TUI and WebUI, then build producing typed output" width="720">
+  <br>
+  <sub>TODO: Record with <a href="https://github.com/charmbracelet/vhs">VHS</a> — <code>generate</code> → <code>serve</code> (TUI + WebUI) → <code>build</code></sub>
+</p>
 
 ---
 
 ## Why
 
-**One YAML. Dev-to-prod in minutes, not months.**
-
-Agent Skills work great inside local coding agents. Getting them into production is a different story.
+Agent skills work great inside local coding agents. Getting them into production is a different story.
 
 |  | Without agent-bundle | With agent-bundle |
 |--|---------------------|-------------------|
 | **Develop** | Skills run in local coding agents only | `agent-bundle serve` — TUI + WebUI with live sandbox view |
 | **Ship** | Rewrite skill logic into a service from scratch | `agent-bundle build` — typed TypeScript factory + Docker image |
 | **Behave** | Dev and prod diverge silently | Same sandbox runtime in both modes |
-
----
-
-## How It Works
-
-![Architecture](.github/architecture.png)
 
 ---
 
@@ -71,7 +67,22 @@ agent-bundle serve
 
 Starts a TUI for interactive testing. A WebUI at `http://localhost:3000` lets you watch the agent's file tree and terminal output in real time — see exactly what it's doing inside the sandbox.
 
-### 4. Build for deployment
+Ready to deploy? See [Build & Embed](#build--embed) below.
+
+---
+
+## Features
+
+- **Live sandbox view** — WebUI at localhost:3000 shows the agent's file tree and terminal in real time. No more black boxes.
+- **Type-safe codegen** — Prisma-style `generate`. Variable names are checked at compile time — miss one and it won't build.
+- **Dev-prod parity** — `serve` and `build` share the same sandbox abstraction. What passes locally ships as-is.
+- **No vendor lock-in** — Swap model providers or sandbox backends with one line of YAML.
+- **Session recovery** — Agent crashes mid-run? Resume from its last conversation state.
+- **Token-scoped MCP** — Connect to internal services via MCP servers. Even under prompt injection, the agent cannot exceed what the MCP server permits for that token.
+
+---
+
+## Build & Embed
 
 ```bash
 agent-bundle build
@@ -96,58 +107,25 @@ import { MyAgent } from "./dist/my-agent";
 
 const agent = await MyAgent.init({
   variables: { user_name: "Alice" },
-  hooks: {
-    preMount: async (io) => {
-      await io.file.write("/workspace/invoice.pdf", pdfBuffer);
-    },
-    postUnmount: async (io) => {
-      const result = await io.file.read("/workspace/output.json");
-      await uploadToS3(result);
-    },
-  },
 });
 
 const response = await agent.respond("Extract all line items");
 await agent.shutdown();
 ```
 
-Variable names are checked at compile time. Miss one and it won't build.
+Variable names are checked at compile time. Lifecycle hooks, file I/O, and session recovery are covered in the [Configuration Guide](./docs/configuration.md).
 
 ---
 
-## Key Features
+## Architecture
 
-**See inside the sandbox.** In `serve` mode, a WebUI at `localhost:3000` shows the agent's live file tree and terminal output as it runs. No more guessing what the agent is doing.
+![Architecture](.github/architecture.png)
 
-<!-- TODO: screenshot — WebUI showing file tree on the left, live terminal output on the right -->
-
-**No vendor lock-in.** Swap model providers or sandbox backends with one line of YAML. Supports Anthropic, OpenAI, Gemini, Ollama, and any OpenAI-compatible proxy; E2B and Kubernetes sandboxes.
-
-**Consistent runtime across environments.** `serve` and `build` run through the same sandbox abstraction. What passes locally ships as-is.
-
-**Session recovery.** If an agent crashes mid-run, resume from its last conversation state:
-
-```typescript
-const agent = await MyAgent.init({
-  variables: { user_name: "Alice" },
-  session: savedSessionState,
-});
-```
-
-Conversation history is restored automatically. Sandbox files are re-seeded via your `preMount` hook.
-
-**MCP for controlled data access.** Connect the agent to internal services via token-scoped MCP servers. Even under prompt injection, the agent cannot exceed what the MCP server permits for that token. See [Configuration Guide](./docs/configuration.md#mcp-servers) for setup.
+The agent orchestrator routes between the LLM provider, sandbox, and MCP servers. All three interfaces share the same abstraction in both `serve` and `build` modes.
 
 ---
 
-## HTTP API
-
-agent-bundle exposes an [Open Responses](https://github.com/open-responses/open-responses)-compatible endpoint in both `serve` and `build` modes. Any OpenAI SDK connects by overriding `baseURL`:
-
-```
-POST /v1/responses
-{ "input": "Extract all line items from the invoice", "stream": true }
-```
+If agent-bundle is useful to you, consider giving it a ⭐. It helps others discover the project.
 
 ---
 

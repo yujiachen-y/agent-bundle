@@ -40,6 +40,13 @@ const resourcesSchema = z
     memory: "512MB",
   });
 
+const kubernetesBuildSchema = z
+  .object({
+    dockerfile: z.string().min(1),
+    context: z.string().min(1).optional(),
+  })
+  .strict();
+
 const sandboxSchema = z
   .object({
     provider: sandboxProviderSchema,
@@ -58,6 +65,7 @@ const sandboxSchema = z
         nodeSelector: z.record(z.string(), z.string()).optional(),
         registry: z.string().min(1).optional(),
         image: z.string().min(1).optional(),
+        build: kubernetesBuildSchema.optional(),
       })
       .strict()
       .optional(),

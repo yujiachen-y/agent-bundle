@@ -16,7 +16,10 @@ sandbox:
     cpu: 1
     memory: 256Mi
   kubernetes:
-    image: agent-bundle/execd:latest   # built from spikes/sandbox/docker/Dockerfile
+    build:
+      dockerfile: ../../packages/execd/Dockerfile
+      context: ../../packages/execd
+    image: agent-bundle/execd:latest
     # kubeconfig: /path/to/kubeconfig  # optional: override ~/.kube/config
 skills:
   - path: ./skills/format-code

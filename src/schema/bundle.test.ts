@@ -176,4 +176,39 @@ describe("parseBundleConfig sandbox and MCP validation", () => {
 
     expect(() => parseBundleConfig(config)).toThrowError();
   });
+
+  it("parses kubernetes build config with dockerfile and context", () => {
+    const config = makeBaseConfig();
+    config.sandbox = {
+      provider: "kubernetes",
+      kubernetes: {
+        image: "agent-bundle/execd:latest",
+        build: {
+          dockerfile: "./Dockerfile",
+          context: ".",
+        },
+      },
+    };
+
+    const parsed = parseBundleConfig(config);
+    expect(parsed.sandbox.kubernetes?.build?.dockerfile).toBe("./Dockerfile");
+    expect(parsed.sandbox.kubernetes?.build?.context).toBe(".");
+  });
+
+  it("parses kubernetes build config with dockerfile only", () => {
+    const config = makeBaseConfig();
+    config.sandbox = {
+      provider: "kubernetes",
+      kubernetes: {
+        image: "agent-bundle/execd:latest",
+        build: {
+          dockerfile: "./Dockerfile",
+        },
+      },
+    };
+
+    const parsed = parseBundleConfig(config);
+    expect(parsed.sandbox.kubernetes?.build?.dockerfile).toBe("./Dockerfile");
+    expect(parsed.sandbox.kubernetes?.build?.context).toBeUndefined();
+  });
 });

@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 
+import { CodeFormatter as factory } from "../../dist/code-formatter/index.ts";
 import { createServer } from "../../src/service/create-server.js";
-import { agent as factory } from "./_generated/agent.js";
 
 const instance = await factory.init({ variables: {} as Record<never, string> });
 

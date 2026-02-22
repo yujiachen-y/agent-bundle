@@ -84,6 +84,8 @@ dist/invoice-processor/
 └── bundle.json   ← config snapshot
 ```
 
+If `sandbox.kubernetes.build` is configured, `agent-bundle build` runs a local `docker build` for that image tag. Image push/import is still an explicit user step.
+
 Integrate into any Node.js service:
 
 ```typescript
@@ -204,6 +206,12 @@ sandbox:
 
   e2b:
     template: my-custom-template
+
+  kubernetes:
+    build:
+      dockerfile: ./Dockerfile # optional: run docker build during `agent-bundle build`
+      context: .               # optional: defaults to dockerfile directory
+    image: my-sandbox:latest   # required when build is configured
 
   serve:
     provider: kubernetes       # local k3d by default

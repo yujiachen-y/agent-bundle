@@ -2,11 +2,10 @@
 
 import { defineCommand, runMain } from "citty";
 
+import { DEFAULT_OUTPUT_DIR, runBuildCommand } from "./build.js";
 import { loadBundleConfig } from "./load-bundle-config.js";
 
 const DEFAULT_CONFIG_PATH = "./agent-bundle.yaml";
-
-type CommandName = "serve" | "build";
 
 function resolveConfigPath(configArg: string | boolean | undefined): string {
   if (typeof configArg === "string" && configArg.length > 0) {
@@ -16,7 +15,7 @@ function resolveConfigPath(configArg: string | boolean | undefined): string {
   return DEFAULT_CONFIG_PATH;
 }
 
-async function runStubCommand(command: CommandName, configPath: string): Promise<void> {
+async function runStubCommand(command: "serve", configPath: string): Promise<void> {
   const config = await loadBundleConfig(configPath);
   const output = {
     command,
@@ -31,6 +30,12 @@ const configArg = {
   type: "string",
   description: "Path to agent-bundle YAML config file.",
   default: DEFAULT_CONFIG_PATH,
+} as const;
+
+const outputArg = {
+  type: "string",
+  description: "Directory to write generated artifacts.",
+  default: DEFAULT_OUTPUT_DIR,
 } as const;
 
 const serveCommand = defineCommand({
@@ -49,13 +54,17 @@ const serveCommand = defineCommand({
 const buildCommand = defineCommand({
   meta: {
     name: "build",
-    description: "Build deployable bundle artifacts (stub).",
+    description: "Build deployable bundle artifacts.",
   },
   args: {
     config: configArg,
+    output: outputArg,
   },
   run: async ({ args }): Promise<void> => {
-    await runStubCommand("build", resolveConfigPath(args.config));
+    await runBuildCommand({
+      configPath: resolveConfigPath(args.config),
+      outputDir: typeof args.output === "string" ? args.output : DEFAULT_OUTPUT_DIR,
+    });
   },
 });
 

@@ -3,6 +3,7 @@
 import { defineCommand, runMain } from "citty";
 
 import { DEFAULT_OUTPUT_DIR, runBuildCommand } from "./build.js";
+import { runGenerateCommand } from "./generate.js";
 import { loadBundleConfig } from "./load-bundle-config.js";
 
 const DEFAULT_CONFIG_PATH = "./agent-bundle.yaml";
@@ -51,6 +52,26 @@ const serveCommand = defineCommand({
   },
 });
 
+const generateCommand = defineCommand({
+  meta: {
+    name: "generate",
+    description: "Generate bundle code (no Docker build).",
+  },
+  args: {
+    config: configArg,
+    output: {
+      type: "string",
+      description: "Directory to write generated artifacts. Defaults to node_modules/@agent-bundle/<name>/.",
+    },
+  },
+  run: async ({ args }): Promise<void> => {
+    await runGenerateCommand({
+      configPath: resolveConfigPath(args.config),
+      outputDir: typeof args.output === "string" ? args.output : undefined,
+    });
+  },
+});
+
 const buildCommand = defineCommand({
   meta: {
     name: "build",
@@ -75,6 +96,7 @@ const mainCommand = defineCommand({
   },
   subCommands: {
     serve: serveCommand,
+    generate: generateCommand,
     build: buildCommand,
   },
 });

@@ -27,6 +27,7 @@ export type GeneratedSources = {
   indexSource: string;
   typesSource: string;
   bundleJsonSource: string;
+  packageJsonSource: string;
 };
 
 const IDENTIFIER_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
@@ -267,10 +268,26 @@ export function generateBundleJsonSource(resolved: ResolvedBundleConfig): string
   return `${JSON.stringify(sanitizeJsonValue(resolved), null, 2)}\n`;
 }
 
+export function generatePackageJsonSource(bundleName: string): string {
+  const packageJson = {
+    name: `@agent-bundle/${bundleName}`,
+    version: "0.0.0",
+    type: "module",
+    main: "./index.ts",
+    types: "./index.ts",
+    dependencies: {
+      "agent-bundle": "*",
+    },
+  };
+
+  return `${JSON.stringify(packageJson, null, 2)}\n`;
+}
+
 export function generateSources(resolved: ResolvedBundleConfig): GeneratedSources {
   return {
     indexSource: generateIndexSource(resolved),
     typesSource: generateTypesSource(resolved),
     bundleJsonSource: generateBundleJsonSource(resolved),
+    packageJsonSource: generatePackageJsonSource(resolved.name),
   };
 }

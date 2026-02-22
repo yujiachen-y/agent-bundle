@@ -7,6 +7,10 @@
     "./runtime": {
       "types": "./dist/runtime.d.ts",
       "default": "./dist/runtime.js"
+    },
+    "./service": {
+      "types": "./dist/service/create-server.d.ts",
+      "default": "./dist/service/create-server.js"
     }
   },
   "bin": {
@@ -15,7 +19,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && rm -rf dist/webui/public && cp -r src/webui/public dist/webui/public",
     "build:sandbox:execd": "docker build -t agent-bundle/execd:latest -f packages/execd/Dockerfile packages/execd",
-    "build:demo:local-server": "pnpm build:sandbox:execd && pnpm exec tsx src/cli/index.ts build --config demo/local-server/agent-bundle.yaml",
+    "build:demo:local-server": "pnpm build:sandbox:execd && pnpm exec tsx src/cli/index.ts build --config demo/local-server/agent-bundle.yaml && pnpm exec tsx src/cli/index.ts generate --config demo/local-server/agent-bundle.yaml",
     "build:demo:e2b-server": "pnpm exec tsx src/cli/index.ts build --config demo/e2b-server/agent-bundle.yaml",
     "lint": "eslint \"spikes/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\" \"src/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\"",
     "duplicate": "jscpd --config .jscpd.json",

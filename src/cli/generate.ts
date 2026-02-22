@@ -1,0 +1,161 @@
+import { lstat, mkdir, symlink, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import type { Writable } from "node:stream";
+
+import { generateSystemPromptTemplate, type SkillSummary } from "../agent-loop/system-prompt/generate.js";
+import type { BundleConfig } from "../schema/bundle.js";
+import { loadAllSkills } from "../skills/loader.js";
+import {
+  createResolvedBundleConfig,
+  generateSources,
+  type GeneratedSources,
+  type ResolvedBundleConfig,
+  type SandboxImageRef,
+} from "./build-codegen.js";
+import { loadBundleConfig } from "./load-bundle-config.js";
+import { resolveProjectRoot } from "./resolve-project-root.js";
+
+export type RunGenerateOptions = {
+  configPath: string;
+  outputDir?: string;
+  stdout?: Writable;
+  stderr?: Writable;
+};
+
+export type RunGenerateResult = {
+  outputDir: string;
+  resolvedConfig: ResolvedBundleConfig;
+};
+
+export type GenerateDependencies = {
+  loadConfig?: typeof loadBundleConfig;
+  loadSkills?: typeof loadAllSkills;
+  generateSystemPrompt?: typeof generateSystemPromptTemplate;
+  writeFileImpl?: typeof writeFile;
+  mkdirImpl?: typeof mkdir;
+  resolveRoot?: typeof resolveProjectRoot;
+};
+
+function toSkillSummaries(skills: Awaited<ReturnType<typeof loadAllSkills>>): SkillSummary[] {
+  return skills.map((skill) => ({
+    name: skill.name,
+    description: skill.description,
+    sourcePath: skill.sourcePath,
+  }));
+}
+
+function resolveSandboxImageRefFromConfig(config: BundleConfig): SandboxImageRef {
+  if (config.sandbox.provider === "kubernetes") {
+    const image = config.sandbox.kubernetes?.image;
+    if (!image) {
+      throw new Error(
+        "sandbox.kubernetes.image is required when sandbox provider is kubernetes.",
+      );
+    }
+
+    return { provider: "kubernetes", ref: image };
+  }
+
+  const template = config.sandbox.e2b?.template;
+  if (!template) {
+    throw new Error(
+      "sandbox.e2b.template is required when sandbox provider is e2b.",
+    );
+  }
+
+  return { provider: "e2b", ref: template };
+}
+
+export async function writeGeneratedFiles(input: {
+  outputDir: string;
+  sources: GeneratedSources;
+  mkdirImpl: typeof mkdir;
+  writeFileImpl: typeof writeFile;
+}): Promise<void> {
+  await input.mkdirImpl(input.outputDir, { recursive: true });
+
+  await Promise.all([
+    input.writeFileImpl(join(input.outputDir, "index.ts"), input.sources.indexSource, "utf8"),
+    input.writeFileImpl(join(input.outputDir, "types.ts"), input.sources.typesSource, "utf8"),
+    input.writeFileImpl(join(input.outputDir, "bundle.json"), input.sources.bundleJsonSource, "utf8"),
+    input.writeFileImpl(join(input.outputDir, "package.json"), input.sources.packageJsonSource, "utf8"),
+  ]);
+}
+
+async function ensureSelfLink(projectRoot: string): Promise<void> {
+  const nodeModulesDir = join(projectRoot, "node_modules");
+  const linkPath = join(nodeModulesDir, "agent-bundle");
+  try {
+    await lstat(linkPath);
+    return;
+  } catch {
+    await mkdir(nodeModulesDir, { recursive: true });
+    await symlink(projectRoot, linkPath, "dir");
+  }
+}
+
+async function resolveDefaultOutputDir(
+  configPath: string,
+  bundleName: string,
+  resolveRoot: typeof resolveProjectRoot,
+): Promise<{ outputDir: string; projectRoot: string }> {
+  const projectRoot = await resolveRoot(dirname(resolve(configPath)));
+  return {
+    outputDir: join(projectRoot, "node_modules", "@agent-bundle", bundleName),
+    projectRoot,
+  };
+}
+
+export async function runGenerateCommand(
+  options: RunGenerateOptions,
+  dependencies: GenerateDependencies = {},
+): Promise<RunGenerateResult> {
+  const loadConfigImpl = dependencies.loadConfig ?? loadBundleConfig;
+  const loadSkillsImpl = dependencies.loadSkills ?? loadAllSkills;
+  const promptGenerator = dependencies.generateSystemPrompt ?? generateSystemPromptTemplate;
+  const writeFileImpl = dependencies.writeFileImpl ?? writeFile;
+  const mkdirImpl = dependencies.mkdirImpl ?? mkdir;
+  const resolveRoot = dependencies.resolveRoot ?? resolveProjectRoot;
+  const stdout = options.stdout ?? process.stdout;
+
+  const configPath = resolve(options.configPath);
+  const bundleDir = dirname(configPath);
+  const config = await loadConfigImpl(configPath);
+
+  stdout.write(`Generating bundle "${config.name}" from ${configPath}\n`);
+
+  const skills = await loadSkillsImpl(config.skills, bundleDir);
+  const skillSummaries = toSkillSummaries(skills);
+  const sandboxImage = resolveSandboxImageRefFromConfig(config);
+  const systemPrompt = promptGenerator({
+    basePrompt: config.prompt.system,
+    skills: skillSummaries,
+  });
+  const resolvedConfig = createResolvedBundleConfig({
+    config,
+    skills: skillSummaries,
+    systemPrompt,
+    sandboxImage,
+  });
+  const sources = generateSources(resolvedConfig);
+
+  let outputDir: string;
+  if (options.outputDir) {
+    outputDir = join(resolve(options.outputDir), config.name);
+  } else {
+    const resolved = await resolveDefaultOutputDir(configPath, config.name, resolveRoot);
+    outputDir = resolved.outputDir;
+    await ensureSelfLink(resolved.projectRoot);
+  }
+
+  await writeGeneratedFiles({
+    outputDir,
+    sources,
+    mkdirImpl,
+    writeFileImpl,
+  });
+
+  stdout.write(`Generate completed: ${outputDir}\n`);
+
+  return { outputDir, resolvedConfig };
+}

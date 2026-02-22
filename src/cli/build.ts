@@ -13,6 +13,7 @@ import {
 } from "./build-codegen.js";
 import { buildE2BTemplate, type BuildE2BTemplateResult } from "./build-e2b-template.js";
 import { buildSandboxImage, type BuildSandboxImageResult } from "./build-sandbox-image.js";
+import { writeGeneratedFiles } from "./generate.js";
 import { loadBundleConfig } from "./load-bundle-config.js";
 
 export const DEFAULT_OUTPUT_DIR = "dist";
@@ -171,21 +172,6 @@ async function resolveSandboxImageRef(input: {
     stdout: input.stdout,
     stderr: input.stderr,
   });
-}
-
-async function writeGeneratedFiles(input: {
-  outputDir: string;
-  sources: ReturnType<typeof generateSources>;
-  mkdirImpl: typeof mkdir;
-  writeFileImpl: typeof writeFile;
-}): Promise<void> {
-  await input.mkdirImpl(input.outputDir, { recursive: true });
-
-  await Promise.all([
-    input.writeFileImpl(join(input.outputDir, "index.ts"), input.sources.indexSource, "utf8"),
-    input.writeFileImpl(join(input.outputDir, "types.ts"), input.sources.typesSource, "utf8"),
-    input.writeFileImpl(join(input.outputDir, "bundle.json"), input.sources.bundleJsonSource, "utf8"),
-  ]);
 }
 
 export async function runBuildCommand(

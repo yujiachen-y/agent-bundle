@@ -122,6 +122,7 @@ describe("runBuildCommand success path with docker build", () => {
     const indexSource = await readFile(join(result.outputDir, "index.ts"), "utf8");
     const typesSource = await readFile(join(result.outputDir, "types.ts"), "utf8");
     const bundleJsonSource = await readFile(join(result.outputDir, "bundle.json"), "utf8");
+    const packageJsonSource = await readFile(join(result.outputDir, "package.json"), "utf8");
 
     expect(indexSource).toContain("export const CodeFormatter = defineAgent");
     expect(typesSource).toContain("export interface CodeFormatterVariables");
@@ -144,6 +145,10 @@ describe("runBuildCommand success path with docker build", () => {
     });
     expect(bundleJson.sandbox.kubernetes?.image).toBe("agent-bundle/execd:latest");
     expect(bundleJson.skills[0].name).toBe("FormatCode");
+
+    const packageJson = JSON.parse(packageJsonSource) as { name: string; dependencies: Record<string, string> };
+    expect(packageJson.name).toBe("@agent-bundle/code-formatter");
+    expect(packageJson.dependencies).toEqual({ "agent-bundle": "*" });
   });
 });
 

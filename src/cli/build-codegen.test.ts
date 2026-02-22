@@ -4,6 +4,7 @@ import { parseBundleConfig } from "../schema/bundle.js";
 import {
   applySandboxImageRef,
   createResolvedBundleConfig,
+  generatePackageJsonSource,
   generateSources,
   toPascalCase,
 } from "./build-codegen.js";
@@ -83,7 +84,24 @@ describe("build code generation sandbox image refs", () => {
 });
 
 describe("build code generation outputs", () => {
-  it("generates index.ts, types.ts and bundle.json", () => {
+  it("generates package.json with scoped package name and runtime dependency", () => {
+    const source = generatePackageJsonSource("invoice-processor");
+    const parsed = JSON.parse(source) as {
+      name: string;
+      type: string;
+      main: string;
+      types: string;
+      dependencies: Record<string, string>;
+    };
+
+    expect(parsed.name).toBe("@agent-bundle/invoice-processor");
+    expect(parsed.type).toBe("module");
+    expect(parsed.main).toBe("./index.ts");
+    expect(parsed.types).toBe("./index.ts");
+    expect(parsed.dependencies).toEqual({ "agent-bundle": "*" });
+  });
+
+  it("generates index.ts, types.ts, bundle.json and package.json", () => {
     const config = createBaseConfig();
     const resolved = createResolvedBundleConfig({
       config,
@@ -126,6 +144,9 @@ describe("build code generation outputs", () => {
     });
     expect(parsedBundle.skills).toEqual([{ name: "Extract", description: "Parse invoice", sourcePath: "./skills/extract" }]);
     expect(parsedBundle.systemPrompt).toContain("## Skills");
+
+    const parsedPkg = JSON.parse(sources.packageJsonSource) as { name: string };
+    expect(parsedPkg.name).toBe("@agent-bundle/invoice-processor");
   });
 
   it("quotes object keys that are not valid identifiers", () => {

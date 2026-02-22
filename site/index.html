@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agent-bundle — Bundle skills into a single deployable agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #09090b;
+    --bg-elevated: #111114;
+    --bg-card: rgba(255,255,255,0.03);
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --text: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-muted: #52525b;
+    --violet: #8b5cf6;
+    --violet-soft: rgba(139,92,246,0.12);
+    --teal: #2dd4bf;
+    --teal-soft: rgba(45,212,191,0.10);
+    --font-sans: 'Outfit', sans-serif;
+    --font-mono: 'Fira Code', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- Gradient mesh background ---- */
+  .mesh-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    overflow: hidden;
+  }
+  .mesh-bg::before {
+    content: '';
+    position: absolute;
+    width: 800px; height: 800px;
+    top: -200px; right: -200px;
+    background: radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%);
+    animation: drift1 20s ease-in-out infinite alternate;
+  }
+  .mesh-bg::after {
+    content: '';
+    position: absolute;
+    width: 600px; height: 600px;
+    bottom: -100px; left: -100px;
+    background: radial-gradient(circle, rgba(45,212,191,0.06) 0%, transparent 70%);
+    animation: drift2 25s ease-in-out infinite alternate;
+  }
+  @keyframes drift1 {
+    from { transform: translate(0, 0); }
+    to { transform: translate(-80px, 60px); }
+  }
+  @keyframes drift2 {
+    from { transform: translate(0, 0); }
+    to { transform: translate(60px, -40px); }
+  }
+
+  /* ---- Noise overlay ---- */
+  .noise {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
+  }
+
+  /* ---- Navbar ---- */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 40px;
+    background: rgba(9,9,11,0.75);
+    backdrop-filter: blur(24px) saturate(1.2);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-brand {
+    font-weight: 700; font-size: 17px;
+    color: var(--text); text-decoration: none;
+    letter-spacing: -0.3px;
+  }
+  .nav-brand .dot { color: var(--violet); }
+  .nav-right { display: flex; align-items: center; gap: 28px; }
+  .nav-right a {
+    color: var(--text-secondary); text-decoration: none;
+    font-size: 14px; font-weight: 400;
+    transition: color 0.2s;
+  }
+  .nav-right a:hover { color: var(--text); }
+  .gh-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 8px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
+    color: var(--text-secondary); font-size: 13px;
+    text-decoration: none; font-family: var(--font-sans);
+    transition: all 0.2s;
+  }
+  .gh-btn:hover {
+    background: rgba(255,255,255,0.09);
+    border-color: var(--border-hover);
+    color: var(--text);
+  }
+  .gh-btn svg { width: 15px; height: 15px; fill: currentColor; }
+
+  /* ---- Hero ---- */
+  .hero {
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 160px 40px 100px;
+    text-align: center;
+  }
+  .hero-pill {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 5px 14px 5px 6px; border-radius: 100px;
+    background: var(--violet-soft);
+    border: 1px solid rgba(139,92,246,0.2);
+    font-size: 13px; font-weight: 500;
+    color: var(--violet);
+    margin-bottom: 36px;
+    opacity: 0; animation: fadeIn 0.6s ease 0.1s forwards;
+  }
+  .hero-pill .pill-dot {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--violet);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: white;
+  }
+
+  .hero h1 {
+    font-weight: 800; font-size: clamp(42px, 5.5vw, 68px);
+    line-height: 1.08; letter-spacing: -2.5px;
+    max-width: 780px;
+    background: linear-gradient(180deg, #fafafa 40%, #71717a 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    opacity: 0; animation: fadeIn 0.6s ease 0.2s forwards;
+  }
+  .hero .sub {
+    margin-top: 24px;
+    font-size: 18px; font-weight: 300;
+    color: var(--text-secondary);
+    max-width: 480px; line-height: 1.6;
+    opacity: 0; animation: fadeIn 0.6s ease 0.3s forwards;
+  }
+
+  /* ---- Install bar (inline copy) ---- */
+  .install-bar {
+    display: inline-flex; align-items: center; gap: 0;
+    margin-top: 32px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    overflow: hidden;
+    opacity: 0; animation: fadeIn 0.6s ease 0.35s forwards;
+    cursor: pointer;
+    transition: border-color 0.25s;
+  }
+  .install-bar:hover {
+    border-color: var(--border-hover);
+  }
+  .install-bar code {
+    padding: 10px 18px;
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    user-select: all;
+  }
+  .install-bar code .dollar { color: var(--teal); margin-right: 8px; }
+  .install-bar .install-copy {
+    padding: 10px 16px;
+    border: none; border-left: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .install-bar .install-copy:hover {
+    background: rgba(255,255,255,0.06);
+    color: var(--text-secondary);
+  }
+
+  .hero-actions {
+    display: flex; gap: 12px; margin-top: 28px;
+    opacity: 0; animation: fadeIn 0.6s ease 0.4s forwards;
+  }
+  .btn-glow {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 28px; border-radius: 10px;
+    background: var(--violet);
+    color: white; font-weight: 600; font-size: 14px;
+    text-decoration: none; border: none;
+    font-family: var(--font-sans);
+    transition: all 0.25s;
+    box-shadow: 0 0 24px var(--violet-soft), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .btn-glow:hover {
+    filter: brightness(1.15);
+    box-shadow: 0 0 40px rgba(139,92,246,0.25), inset 0 1px 0 rgba(255,255,255,0.15);
+    transform: translateY(-1px);
+  }
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 28px; border-radius: 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary); font-weight: 500; font-size: 14px;
+    text-decoration: none;
+    font-family: var(--font-sans);
+    transition: all 0.25s;
+  }
+  .btn-ghost:hover {
+    border-color: var(--border-hover);
+    color: var(--text);
+    background: rgba(255,255,255,0.03);
+  }
+
+  /* ---- Terminal with animated border ---- */
+  .terminal-container {
+    margin-top: 64px; width: 100%; max-width: 680px;
+    opacity: 0; animation: fadeIn 0.6s ease 0.5s forwards;
+  }
+  .term-border {
+    position: relative;
+    border-radius: 17px;
+    padding: 1px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .term-border::before {
+    content: '';
+    position: absolute;
+    inset: -50%;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0%,
+      var(--violet) 8%,
+      var(--teal) 16%,
+      transparent 24%,
+      transparent 100%
+    );
+    animation: borderSpin 6s linear infinite;
+  }
+  @keyframes borderSpin {
+    to { transform: rotate(360deg); }
+  }
+  .term {
+    position: relative;
+    border-radius: 16px;
+    background: var(--bg-elevated);
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  }
+  .term-chrome {
+    display: flex; align-items: center; gap: 7px;
+    padding: 15px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .term-circle { width: 10px; height: 10px; border-radius: 50%; }
+  .term-circle.r { background: #f87171; }
+  .term-circle.y { background: #fbbf24; }
+  .term-circle.g { background: #4ade80; }
+  .term-chrome .term-title {
+    flex: 1; text-align: center;
+    font-size: 12px; color: var(--text-muted);
+    font-family: var(--font-mono);
+    margin-right: 36px;
+  }
+  .term-content {
+    padding: 22px 24px;
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    line-height: 1.9;
+    height: 420px;
+    overflow: hidden;
+  }
+  .term-content .line {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    white-space: nowrap;
+  }
+  .term-content .line.show { opacity: 1; }
+  .term-content .pr { color: var(--teal); }
+  .term-content .cm { color: var(--text); }
+  .term-content .dim { color: var(--text-muted); }
+  .term-content .ok { color: #4ade80; }
+  .term-content .warn { color: #fbbf24; }
+  .term-content .cursor-block {
+    display: inline-block;
+    width: 8px; height: 16px;
+    background: var(--teal);
+    animation: cursorBlink 1.2s step-end infinite;
+    vertical-align: text-bottom;
+  }
+
+  @keyframes cursorBlink { 50% { opacity: 0; } }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---- Section wrapper ---- */
+  .section-wrap {
+    position: relative; z-index: 2;
+    max-width: 1080px; margin: 0 auto;
+    padding: 100px 40px;
+  }
+  .section-eyebrow {
+    font-size: 13px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 2px;
+    color: var(--violet);
+    margin-bottom: 12px;
+  }
+  .section-heading {
+    font-weight: 700; font-size: clamp(26px, 3vw, 36px);
+    letter-spacing: -0.8px;
+    margin-bottom: 56px;
+    color: var(--text);
+  }
+
+  /* ---- Features ---- */
+  .feat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .feat-cell {
+    padding: 36px 32px;
+    background: var(--bg);
+    transition: background 0.3s ease;
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  .feat-cell.visible {
+    opacity: 1;
+    transform: translateY(0);
+    transition: background 0.3s ease, opacity 0.5s ease, transform 0.5s ease;
+  }
+  .feat-cell:hover {
+    background: var(--bg-elevated);
+  }
+  .feat-cell .feat-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; margin-bottom: 20px;
+  }
+  .feat-cell:nth-child(odd) .feat-icon {
+    background: var(--violet-soft);
+  }
+  .feat-cell:nth-child(even) .feat-icon {
+    background: var(--teal-soft);
+  }
+  .feat-cell h3 {
+    font-weight: 600; font-size: 15px;
+    margin-bottom: 8px; letter-spacing: -0.2px;
+  }
+  .feat-cell p {
+    font-size: 13.5px; color: var(--text-secondary);
+    line-height: 1.65; font-weight: 300;
+  }
+
+  /* ---- Quick Start ---- */
+  .qs-wrap { max-width: 620px; }
+  .qs-step { margin-bottom: 32px; }
+  .qs-step-head {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 10px;
+  }
+  .qs-num {
+    font-family: var(--font-mono);
+    font-size: 12px; font-weight: 600;
+    color: var(--violet);
+    width: 26px; height: 26px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--violet-soft);
+  }
+  .qs-label { font-weight: 600; font-size: 14px; }
+  .qs-code {
+    position: relative;
+    border-radius: 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .qs-code pre {
+    margin: 0;
+    padding: 18px 22px;
+    font-family: var(--font-mono);
+    font-size: 13px; line-height: 1.9;
+    white-space: pre;
+  }
+  .qs-code .cp {
+    position: absolute; top: 10px; right: 10px;
+    padding: 3px 10px; border-radius: 5px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--text-muted); font-size: 11px;
+    cursor: pointer; font-family: var(--font-sans);
+    transition: all 0.2s;
+  }
+  .qs-code .cp:hover {
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.07);
+  }
+  .qs-code .k { color: var(--violet); }
+  .qs-code .s { color: var(--teal); }
+  .qs-code .c { color: var(--text-muted); }
+  .qs-code .p { color: var(--teal); }
+
+  /* ---- Star CTA ---- */
+  .star-cta {
+    position: relative; z-index: 2;
+    text-align: center;
+    padding: 100px 40px;
+  }
+  .star-cta-inner {
+    max-width: 560px;
+    margin: 0 auto;
+  }
+  .star-cta h2 {
+    font-weight: 700;
+    font-size: clamp(26px, 3vw, 38px);
+    letter-spacing: -1px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, var(--violet), var(--teal));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .star-cta p {
+    font-size: 16px; font-weight: 300;
+    color: var(--text-secondary);
+    margin-bottom: 36px;
+    line-height: 1.6;
+  }
+  .star-btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 16px 36px; border-radius: 12px;
+    font-family: var(--font-sans);
+    font-weight: 600; font-size: 16px;
+    text-decoration: none; border: none; cursor: pointer;
+    color: white;
+    background: linear-gradient(135deg, var(--violet), #6d28d9);
+    box-shadow:
+      0 0 40px rgba(139,92,246,0.2),
+      inset 0 1px 0 rgba(255,255,255,0.15);
+    transition: all 0.3s;
+  }
+  .star-btn:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 60px rgba(139,92,246,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .star-btn svg {
+    width: 20px; height: 20px; fill: currentColor;
+    transition: transform 0.3s;
+  }
+  .star-btn:hover svg {
+    transform: scale(1.15) rotate(-8deg);
+  }
+
+  /* ---- Divider ---- */
+  .divider {
+    height: 1px; border: none;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 0 40px;
+    position: relative; z-index: 2;
+  }
+
+  /* ---- Footer ---- */
+  footer {
+    position: relative; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 28px 40px;
+    font-size: 13px; color: var(--text-muted);
+    font-weight: 300;
+  }
+  footer a {
+    color: var(--text-muted); text-decoration: none;
+    transition: color 0.2s;
+  }
+  footer a:hover { color: var(--text-secondary); }
+  .ft-links { display: flex; gap: 20px; }
+
+  /* ---- Scroll animations ---- */
+  .anim-in {
+    opacity: 0; transform: translateY(24px);
+    transition: opacity 0.65s ease, transform 0.65s ease;
+  }
+  .anim-in.show {
+    opacity: 1; transform: translateY(0);
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 768px) {
+    nav { padding: 14px 20px; }
+    .hero { padding: 130px 24px 60px; }
+    .section-wrap { padding: 80px 24px; }
+    .feat-grid { grid-template-columns: 1fr; }
+    .star-cta { padding: 80px 24px; }
+    footer { padding: 24px 20px; flex-direction: column; gap: 12px; }
+  }
+  @media (max-width: 480px) {
+    .hero-actions { flex-direction: column; width: 100%; }
+    .btn-glow, .btn-ghost { justify-content: center; }
+    .nav-right a:not(.gh-btn) { display: none; }
+    .install-bar { width: 100%; }
+    .install-bar code { flex: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="mesh-bg"></div>
+<div class="noise"></div>
+
+<!-- Navbar -->
+<nav>
+  <a href="#" class="nav-brand">agent<span class="dot">·</span>bundle</a>
+  <div class="nav-right">
+    <a href="#features">Features</a>
+    <a href="#quickstart">Quick Start</a>
+    <a href="https://github.com/yujiachen-y/agent-bundle" class="gh-btn">
+      <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      Star
+    </a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-pill">
+    <span class="pill-dot">→</span>
+    v1.0 Now Available
+  </div>
+  <h1>Bundle skills into a single deployable agent</h1>
+  <p class="sub">One YAML. Dev-to-prod in minutes, not months.<br>Sandboxed execution. Token-scoped data access.</p>
+
+  <!-- Install bar -->
+  <div class="install-bar" id="installBar" title="Click to copy">
+    <code><span class="dollar">$</span>pnpm add -g agent-bundle</code>
+    <button class="install-copy" id="installCopy">Copy</button>
+  </div>
+
+  <div class="hero-actions">
+    <a href="#quickstart" class="btn-glow">Get Started</a>
+    <a href="https://github.com/yujiachen-y/agent-bundle" class="btn-ghost">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      View on GitHub
+    </a>
+  </div>
+
+  <!-- Terminal with animated gradient border -->
+  <div class="terminal-container">
+    <div class="term-border">
+      <div class="term">
+        <div class="term-chrome">
+          <div class="term-circle r"></div>
+          <div class="term-circle y"></div>
+          <div class="term-circle g"></div>
+          <span class="term-title">~/my-agent</span>
+        </div>
+        <div class="term-content" id="terminal"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- Features -->
+<div class="section-wrap" id="features">
+  <div class="section-eyebrow anim-in">Features</div>
+  <div class="section-heading anim-in">Everything you need to ship agents.</div>
+  <div class="feat-grid">
+    <div class="feat-cell">
+      <div class="feat-icon">👁</div>
+      <h3>See inside the sandbox</h3>
+      <p>WebUI shows the agent's live file tree and terminal output as it runs. No more black boxes.</p>
+    </div>
+    <div class="feat-cell">
+      <div class="feat-icon">⚡</div>
+      <h3>Type-safe codegen</h3>
+      <p>Prisma-style generate. Variable names are checked at compile time — miss one and it won't build.</p>
+    </div>
+    <div class="feat-cell">
+      <div class="feat-icon">⟳</div>
+      <h3>Dev-prod parity</h3>
+      <p>serve and build share the same sandbox abstraction. What passes locally ships as-is.</p>
+    </div>
+    <div class="feat-cell">
+      <div class="feat-icon">🔓</div>
+      <h3>No vendor lock-in</h3>
+      <p>Swap LLM providers or sandbox backends with one line of YAML. Anthropic, OpenAI, Gemini, Ollama.</p>
+    </div>
+    <div class="feat-cell">
+      <div class="feat-icon">↺</div>
+      <h3>Session recovery</h3>
+      <p>Agent crashes mid-run? Resume from its last conversation state. Production-grade reliability.</p>
+    </div>
+    <div class="feat-cell">
+      <div class="feat-icon">🛡</div>
+      <h3>Token-scoped MCP</h3>
+      <p>Even under prompt injection, the agent cannot exceed what the MCP server permits for that token.</p>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- Quick Start -->
+<div class="section-wrap anim-in" id="quickstart">
+  <div class="qs-wrap">
+    <div class="section-eyebrow">Quick Start</div>
+    <div class="section-heading">Three steps to your first agent.</div>
+
+    <div class="qs-step">
+      <div class="qs-step-head">
+        <div class="qs-num">1</div>
+        <div class="qs-label">Install</div>
+      </div>
+      <div class="qs-code">
+        <button class="cp" onclick="copyBlock(this)">Copy</button>
+<pre><span class="p">$</span> pnpm add -g agent-bundle</pre>
+      </div>
+    </div>
+
+    <div class="qs-step">
+      <div class="qs-step-head">
+        <div class="qs-num">2</div>
+        <div class="qs-label">Define your bundle</div>
+      </div>
+      <div class="qs-code">
+        <button class="cp" onclick="copyBlock(this)">Copy</button>
+<pre><span class="c"># bundle.yaml</span>
+<span class="k">name</span>: my-agent
+
+<span class="k">model</span>:
+  <span class="k">provider</span>: anthropic
+  <span class="k">model</span>: <span class="s">claude-sonnet-4-20250514</span>
+
+<span class="k">sandbox</span>:
+  <span class="k">provider</span>: kubernetes
+
+<span class="k">skills</span>:
+  - <span class="k">path</span>: <span class="s">./skills/my-skill</span></pre>
+      </div>
+    </div>
+
+    <div class="qs-step">
+      <div class="qs-step-head">
+        <div class="qs-num">3</div>
+        <div class="qs-label">Generate, serve, build</div>
+      </div>
+      <div class="qs-code">
+        <button class="cp" onclick="copyBlock(this)">Copy</button>
+<pre><span class="p">$</span> agent-bundle generate  <span class="c"># type-safe client</span>
+<span class="p">$</span> agent-bundle serve     <span class="c"># local dev + WebUI</span>
+<span class="p">$</span> agent-bundle build     <span class="c"># production image</span></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- Star CTA -->
+<div class="star-cta anim-in">
+  <div class="star-cta-inner">
+    <h2>Ship your first agent today.</h2>
+    <p>agent-bundle is open source and free forever. Star the repo to follow updates and help others discover it.</p>
+    <a href="https://github.com/yujiachen-y/agent-bundle" class="star-btn">
+      <svg viewBox="0 0 16 16"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25z"/></svg>
+      Star on GitHub
+    </a>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer>
+  <span>MIT License · agent-bundle</span>
+  <div class="ft-links">
+    <a href="https://github.com/yujiachen-y/agent-bundle">GitHub</a>
+    <a href="https://github.com/yujiachen-y/agent-bundle/blob/main/docs/configuration.md">Docs</a>
+  </div>
+</footer>
+
+<script>
+// ---- Typewriter terminal animation ----
+const termEl = document.getElementById('terminal');
+
+const sequence = [
+  { type: 'cmd', prompt: '$ ', text: 'agent-bundle generate', delay: 0 },
+  { type: 'out', cls: 'dim', text: 'Generating bundle "my-agent" from bundle.yaml', delay: 800 },
+  { type: 'out', cls: 'ok', text: '✓ Generate completed: node_modules/@agent-bundle/my-agent', delay: 1400 },
+  { type: 'blank', delay: 1900 },
+  { type: 'cmd', prompt: '$ ', text: 'agent-bundle serve', delay: 2300 },
+  { type: 'out', cls: 'dim', text: 'Loading bundle "my-agent" ...', delay: 3000 },
+  { type: 'out', cls: 'dim', text: '  Sandbox: kubernetes (my-sandbox:latest)', delay: 3500 },
+  { type: 'out', cls: 'dim', text: '  Model:   anthropic/claude-sonnet-4-20250514', delay: 4000 },
+  { type: 'out', cls: 'ok', text: '✓ TUI ready — WebUI at http://localhost:3000', delay: 4600 },
+  { type: 'blank', delay: 5100 },
+  { type: 'cmd', prompt: '$ ', text: 'agent-bundle build', delay: 5500 },
+  { type: 'out', cls: 'dim', text: 'Building Docker image my-sandbox:latest ...', delay: 6200 },
+  { type: 'out', cls: 'warn', text: '  dist/my-agent/index.ts   ← typed factory', delay: 6800 },
+  { type: 'out', cls: 'warn', text: '  dist/my-agent/types.ts   ← variable types', delay: 7200 },
+  { type: 'out', cls: 'warn', text: '  dist/my-agent/bundle.json', delay: 7600 },
+  { type: 'out', cls: 'ok', text: '✓ Build completed — ready to deploy', delay: 8200 },
+];
+
+function typeText(container, text, charDelay) {
+  return new Promise(resolve => {
+    let i = 0;
+    // Add cursor
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor-block';
+    container.appendChild(cursor);
+    function tick() {
+      if (i < text.length) {
+        cursor.before(document.createTextNode(text[i]));
+        i++;
+        setTimeout(tick, charDelay);
+      } else {
+        resolve();
+      }
+    }
+    tick();
+  });
+}
+
+function removeCursor() {
+  const c = termEl.querySelector('.cursor-block');
+  if (c) c.remove();
+}
+
+async function playTerminal() {
+  termEl.innerHTML = '';
+
+  for (const item of sequence) {
+    await new Promise(r => setTimeout(r, item === sequence[0] ? 400 : 300));
+
+    if (item.type === 'blank') {
+      const div = document.createElement('div');
+      div.className = 'line show';
+      div.innerHTML = '&nbsp;';
+      termEl.appendChild(div);
+      continue;
+    }
+
+    if (item.type === 'cmd') {
+      removeCursor();
+      const div = document.createElement('div');
+      div.className = 'line show';
+      const promptSpan = document.createElement('span');
+      promptSpan.className = 'pr';
+      promptSpan.textContent = item.prompt;
+      div.appendChild(promptSpan);
+      const cmdSpan = document.createElement('span');
+      cmdSpan.className = 'cm';
+      div.appendChild(cmdSpan);
+      termEl.appendChild(div);
+      await typeText(cmdSpan, item.text, 32);
+      // Brief pause after typing command
+      await new Promise(r => setTimeout(r, 350));
+    }
+
+    if (item.type === 'out') {
+      removeCursor();
+      const div = document.createElement('div');
+      div.className = 'line';
+      div.innerHTML = `<span class="${item.cls}">${item.text}</span>`;
+      termEl.appendChild(div);
+      requestAnimationFrame(() => div.classList.add('show'));
+    }
+
+    termEl.scrollTop = termEl.scrollHeight;
+  }
+}
+
+playTerminal();
+
+// ---- Feature cards staggered reveal ----
+const featObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const cells = entry.target.querySelectorAll('.feat-cell');
+      cells.forEach((cell, i) => {
+        setTimeout(() => cell.classList.add('visible'), i * 100);
+      });
+      featObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.15 });
+document.querySelectorAll('.feat-grid').forEach(el => featObserver.observe(el));
+
+// ---- Scroll reveal for other sections ----
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('show'); });
+}, { threshold: 0.12 });
+document.querySelectorAll('.anim-in').forEach(el => io.observe(el));
+
+// ---- Install bar copy ----
+const installBar = document.getElementById('installBar');
+const installCopy = document.getElementById('installCopy');
+function copyInstall() {
+  navigator.clipboard.writeText('pnpm add -g agent-bundle').then(() => {
+    installCopy.textContent = 'Copied!';
+    setTimeout(() => installCopy.textContent = 'Copy', 2000);
+  });
+}
+installBar.addEventListener('click', copyInstall);
+
+// ---- Code block copy ----
+function copyBlock(btn) {
+  const pre = btn.parentElement.querySelector('pre');
+  const text = pre.textContent.trim();
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1800);
+  });
+}
+</script>
+
+</body>
+</html>

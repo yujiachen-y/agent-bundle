@@ -45,7 +45,7 @@ sandbox:
     memory: 512MB
 
   e2b:
-    template: my-custom-template
+    template: my-custom-template # required for `agent-bundle build` when provider=e2b
 
   kubernetes:
     build:
@@ -58,6 +58,8 @@ sandbox:
 ```
 
 `resources` is optional. If you provide it, specify both `cpu` and `memory`; partial overrides are rejected. Omit `resources` to use defaults (`cpu: 2`, `memory: 512MB`).
+
+When `sandbox.provider` is `e2b`, `agent-bundle build` generates a temporary build context (`/skills`, `/tools`, `e2b.Dockerfile`) and builds templates via the E2B SDK API. If SDK build fails, it falls back to `e2b template build --path <generated-context> <sandbox.e2b.template>`. If CLI fallback is used and `E2B_ACCESS_TOKEN` is unset while `E2B_API_KEY` is present, the build command reuses `E2B_API_KEY` for CLI auth.
 
 ## Skills
 

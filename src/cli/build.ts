@@ -4,13 +4,14 @@ import type { Writable } from "node:stream";
 
 import { generateSystemPromptTemplate, type SkillSummary } from "../agent-loop/system-prompt/generate.js";
 import type { BundleConfig } from "../schema/bundle.js";
-import { loadAllSkills } from "../skills/loader.js";
+import { loadAllSkills, type Skill } from "../skills/loader.js";
 import {
   createResolvedBundleConfig,
   generateSources,
   type ResolvedBundleConfig,
   type SandboxImageRef,
 } from "./build-codegen.js";
+import { buildE2BTemplate, type BuildE2BTemplateResult } from "./build-e2b-template.js";
 import { buildSandboxImage, type BuildSandboxImageResult } from "./build-sandbox-image.js";
 import { loadBundleConfig } from "./load-bundle-config.js";
 
@@ -33,6 +34,7 @@ type BuildDependencies = {
   loadSkills?: typeof loadAllSkills;
   generateSystemPrompt?: typeof generateSystemPromptTemplate;
   buildSandbox?: typeof buildSandboxImage;
+  buildE2B?: typeof buildE2BTemplate;
   writeFileImpl?: typeof writeFile;
   mkdirImpl?: typeof mkdir;
 };
@@ -56,6 +58,15 @@ function ensureKubernetesImage(config: BundleConfig): string {
   }
 
   return image;
+}
+
+function ensureE2BTemplate(config: BundleConfig): string {
+  const template = config.sandbox.e2b?.template;
+  if (!template) {
+    throw new Error("sandbox.e2b.template is required when sandbox provider is e2b.");
+  }
+
+  return template;
 }
 
 async function buildKubernetesSandboxImage(input: {
@@ -89,6 +100,28 @@ async function buildKubernetesSandboxImage(input: {
   return toKubernetesSandboxImageRef(buildResult);
 }
 
+async function buildE2BSandboxImage(input: {
+  config: BundleConfig;
+  bundleDir: string;
+  skills: Skill[];
+  buildE2B: typeof buildE2BTemplate;
+  stdout: Writable;
+  stderr: Writable;
+}): Promise<SandboxImageRef> {
+  const template = ensureE2BTemplate(input.config);
+
+  input.stdout.write(`Building sandbox template with E2B: ${template}\n`);
+  const buildResult = await input.buildE2B({
+    bundleDir: input.bundleDir,
+    template,
+    skills: input.skills,
+    stdout: input.stdout,
+    stderr: input.stderr,
+  });
+
+  return toE2BSandboxImageRef(buildResult);
+}
+
 function toKubernetesSandboxImageRef(result: BuildSandboxImageResult): SandboxImageRef {
   if (result.exitCode !== 0) {
     throw new Error(`docker build failed with exit code ${result.exitCode}.`);
@@ -100,24 +133,23 @@ function toKubernetesSandboxImageRef(result: BuildSandboxImageResult): SandboxIm
   };
 }
 
-function resolveE2BTemplate(config: BundleConfig): SandboxImageRef {
-  const template = config.sandbox.e2b?.template;
-  if (!template) {
-    throw new Error(
-      "E2B build pipeline (Phase 6 B2) is not implemented yet. Set sandbox.e2b.template or use kubernetes.",
-    );
+function toE2BSandboxImageRef(result: BuildE2BTemplateResult): SandboxImageRef {
+  if (result.exitCode !== 0) {
+    throw new Error(`e2b template build failed with exit code ${result.exitCode}.`);
   }
 
   return {
     provider: "e2b",
-    ref: template,
+    ref: result.templateRef,
   };
 }
 
 async function resolveSandboxImageRef(input: {
   config: BundleConfig;
   bundleDir: string;
+  skills: Skill[];
   buildSandbox: typeof buildSandboxImage;
+  buildE2B: typeof buildE2BTemplate;
   stdout: Writable;
   stderr: Writable;
 }): Promise<SandboxImageRef> {
@@ -131,7 +163,14 @@ async function resolveSandboxImageRef(input: {
     });
   }
 
-  return resolveE2BTemplate(input.config);
+  return await buildE2BSandboxImage({
+    config: input.config,
+    bundleDir: input.bundleDir,
+    skills: input.skills,
+    buildE2B: input.buildE2B,
+    stdout: input.stdout,
+    stderr: input.stderr,
+  });
 }
 
 async function writeGeneratedFiles(input: {
@@ -157,6 +196,7 @@ export async function runBuildCommand(
   const loadSkillsImpl = dependencies.loadSkills ?? loadAllSkills;
   const promptGenerator = dependencies.generateSystemPrompt ?? generateSystemPromptTemplate;
   const buildSandboxImpl = dependencies.buildSandbox ?? buildSandboxImage;
+  const buildE2BImpl = dependencies.buildE2B ?? buildE2BTemplate;
   const writeFileImpl = dependencies.writeFileImpl ?? writeFile;
   const mkdirImpl = dependencies.mkdirImpl ?? mkdir;
   const stdout = options.stdout ?? process.stdout;
@@ -173,7 +213,9 @@ export async function runBuildCommand(
   const sandboxImage = await resolveSandboxImageRef({
     config,
     bundleDir,
+    skills,
     buildSandbox: buildSandboxImpl,
+    buildE2B: buildE2BImpl,
     stdout,
     stderr,
   });

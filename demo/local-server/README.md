@@ -24,8 +24,7 @@ main.ts                      ← your application code (imports factory, starts 
 - An LLM API key matching the provider in `agent-bundle.yaml` (see [LLM provider](#llm-provider) below)
 - Dependencies installed (`pnpm install`)
 
-Run the commands in this README from the repository root:
-`/Users/yujiachen/Projects/agent-bundle`.
+Run commands in this README from the repository root.
 
 ## Environment setup
 
@@ -35,14 +34,14 @@ Run the commands in this README from the repository root:
 k3d cluster create agent-sandbox
 ```
 
-### 2. Build and import the execd sandbox image
+### 2. Build and import the demo sandbox image
 
 ```bash
-# Build via bundle config (runs docker build using sandbox.kubernetes.build)
-pnpm exec tsx src/cli/index.ts build --config demo/local-server/agent-bundle.yaml
+# Build base execd image, then build demo bundle+demo sandbox image
+pnpm build:demo:local-server
 
 # Import into k3d
-k3d image import agent-bundle/execd:latest -c agent-sandbox
+k3d image import agent-bundle/local-server-execd:latest -c agent-sandbox
 ```
 
 ### 3. Verify the cluster is ready
@@ -69,8 +68,10 @@ sandbox:
 ```
 
 The sandbox image is configured in `agent-bundle.yaml` under
-`sandbox.kubernetes.image`. The demo defaults to `agent-bundle/execd:latest`,
-which you built in step 2 above.
+`sandbox.kubernetes.image`. The demo defaults to
+`agent-bundle/local-server-execd:latest`, built from
+`demo/local-server/Dockerfile` (which includes `autopep8` for this demo flow),
+and uses `agent-bundle/execd:latest` as its base image.
 
 ### Troubleshooting kubeconfig on macOS/Docker Desktop
 
@@ -122,6 +123,7 @@ model:
 ```
 demo/local-server/
 ├── agent-bundle.yaml           # Bundle config: model, sandbox, skills, docker build inputs
+├── Dockerfile                  # Demo-only sandbox image (execd + autopep8)
 ├── skills/
 │   └── format-code/
 │       └── SKILL.md            # Skill: Write → Bash → Read in sandbox

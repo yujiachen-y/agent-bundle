@@ -71,14 +71,23 @@ export async function requestJson<T>(url: string, init: RequestInit): Promise<T>
   return payload as T;
 }
 
-export async function startPortForward(podName: string, namespace: string): Promise<{
+export async function startPortForward(
+  podName: string,
+  namespace: string,
+  kubeconfigPath?: string,
+): Promise<{
   baseUrl: string;
   handle: PortForwardHandle;
 }> {
   const localPort = await findFreePort();
+  const args = ["port-forward", "-n", namespace];
+  if (kubeconfigPath) {
+    args.push("--kubeconfig", kubeconfigPath);
+  }
+  args.push(`pod/${podName}`, `${localPort}:${EXECD_PORT}`);
   const child = spawn(
     "kubectl",
-    ["port-forward", "-n", namespace, `pod/${podName}`, `${localPort}:${EXECD_PORT}`],
+    args,
     { stdio: ["ignore", "pipe", "pipe"] },
   );
 

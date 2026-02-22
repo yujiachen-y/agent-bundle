@@ -14,6 +14,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && rm -rf dist/webui/public && cp -r src/webui/public dist/webui/public",
+    "build:sandbox:execd": "docker build -t agent-bundle/execd:latest -f packages/execd/Dockerfile packages/execd",
+    "build:demo:local-server": "pnpm build:sandbox:execd && pnpm exec tsx src/cli/index.ts build --config demo/local-server/agent-bundle.yaml",
     "lint": "eslint \"spikes/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\" \"src/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\"",
     "duplicate": "jscpd --config .jscpd.json",
     "test": "vitest run --coverage",
@@ -26,7 +28,7 @@
     "quality": "pnpm run lint && pnpm run duplicate && pnpm run test",
     "ci": "pnpm run quality",
     "ci:full": "pnpm run quality && pnpm run test:e2e",
-    "demo:local-server": "tsx demo/local-server/main.ts"
+    "demo:local-server": "pnpm build && tsx demo/local-server/main.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

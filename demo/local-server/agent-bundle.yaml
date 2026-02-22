@@ -8,6 +8,8 @@ prompt:
     You have access to a sandboxed environment.
     Follow the skill instructions precisely.
     Always use the tools available to you — do not produce output without using tools.
+    Use exactly `/workspace/input.py` as the working file.
+    Before replying, you must read `/workspace/input.py` with the Read tool.
   variables: []
 sandbox:
   provider: kubernetes
@@ -17,9 +19,9 @@ sandbox:
     memory: 256Mi
   kubernetes:
     build:
-      dockerfile: ../../packages/execd/Dockerfile
-      context: ../../packages/execd
-    image: agent-bundle/execd:latest
+      dockerfile: ./Dockerfile
+      context: .
+    image: agent-bundle/local-server-execd:latest
     # kubeconfig: /path/to/kubeconfig  # optional: override ~/.kube/config
 skills:
   - path: ./skills/format-code

@@ -8,16 +8,25 @@ type CoreApiMock = {
   deleteNamespacedPod: ReturnType<typeof vi.fn>;
 };
 
+type ClusterMock = {
+  name: string;
+  server: string;
+};
+
 let coreApiMock: CoreApiMock;
 const loadFromDefaultMock = vi.fn();
 const loadFromFileMock = vi.fn();
 const makeApiClientMock = vi.fn(() => coreApiMock);
+const getCurrentContextMock = vi.fn<string, []>();
+const getCurrentClusterMock = vi.fn<ClusterMock | null, []>();
 const fetchMock = vi.fn<typeof fetch>();
 
 vi.mock("@kubernetes/client-node", () => ({
   KubeConfig: class {
     public loadFromDefault = loadFromDefaultMock;
     public loadFromFile = loadFromFileMock;
+    public getCurrentContext = getCurrentContextMock;
+    public getCurrentCluster = getCurrentClusterMock;
     public makeApiClient = makeApiClientMock;
   },
   CoreV1Api: class {},
@@ -52,6 +61,13 @@ beforeEach(() => {
   makeApiClientMock.mockClear();
   loadFromDefaultMock.mockClear();
   loadFromFileMock.mockClear();
+  getCurrentContextMock.mockReset();
+  getCurrentContextMock.mockReturnValue("default");
+  getCurrentClusterMock.mockReset();
+  getCurrentClusterMock.mockReturnValue({
+    name: "default-cluster",
+    server: "https://127.0.0.1:6443",
+  });
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });

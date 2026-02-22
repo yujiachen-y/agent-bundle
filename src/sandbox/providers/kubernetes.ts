@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { CoreV1Api, KubeConfig, type V1Pod } from "@kubernetes/client-node";
+import { CoreV1Api, type V1Pod } from "@kubernetes/client-node";
 
 import type {
   ExecResult,
@@ -13,6 +14,7 @@ import type {
 } from "../types.js";
 import { quoteShellArg } from "../utils.js";
 import { requestCommandRun } from "./kubernetes-command-run.js";
+import { createCoreApi } from "./kubernetes-kubeconfig.js";
 import {
   DIRECT_POD_HEALTH_TIMEOUT_MS,
   DEFAULT_HEALTH_TIMEOUT_MS,
@@ -38,22 +40,14 @@ function isDeleteEndpointMissingError(error: unknown): boolean {
   return /HTTP 404 .*\/files\/delete/.test(error.message);
 }
 
-function createCoreApi(kubeconfigPath?: string): CoreV1Api {
-  const kubeConfig = new KubeConfig();
-  if (kubeconfigPath) {
-    kubeConfig.loadFromFile(kubeconfigPath);
-  } else {
-    kubeConfig.loadFromDefault();
-  }
-  return kubeConfig.makeApiClient(CoreV1Api);
-}
-
 export class K8sSandbox implements Sandbox {
   public readonly id = `k8s-${randomUUID()}`;
 
   private readonly coreApi: CoreV1Api;
   private readonly namespace: string;
   private readonly podName: string;
+  private readonly kubectlKubeconfigPath: string | null;
+  private temporaryKubeconfigPath: string | null;
   private runtimeStatus: SandboxStatus = "idle";
   private execdBaseUrl: string | null = null;
   private portForward: PortForwardHandle | null = null;
@@ -106,9 +100,12 @@ export class K8sSandbox implements Sandbox {
     private readonly config: SandboxConfig,
     private readonly hooks: SandboxHooks = {},
   ) {
-    this.coreApi = createCoreApi(this.config.kubernetes?.kubeconfig);
+    const coreApiContext = createCoreApi(this.config.kubernetes?.kubeconfig);
+    this.coreApi = coreApiContext.coreApi;
     this.namespace = this.config.kubernetes?.namespace ?? "default";
     this.podName = `agent-sandbox-${this.id}`;
+    this.kubectlKubeconfigPath = coreApiContext.kubectlKubeconfigPath;
+    this.temporaryKubeconfigPath = coreApiContext.temporaryKubeconfigPath;
   }
 
   public get status(): SandboxStatus {
@@ -251,7 +248,11 @@ export class K8sSandbox implements Sandbox {
       }
     }
 
-    const forwarded = await startPortForward(this.podName, this.namespace);
+    const forwarded = await startPortForward(
+      this.podName,
+      this.namespace,
+      this.kubectlKubeconfigPath ?? undefined,
+    );
     this.execdBaseUrl = forwarded.baseUrl;
     this.portForward = forwarded.handle;
 
@@ -310,6 +311,10 @@ export class K8sSandbox implements Sandbox {
       }
     } finally {
       this.execdBaseUrl = null;
+      if (this.temporaryKubeconfigPath) {
+        rmSync(this.temporaryKubeconfigPath, { force: true });
+        this.temporaryKubeconfigPath = null;
+      }
     }
   }
 }

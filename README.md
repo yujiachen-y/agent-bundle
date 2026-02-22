@@ -1,24 +1,45 @@
 # agent-bundle
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)](https://www.typescriptlang.org/)
+[![Node](https://img.shields.io/badge/Node-%3E%3D20-green.svg)](https://nodejs.org/)
+
 > Bundle skills into a single deployable agent.
 
 *Sandboxed execution. Token-scoped data access.*
 
-<!-- demo GIF: `agent-bundle serve` opening TUI + WebUI showing file tree and live terminal -->
-
-Agent Skills work great inside local coding agents. Getting them into production is a different story: skills can't be published as services, logic has to be rewritten, and behavior between dev and prod diverges.
-
-agent-bundle closes that gap. Give it a YAML config and a set of skills — it runs a local agent for development and builds a typed, embeddable TypeScript package for deployment. Same runtime, same behavior, both directions.
+<!-- TODO: demo GIF — `agent-bundle serve` opening TUI + WebUI showing file tree and live terminal -->
 
 ---
 
-## How it works
+## Why
 
-```
-bundle.yaml + skills/
-       │
-       ├── agent-bundle serve   →  TUI + WebUI (local dev)
-       └── agent-bundle build   →  typed TypeScript factory + Docker image
+Agent Skills work great inside local coding agents. Getting them into production is a different story.
+
+|  | Without agent-bundle | With agent-bundle |
+|--|---------------------|-------------------|
+| **Develop** | Skills run in local coding agents only | `agent-bundle serve` — TUI + WebUI with live sandbox view |
+| **Ship** | Rewrite skill logic into a service from scratch | `agent-bundle build` — typed TypeScript factory + Docker image |
+| **Behave** | Dev and prod diverge silently | Same sandbox runtime in both modes |
+
+---
+
+## How It Works
+
+```mermaid
+graph LR
+    A["bundle.yaml + skills/"] --> B{"agent-bundle"}
+    B -->|serve| C["TUI + WebUI
+    local dev"]
+    B -->|build| D["TypeScript factory
+    + Docker image"]
+    C --> E["Sandbox
+    E2B / Kubernetes"]
+    D --> E
+    E --> F["LLM
+    Anthropic / OpenAI / Gemini / Ollama"]
+    E --> G["MCP Servers
+    token-scoped"]
 ```
 
 ---
@@ -33,33 +54,24 @@ pnpm add -g agent-bundle
 
 ### 2. Define your bundle
 
-Skills can be local directories, GitHub repos, or remote URLs. See [Agent Skills](https://github.com/agent-skills/spec) for the skill format.
-
 ```yaml
 # bundle.yaml
-name: invoice-processor
+name: my-agent
 
 model:
   provider: anthropic
   model: claude-sonnet-4-20250514
 
-prompt:
-  system: |
-    You are an expert invoice processing assistant.
-    Current user: {{user_name}}
-  variables:
-    - user_name
-
 sandbox:
-  provider: kubernetes   # local k3d in serve mode
+  provider: kubernetes
+  kubernetes:
+    image: my-sandbox:latest
 
 skills:
-  - path: ./skills/extract-line-items
-  - github: acme/invoice-skills
-    skill: generate-summary
-  - url: https://registry.example.com/skills/ocr
-    version: 1.2.0
+  - path: ./skills/my-skill
 ```
+
+See [Agent Skills](https://github.com/agent-skills/spec) for the skill format and [Configuration Guide](./docs/configuration.md) for all options.
 
 ### 3. Run locally
 
@@ -75,10 +87,10 @@ Starts a TUI for interactive testing. A WebUI at `http://localhost:3000` lets yo
 agent-bundle build
 ```
 
-Produces two artifacts:
+Produces a typed, embeddable package:
 
 ```
-dist/invoice-processor/
+dist/my-agent/
 ├── index.ts      ← typed agent factory
 ├── types.ts      ← variable types
 └── bundle.json   ← config snapshot
@@ -89,9 +101,9 @@ If `sandbox.kubernetes.build` is configured, `agent-bundle build` runs a local `
 Integrate into any Node.js service:
 
 ```typescript
-import { InvoiceProcessor } from "./dist/invoice-processor";
+import { MyAgent } from "./dist/my-agent";
 
-const agent = await InvoiceProcessor.init({
+const agent = await MyAgent.init({
   variables: { user_name: "Alice" },
   hooks: {
     preMount: async (io) => {
@@ -112,11 +124,11 @@ Variable names are checked at compile time. Miss one and it won't build.
 
 ---
 
-## Key features
+## Key Features
 
 **See inside the sandbox.** In `serve` mode, a WebUI at `localhost:3000` shows the agent's live file tree and terminal output as it runs. No more guessing what the agent is doing.
 
-<!-- screenshot: WebUI showing file tree on the left, live terminal output on the right -->
+<!-- TODO: screenshot — WebUI showing file tree on the left, live terminal output on the right -->
 
 **No vendor lock-in.** Swap model providers or sandbox backends with one line of YAML. Supports Anthropic, OpenAI, Gemini, Ollama, and any OpenAI-compatible proxy; E2B and Kubernetes sandboxes.
 
@@ -125,7 +137,7 @@ Variable names are checked at compile time. Miss one and it won't build.
 **Session recovery.** If an agent crashes mid-run, resume from its last conversation state:
 
 ```typescript
-const agent = await InvoiceProcessor.init({
+const agent = await MyAgent.init({
   variables: { user_name: "Alice" },
   session: savedSessionState,
 });
@@ -133,25 +145,7 @@ const agent = await InvoiceProcessor.init({
 
 Conversation history is restored automatically. Sandbox files are re-seeded via your `preMount` hook.
 
-**MCP for controlled data access.** Connect the agent to internal services via token-scoped MCP servers. The agent runs in a fully privileged sandbox — MCP token scoping is the layer that limits what data it can actually reach:
-
-```yaml
-# bundle.yaml
-mcp:
-  servers:
-    - name: refund-service
-      url: https://internal.example.com/mcp/refund
-      auth: bearer
-```
-
-```typescript
-const agent = await InvoiceProcessor.init({
-  variables: { user_name: "Alice" },
-  mcpTokens: { "refund-service": userToken },
-});
-```
-
-Even under prompt injection, the agent cannot exceed what the MCP server permits for that token.
+**MCP for controlled data access.** Connect the agent to internal services via token-scoped MCP servers. Even under prompt injection, the agent cannot exceed what the MCP server permits for that token. See [Configuration Guide](./docs/configuration.md#mcp-servers) for setup.
 
 ---
 
@@ -166,73 +160,6 @@ POST /v1/responses
 
 ---
 
-## Configuration
-
-### Model
-
-```yaml
-model:
-  provider: anthropic          # anthropic | openai | gemini | ollama | openrouter
-  model: claude-sonnet-4-20250514
-```
-
-API keys are resolved from environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.). No secrets in YAML.
-
-For `ollama`, `agent-bundle` uses the OpenAI-compatible endpoint from `OLLAMA_BASE_URL` (or `OLLAMA_HOST`), and auto-appends `/v1` when missing. Default: `http://127.0.0.1:11434/v1`. If both are set, `OLLAMA_BASE_URL` takes precedence. If your endpoint requires auth, set `OLLAMA_API_KEY`; otherwise a placeholder key is used automatically.
-
-You can override Ollama runtime hints in YAML:
-
-```yaml
-model:
-  provider: ollama
-  model: qwen2.5-coder
-  ollama:
-    baseUrl: http://127.0.0.1:11434
-    contextWindow: 16384
-    maxTokens: 4096
-```
-
-`contextWindow` and `maxTokens` are compatibility hints for planning token budgets; the actual limit is determined by the Ollama model and your runtime `num_ctx` setting.
-
-### Sandbox
-
-```yaml
-sandbox:
-  provider: e2b                # e2b | kubernetes
-  timeout: 900
-  resources:
-    cpu: 2
-    memory: 512MB
-
-  e2b:
-    template: my-custom-template
-
-  kubernetes:
-    build:
-      dockerfile: ./Dockerfile # optional: run docker build during `agent-bundle build`
-      context: .               # optional: defaults to dockerfile directory
-    image: my-sandbox:latest   # required when build is configured
-
-  serve:
-    provider: kubernetes       # local k3d by default
-```
-
-`resources` is optional. If you provide it, specify both `cpu` and `memory`; partial overrides are rejected. Omit `resources` to use defaults (`cpu: 2`, `memory: 512MB`).
-
-### Skills
-
-```yaml
-skills:
-  - path: ./skills/my-skill           # local directory
-  - github: owner/repo                # GitHub repo
-    skill: path/to/skill              # path within repo (optional)
-    ref: main                         # branch, tag, or commit (optional)
-  - url: https://example.com/skills/ocr
-    version: 1.2.0
-```
-
----
-
 ## Roadmap
 
 - [ ] Pluggable agent loop engines — Claude Code, Codex via process bridge
@@ -240,6 +167,12 @@ skills:
 
 ---
 
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+---
+
 ## License
 
-MIT
+[MIT](./LICENSE)

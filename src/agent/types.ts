@@ -15,12 +15,16 @@ export type McpServerConfig = {
 
 export type AgentStatus = "ready" | "running" | "stopped";
 
+export type RespondStreamOptions = {
+  signal?: AbortSignal;
+};
+
 export interface Agent {
   readonly name: string;
   readonly status: AgentStatus;
 
   respond(input: ResponseInput): Promise<ResponseOutput>;
-  respondStream(input: ResponseInput): AsyncIterable<ResponseEvent>;
+  respondStream(input: ResponseInput, options?: RespondStreamOptions): AsyncIterable<ResponseEvent>;
   shutdown(): Promise<void>;
 }
 

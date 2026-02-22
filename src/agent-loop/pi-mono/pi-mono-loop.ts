@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Agent } from "@mariozechner/pi-agent-core";
 import type { Api, Model } from "@mariozechner/pi-ai";
 
-import type { AgentLoop, AgentLoopConfig, ToolHandler } from "../agent-loop.js";
+import type { AgentLoop, AgentLoopConfig, RunOptions, ToolHandler } from "../agent-loop.js";
 import type { ResponseEvent, ResponseInput, ResponseOutput } from "../types.js";
 import { toResponseEvent } from "./events.js";
 import { getLatestAssistantMessage, toAgentMessages, toAssistantText } from "./input.js";
@@ -47,15 +47,31 @@ export class PiMonoAgentLoop implements AgentLoop {
     this.agent.setTools(createPiTools(config.toolHandler));
   }
 
-  public async *run(input: ResponseInput): AsyncIterable<ResponseEvent> {
+  public async *run(input: ResponseInput, options?: RunOptions): AsyncIterable<ResponseEvent> {
     if (!this.agent || !this.toolHandler || !this.model) {
       throw new Error("PiMonoAgentLoop is not initialized.");
     }
 
+    const agent = this.agent;
+    const signal = options?.signal;
     const responseId = `resp-${randomUUID()}`;
     const queue = new AsyncEventQueue<ResponseEvent>();
 
-    const unsubscribe = this.agent.subscribe((event) => {
+    const onAbort = signal
+      ? (): void => {
+          agent.abort();
+        }
+      : undefined;
+
+    if (onAbort) {
+      if (signal!.aborted) {
+        agent.abort();
+      } else {
+        signal!.addEventListener("abort", onAbort, { once: true });
+      }
+    }
+
+    const unsubscribe = agent.subscribe((event) => {
       const responseEvent = toResponseEvent(event);
       if (responseEvent) {
         queue.push(responseEvent);
@@ -69,6 +85,9 @@ export class PiMonoAgentLoop implements AgentLoop {
 
     const runPromise = this.executeRun(input, responseId, queue)
       .finally(() => {
+        if (onAbort) {
+          signal!.removeEventListener("abort", onAbort);
+        }
         unsubscribe();
         queue.close();
       });

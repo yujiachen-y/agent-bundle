@@ -8,8 +8,12 @@ export type AgentLoopConfig = {
   toolHandler: ToolHandler;
 };
 
+export type RunOptions = {
+  signal?: AbortSignal;
+};
+
 export interface AgentLoop {
   init(config: AgentLoopConfig): Promise<void>;
-  run(input: ResponseInput): AsyncIterable<ResponseEvent>;
+  run(input: ResponseInput, options?: RunOptions): AsyncIterable<ResponseEvent>;
   dispose(): Promise<void>;
 }

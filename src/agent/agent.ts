@@ -30,7 +30,7 @@ import {
   toToolError,
   validateModelApiKey,
 } from "./internals.js";
-import type { Agent, AgentConfig, AgentStatus, InitOptions } from "./types.js";
+import type { Agent, AgentConfig, AgentStatus, InitOptions, RespondStreamOptions } from "./types.js";
 
 export class AgentImpl<V extends string> implements Agent {
   public readonly name: string;
@@ -106,7 +106,7 @@ export class AgentImpl<V extends string> implements Agent {
     return responseOutput;
   }
 
-  public async *respondStream(input: ResponseInput) {
+  public async *respondStream(input: ResponseInput, options?: RespondStreamOptions) {
     ensureRunnableStatus(this.statusValue);
 
     const loop = this.loop;
@@ -114,6 +114,7 @@ export class AgentImpl<V extends string> implements Agent {
       throw new Error("Agent loop is not initialized.");
     }
 
+    const signal = options?.signal;
     const runInput = toConversationInput(this.conversationHistory, input);
     this.statusValue = "running";
 
@@ -121,7 +122,9 @@ export class AgentImpl<V extends string> implements Agent {
     let sawError = false;
 
     try {
-      for await (const event of loop.run(runInput)) {
+      for await (const event of loop.run(runInput, { signal })) {
+        if (signal?.aborted) break;
+
         if (event.type === "response.completed") {
           completedOutput = event.output;
         }

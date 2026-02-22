@@ -3,6 +3,7 @@ import type {
   AgentLoopConfig,
   ResponseEvent,
   ResponseInput,
+  RunOptions,
 } from "../agent-loop/index.js";
 import type {
   ExecOptions,
@@ -42,7 +43,8 @@ export class FakeLoop implements AgentLoop {
     this.initConfigs.push(config);
   }
 
-  public async *run(input: ResponseInput): AsyncIterable<ResponseEvent> {
+  public async *run(input: ResponseInput, options?: RunOptions): AsyncIterable<ResponseEvent> {
+    void options;
     this.runInputs.push(input);
     const events = this.queuedRuns.shift() ?? [];
 

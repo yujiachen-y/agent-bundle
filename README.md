@@ -4,6 +4,7 @@
 [![codecov](https://codecov.io/gh/yujiachen-y/agent-bundle/graph/badge.svg?token=NW998X95RW)](https://codecov.io/gh/yujiachen-y/agent-bundle)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/Node-%3E%3D20-green.svg)](https://nodejs.org/)
+[![Website](https://img.shields.io/badge/Website-agent--bundle.com-8b5cf6)](https://agent-bundle.com)
 
 > Bundle skills into a single deployable agent.
 

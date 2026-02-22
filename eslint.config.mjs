@@ -37,6 +37,7 @@ export default tseslint.config(
       "**/artifacts/**",
       "**/coverage/**",
       "**/*.d.ts",
+      "src/webui/public/**",
     ],
   },
   {

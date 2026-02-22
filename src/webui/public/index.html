@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>agent-bundle</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+</head>
+<body>
+  <div id="app">
+    <header id="header">
+      <span class="logo">agent-bundle</span>
+      <span id="status-badge" class="badge badge--idle">idle</span>
+    </header>
+
+    <div id="panels">
+      <aside id="file-panel">
+        <div class="panel-header">Files <span class="subtle">/workspace</span></div>
+        <div id="file-tree" class="file-tree"></div>
+      </aside>
+
+      <main id="main-panel">
+        <div id="terminal-container"></div>
+        <form id="chat-form">
+          <input
+            id="chat-input"
+            type="text"
+            placeholder="Send a message..."
+            autocomplete="off"
+            autofocus
+          >
+          <button type="submit" id="send-btn">Send</button>
+        </form>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

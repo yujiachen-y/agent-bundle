@@ -27,21 +27,7 @@ Agent Skills work great inside local coding agents. Getting them into production
 
 ## How It Works
 
-```mermaid
-graph LR
-    A["bundle.yaml + skills/"] --> B{"agent-bundle"}
-    B -->|serve| C["TUI + WebUI
-    local dev"]
-    B -->|build| D["TypeScript factory
-    + Docker image"]
-    C --> E["Sandbox
-    E2B / Kubernetes"]
-    D --> E
-    E --> F["LLM
-    Anthropic / OpenAI / Gemini / Ollama"]
-    E --> G["MCP Servers
-    token-scoped"]
-```
+![Architecture](.github/architecture.png)
 
 ---
 

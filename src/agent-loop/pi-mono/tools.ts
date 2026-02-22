@@ -6,7 +6,7 @@ import {
   writeTool as piWriteTool,
 } from "@mariozechner/pi-coding-agent";
 
-import type { ToolHandler } from "../agent-loop.js";
+import type { AgentLoopTool, ToolHandler } from "../agent-loop.js";
 import {
   isRecord,
   readNumberField,
@@ -51,6 +51,43 @@ function createTool(
         id: toolCallId,
         name: toBundleToolName(name),
         input,
+      });
+
+      if (toolResult.isError) {
+        throw new Error(toToolOutputText(toolResult.output));
+      }
+
+      return {
+        content: [{ type: "text", text: toToolOutputText(toolResult.output) }],
+        details: toolResult.output,
+      };
+    },
+  };
+}
+
+function toAgentToolParameters(
+  inputSchema: AgentLoopTool["inputSchema"],
+): AgentTool["parameters"] {
+  // pi-agent-core models tool parameters as TypeBox schemas, while MCP tool discovery returns
+  // JSON Schema objects. Runtime consumers in pi-mono read JSON Schema-compatible fields, so
+  // we keep the schema object unchanged when bridging discovered MCP tools.
+  return inputSchema as unknown as AgentTool["parameters"];
+}
+
+function createExternalTool(
+  tool: AgentLoopTool,
+  toolHandler: ToolHandler,
+): AgentTool {
+  return {
+    name: tool.name,
+    label: tool.name,
+    description: tool.description,
+    parameters: toAgentToolParameters(tool.inputSchema),
+    execute: async (toolCallId, rawInput): Promise<AgentToolResult<unknown>> => {
+      const toolResult = await toolHandler({
+        id: toolCallId,
+        name: tool.name,
+        input: toInputRecord(rawInput),
       });
 
       if (toolResult.isError) {
@@ -162,8 +199,11 @@ function createEditTool(toolHandler: ToolHandler): AgentTool {
   };
 }
 
-export function createPiTools(toolHandler: ToolHandler): AgentTool[] {
-  return [
+export function createPiTools(
+  toolHandler: ToolHandler,
+  externalTools: readonly AgentLoopTool[] = [],
+): AgentTool[] {
+  const builtInTools = [
     createTool(
       "read",
       piReadTool.description,
@@ -197,6 +237,9 @@ export function createPiTools(toolHandler: ToolHandler): AgentTool[] {
       toolHandler,
     ),
   ];
+
+  const dynamicTools = externalTools.map((tool) => createExternalTool(tool, toolHandler));
+  return [...builtInTools, ...dynamicTools];
 }
 
 export function toBundleToolCallName(toolName: string): string {

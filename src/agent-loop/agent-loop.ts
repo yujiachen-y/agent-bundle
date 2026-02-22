@@ -2,10 +2,24 @@ import type { ModelConfig, ResponseEvent, ResponseInput, ToolCall, ToolResult } 
 
 export type ToolHandler = (call: ToolCall) => Promise<ToolResult>;
 
+export type ToolInputSchema = {
+  type: "object";
+  properties?: Record<string, unknown>;
+  required?: string[];
+  [key: string]: unknown;
+};
+
+export type AgentLoopTool = {
+  name: string;
+  description: string;
+  inputSchema: ToolInputSchema;
+};
+
 export type AgentLoopConfig = {
   systemPrompt: string;
   model: ModelConfig;
   toolHandler: ToolHandler;
+  externalTools?: readonly AgentLoopTool[];
 };
 
 export type RunOptions = {

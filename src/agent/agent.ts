@@ -66,12 +66,14 @@ export class AgentImpl<V extends string> implements Agent {
     try {
       await sandbox.start();
       this.mcpClientManager = await this.createMcpManager();
+      const externalTools = this.mcpClientManager?.tools ?? [];
       await loop.init({
         systemPrompt,
         model: this.config.model,
         toolHandler: async (call) => {
           return await this.handleToolCall(call);
         },
+        ...(externalTools.length > 0 ? { externalTools } : {}),
       });
       this.statusValue = "ready";
     } catch (error) {

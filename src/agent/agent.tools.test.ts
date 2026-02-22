@@ -7,6 +7,19 @@ import { createHarness } from "./agent.test-helpers.js";
 it("routes Read Write Bash and MCP calls through toolHandler", async () => {
   const mcpCalls: ToolCall[] = [];
   const mcpClientManager: McpClientManager = {
+    tools: [
+      {
+        name: "mcp__refund__create_request",
+        description: "Create a refund request",
+        inputSchema: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+          },
+          required: ["id"],
+        },
+      },
+    ],
     callTool: async (call) => {
       mcpCalls.push(call);
       return {
@@ -31,6 +44,7 @@ it("routes Read Write Bash and MCP calls through toolHandler", async () => {
 
   await harness.agent.initialize();
   const toolHandler = harness.loop.initConfigs[0].toolHandler;
+  expect(harness.loop.initConfigs[0].externalTools).toHaveLength(1);
 
   const readResult = await toolHandler({
     id: "tool-read",

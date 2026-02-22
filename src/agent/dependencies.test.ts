@@ -1,36 +1,49 @@
-import { expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
 import { PiMonoAgentLoop } from "../agent-loop/index.js";
-import { createDefaultDependencies } from "./dependencies.js";
 
-it("creates PiMono loop and returns null MCP manager when no servers configured", async () => {
+const createMcpClientManagerMock = vi.fn();
+
+vi.mock("../mcp/index.js", () => ({
+  createMcpClientManager: createMcpClientManagerMock,
+}));
+
+const { createDefaultDependencies } = await import("./dependencies.js");
+
+beforeEach(() => {
+  createMcpClientManagerMock.mockReset();
+  createMcpClientManagerMock.mockResolvedValue(null);
+});
+
+it("creates PiMono loop and delegates empty MCP config", async () => {
   const dependencies = createDefaultDependencies();
 
   const loop = dependencies.createLoop();
   const mcpManager = await dependencies.createMcpClientManager([], {});
 
   expect(loop).toBeInstanceOf(PiMonoAgentLoop);
+  expect(createMcpClientManagerMock).toHaveBeenCalledWith([], {});
   expect(mcpManager).toBeNull();
 });
 
-it("returns an MCP placeholder manager when servers exist", async () => {
+it("delegates MCP manager creation when servers exist", async () => {
+  const fakeManager = {
+    tools: [],
+    callTool: vi.fn(),
+    dispose: vi.fn(),
+  };
+  createMcpClientManagerMock.mockResolvedValue(fakeManager);
+
   const dependencies = createDefaultDependencies();
+  const servers = [
+    { name: "refund", url: "https://example.com/mcp", auth: "bearer" as const },
+  ];
+  const tokens = { refund: "token-1" };
   const mcpManager = await dependencies.createMcpClientManager(
-    [{ name: "refund", url: "https://example.com/mcp", auth: "bearer" }],
-    { refund: "token-1" },
+    servers,
+    tokens,
   );
 
-  expect(mcpManager).not.toBeNull();
-
-  const result = await mcpManager?.callTool({
-    id: "tool-1",
-    name: "mcp__refund__create_request",
-    input: {},
-  });
-
-  expect(result).toMatchObject({
-    toolCallId: "tool-1",
-    isError: true,
-  });
-  await mcpManager?.dispose();
+  expect(createMcpClientManagerMock).toHaveBeenCalledWith(servers, tokens);
+  expect(mcpManager).toBe(fakeManager);
 });

@@ -44,7 +44,7 @@ export class PiMonoAgentLoop implements AgentLoop {
     });
 
     this.agent.setSystemPrompt(config.systemPrompt);
-    this.agent.setTools(createPiTools(config.toolHandler));
+    this.agent.setTools(createPiTools(config.toolHandler, config.externalTools ?? []));
   }
 
   public async *run(input: ResponseInput, options?: RunOptions): AsyncIterable<ResponseEvent> {

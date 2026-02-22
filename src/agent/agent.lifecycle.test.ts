@@ -138,6 +138,7 @@ it("shuts down in order loop then mcp then sandbox and is idempotent", async () 
       mcp: [{ name: "refund", url: "https://example.com/mcp", auth: "bearer" }],
     },
     mcpClientManager: {
+      tools: [],
       callTool: async (call) => ({ toolCallId: call.id, output: "ok" }),
       dispose: async () => {
         order.push("mcp.dispose");

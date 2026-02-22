@@ -214,7 +214,12 @@ function applyModelCredentialAliases(provider: ModelProvider): void {
   }
 }
 
+// Backward-compatible alias for existing callers.
 export function validateModelApiKey(provider: ModelProvider): void {
+  resolveAndValidateModelApiKey(provider);
+}
+
+export function resolveAndValidateModelApiKey(provider: ModelProvider): void {
   applyModelCredentialAliases(provider);
 
   const requiredEnvNames = MODEL_PROVIDER_CREDENTIAL_ENVS[provider];

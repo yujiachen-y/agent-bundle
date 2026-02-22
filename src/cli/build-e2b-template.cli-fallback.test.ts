@@ -9,7 +9,7 @@ import {
   createLocalSkill,
   createRemoteSkill,
   createTempWorkspace,
-  expectPathMissing,
+  statPath,
   MockSpawnedProcess,
   withTemporaryEnv,
 } from "./build-e2b-template.test-helpers.js";
@@ -101,7 +101,7 @@ describe("buildE2BTemplate CLI fallback context", () => {
     });
     expect(stdoutText).toContain("published code-formatter:a3f8c2d");
     expect(stderrText).toContain("E2B SDK template build failed");
-    await expect(expectPathMissing(contextDir)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(statPath(contextDir)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("falls back to configured template when CLI output has no matching ref", async () => {

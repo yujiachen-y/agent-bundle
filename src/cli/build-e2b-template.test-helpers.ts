@@ -4,10 +4,9 @@ import { join } from "node:path";
 import { PassThrough } from "node:stream";
 
 import type { Skill } from "../skills/loader.js";
+import { withTemporaryEnv, type EnvRestore } from "../test-helpers/env.js";
 
 const CREATED_DIRS: string[] = [];
-
-export type EnvRestore = () => void;
 
 export class MockSpawnedProcess {
   public readonly stdout = new PassThrough();
@@ -90,34 +89,8 @@ export function createRemoteSkill(): Skill {
   };
 }
 
-export async function expectPathMissing(path: string): Promise<void> {
+export async function statPath(path: string): Promise<void> {
   await stat(path);
-}
-
-export function withTemporaryEnv(updates: Record<string, string | undefined>): EnvRestore {
-  const previousValues = Object.fromEntries(
-    Object.keys(updates).map((key) => [key, process.env[key]]),
-  );
-
-  Object.entries(updates).forEach(([key, value]) => {
-    if (value === undefined) {
-      delete process.env[key];
-      return;
-    }
-
-    process.env[key] = value;
-  });
-
-  return () => {
-    Object.entries(previousValues).forEach(([key, value]) => {
-      if (value === undefined) {
-        delete process.env[key];
-        return;
-      }
-
-      process.env[key] = value;
-    });
-  };
 }
 
 export async function cleanupTempWorkspaces(): Promise<void> {
@@ -127,3 +100,5 @@ export async function cleanupTempWorkspaces(): Promise<void> {
     }),
   );
 }
+
+export { withTemporaryEnv, type EnvRestore };

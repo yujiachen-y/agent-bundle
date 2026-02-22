@@ -256,6 +256,7 @@ async function runTemplateBuildCli(input: {
   stderr: Writable;
 }): Promise<BuildE2BTemplateResult> {
   const args = ["template", "build", "--path", input.contextDir, input.template];
+  let stdoutOutput = "";
   let commandOutput = "";
 
   return await new Promise<BuildE2BTemplateResult>((resolvePromise, rejectPromise) => {
@@ -265,7 +266,9 @@ async function runTemplateBuildCli(input: {
     });
 
     pipeIfPresent(child.stdout, input.stdout, (chunk) => {
-      commandOutput += chunk.toString();
+      const text = chunk.toString();
+      stdoutOutput += text;
+      commandOutput += text;
     });
     pipeIfPresent(child.stderr, input.stderr, (chunk) => {
       commandOutput += chunk.toString();
@@ -276,12 +279,45 @@ async function runTemplateBuildCli(input: {
     });
 
     child.on("close", (code) => {
+      const stdoutTemplateRef = detectTemplateRef(stdoutOutput, input.template);
       resolvePromise({
-        templateRef: detectTemplateRef(commandOutput, input.template),
+        templateRef: stdoutTemplateRef === input.template
+          ? detectTemplateRef(commandOutput, input.template)
+          : stdoutTemplateRef,
         exitCode: code ?? 1,
       });
     });
   });
+}
+
+async function runTemplateBuildWithFallback(input: {
+  contextDir: string;
+  template: string;
+  templateBuildImpl: TemplateBuildImpl;
+  spawnImpl: SpawnLike;
+  stdout: Writable;
+  stderr: Writable;
+}): Promise<BuildE2BTemplateResult> {
+  try {
+    return await runTemplateBuildSdk({
+      contextDir: input.contextDir,
+      template: input.template,
+      templateBuildImpl: input.templateBuildImpl,
+      stdout: input.stdout,
+    });
+  } catch (error) {
+    input.stderr.write(
+      `E2B SDK template build failed (${error instanceof Error ? error.message : String(error)}). Falling back to e2b CLI.\n`,
+    );
+
+    return await runTemplateBuildCli({
+      contextDir: input.contextDir,
+      template: input.template,
+      spawnImpl: input.spawnImpl,
+      stdout: input.stdout,
+      stderr: input.stderr,
+    });
+  }
 }
 
 export async function buildE2BTemplate(
@@ -294,26 +330,14 @@ export async function buildE2BTemplate(
   const contextDir = await createBuildContext(options);
 
   try {
-    try {
-      return await runTemplateBuildSdk({
-        contextDir,
-        template: options.template,
-        templateBuildImpl,
-        stdout: output,
-      });
-    } catch (error) {
-      errorOutput.write(
-        `E2B SDK template build failed (${error instanceof Error ? error.message : String(error)}). Falling back to e2b CLI.\n`,
-      );
-
-      return await runTemplateBuildCli({
-        contextDir,
-        template: options.template,
-        spawnImpl,
-        stdout: output,
-        stderr: errorOutput,
-      });
-    }
+    return await runTemplateBuildWithFallback({
+      contextDir,
+      template: options.template,
+      templateBuildImpl,
+      spawnImpl,
+      stdout: output,
+      stderr: errorOutput,
+    });
   } finally {
     await rm(contextDir, { recursive: true, force: true });
   }

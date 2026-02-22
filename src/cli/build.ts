@@ -4,7 +4,7 @@ import type { Writable } from "node:stream";
 
 import { generateSystemPromptTemplate, type SkillSummary } from "../agent-loop/system-prompt/generate.js";
 import type { BundleConfig } from "../schema/bundle.js";
-import { loadAllSkills } from "../skills/loader.js";
+import { loadAllSkills, type Skill } from "../skills/loader.js";
 import {
   createResolvedBundleConfig,
   generateSources,
@@ -103,6 +103,7 @@ async function buildKubernetesSandboxImage(input: {
 async function buildE2BSandboxImage(input: {
   config: BundleConfig;
   bundleDir: string;
+  skills: Skill[];
   buildE2B: typeof buildE2BTemplate;
   stdout: Writable;
   stderr: Writable;
@@ -113,6 +114,7 @@ async function buildE2BSandboxImage(input: {
   const buildResult = await input.buildE2B({
     bundleDir: input.bundleDir,
     template,
+    skills: input.skills,
     stdout: input.stdout,
     stderr: input.stderr,
   });
@@ -145,6 +147,7 @@ function toE2BSandboxImageRef(result: BuildE2BTemplateResult): SandboxImageRef {
 async function resolveSandboxImageRef(input: {
   config: BundleConfig;
   bundleDir: string;
+  skills: Skill[];
   buildSandbox: typeof buildSandboxImage;
   buildE2B: typeof buildE2BTemplate;
   stdout: Writable;
@@ -163,6 +166,7 @@ async function resolveSandboxImageRef(input: {
   return await buildE2BSandboxImage({
     config: input.config,
     bundleDir: input.bundleDir,
+    skills: input.skills,
     buildE2B: input.buildE2B,
     stdout: input.stdout,
     stderr: input.stderr,
@@ -209,6 +213,7 @@ export async function runBuildCommand(
   const sandboxImage = await resolveSandboxImageRef({
     config,
     bundleDir,
+    skills,
     buildSandbox: buildSandboxImpl,
     buildE2B: buildE2BImpl,
     stdout,

@@ -227,6 +227,11 @@ describe("runBuildCommand success path with e2b build", () => {
       expect.objectContaining({
         bundleDir: workspaceDir,
         template: "code-formatter",
+        skills: expect.arrayContaining([
+          expect.objectContaining({
+            name: "FormatCode",
+          }),
+        ]),
       }),
     );
     expect(output).toContain("Building sandbox template with E2B: code-formatter");

@@ -28,9 +28,12 @@ export type FileListResponse = {
 };
 
 export function isNotFoundError(error: unknown): boolean {
-  return typeof error === "object"
-    && error !== null
-    && Reflect.get(error, "statusCode") === 404;
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  return Reflect.get(error, "statusCode") === 404
+    || Reflect.get(error, "code") === 404;
 }
 
 export function unwrapPodResponse(response: unknown): V1Pod {

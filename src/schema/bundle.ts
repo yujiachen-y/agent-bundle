@@ -11,6 +11,13 @@ const modelProviderSchema = z.enum([
   "ollama",
   "openrouter",
 ]);
+const ollamaModelSchema = z
+  .object({
+    baseUrl: z.string().url().optional(),
+    contextWindow: z.number().int().positive().optional(),
+    maxTokens: z.number().int().positive().optional(),
+  })
+  .strict();
 
 const sandboxProviderSchema = z.enum(["e2b", "kubernetes"]);
 
@@ -47,6 +54,7 @@ const sandboxSchema = z
     kubernetes: z
       .object({
         namespace: z.string().min(1).optional(),
+        kubeconfig: z.string().min(1).optional(),
         nodeSelector: z.record(z.string(), z.string()).optional(),
         registry: z.string().min(1).optional(),
         image: z.string().min(1).optional(),
@@ -110,6 +118,7 @@ export const bundleSchema = z
       .object({
         provider: modelProviderSchema,
         model: z.string().min(1),
+        ollama: ollamaModelSchema.optional(),
       })
       .strict(),
     prompt: z

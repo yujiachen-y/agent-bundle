@@ -10,12 +10,14 @@ type CoreApiMock = {
 
 let coreApiMock: CoreApiMock;
 const loadFromDefaultMock = vi.fn();
+const loadFromFileMock = vi.fn();
 const makeApiClientMock = vi.fn(() => coreApiMock);
 const fetchMock = vi.fn<typeof fetch>();
 
 vi.mock("@kubernetes/client-node", () => ({
   KubeConfig: class {
     public loadFromDefault = loadFromDefaultMock;
+    public loadFromFile = loadFromFileMock;
     public makeApiClient = makeApiClientMock;
   },
   CoreV1Api: class {},
@@ -49,6 +51,7 @@ beforeEach(() => {
   };
   makeApiClientMock.mockClear();
   loadFromDefaultMock.mockClear();
+  loadFromFileMock.mockClear();
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -115,6 +118,22 @@ describe("K8sSandbox start", () => {
         }),
       }),
     );
+  });
+
+  it("loads kubeconfig from file when kubernetes.kubeconfig is set", async () => {
+    fetchMock.mockResolvedValue(new Response('{"status":"ok"}', { status: 200 }));
+    const sandbox = new K8sSandbox(
+      makeSandboxConfig({
+        kubernetes: {
+          kubeconfig: "/custom/kubeconfig.yaml",
+        },
+      }),
+    );
+
+    await sandbox.start();
+
+    expect(loadFromFileMock).toHaveBeenCalledWith("/custom/kubeconfig.yaml");
+    expect(loadFromDefaultMock).not.toHaveBeenCalled();
   });
 
   it("cleans up pod when start fails after pod creation", async () => {

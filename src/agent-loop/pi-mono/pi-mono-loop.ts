@@ -12,6 +12,21 @@ import { AsyncEventQueue } from "./queue.js";
 import { createPiTools } from "./tools.js";
 import { toErrorMessage, toTokenUsage } from "./utils.js";
 
+// Only Ollama needs a local placeholder key when unauthenticated.
+// Other providers use pi-ai's built-in environment-based key resolution.
+function resolveOllamaApiKey(provider: string): string | undefined {
+  if (provider !== "ollama") {
+    return undefined;
+  }
+
+  const configuredKey = process.env.OLLAMA_API_KEY?.trim();
+  if (configuredKey && configuredKey.length > 0) {
+    return configuredKey;
+  }
+
+  return "ollama";
+}
+
 export class PiMonoAgentLoop implements AgentLoop {
   private agent: Agent | null = null;
   private toolHandler: ToolHandler | null = null;
@@ -25,6 +40,7 @@ export class PiMonoAgentLoop implements AgentLoop {
         systemPrompt: config.systemPrompt,
         model: this.model,
       },
+      getApiKey: resolveOllamaApiKey,
     });
 
     this.agent.setSystemPrompt(config.systemPrompt);

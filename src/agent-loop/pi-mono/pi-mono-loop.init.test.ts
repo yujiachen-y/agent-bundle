@@ -100,21 +100,119 @@ it("maps gemini provider and installs sandbox-backed tools", async () => {
   expectToolHandlerCalls(toolHandler);
 });
 
-it("throws a clear error for unsupported ollama provider", async () => {
-  const loop = new PiMonoAgentLoop();
-  await expect(
-    loop.init({
+it("supports ollama via openai-compatible custom model", async () => {
+  const previousOllamaBaseUrl = process.env.OLLAMA_BASE_URL;
+  process.env.OLLAMA_BASE_URL = "http://localhost:11434";
+
+  try {
+    const loop = new PiMonoAgentLoop();
+    await loop.init({
       systemPrompt: "system",
       model: {
         provider: "ollama",
-        model: "qwen2.5-coder",
+        model: "gpt-oss:20b",
       },
       toolHandler: async (call) => ({
         toolCallId: call.id,
         output: "unused",
       }),
-    }),
-  ).rejects.toThrowError(/ollama/);
+    });
+
+    expect(getProvidersMock).not.toHaveBeenCalled();
+    expect(getModelsMock).not.toHaveBeenCalled();
+    expect(agentInstances).toHaveLength(1);
+
+    const agent = agentInstances[0];
+    const initialState = (
+      agent.options as {
+        initialState: {
+          model: {
+            id: string;
+            provider: string;
+            api: string;
+            baseUrl: string;
+            contextWindow: number;
+            maxTokens: number;
+          };
+        };
+      }
+    ).initialState;
+    const getApiKey = (agent.options as { getApiKey: (provider: string) => string | undefined }).getApiKey;
+
+    expect(initialState.model.id).toBe("gpt-oss:20b");
+    expect(initialState.model.provider).toBe("ollama");
+    expect(initialState.model.api).toBe("openai-completions");
+    expect(initialState.model.baseUrl).toBe("http://localhost:11434/v1");
+    expect(initialState.model.contextWindow).toBe(128_000);
+    expect(initialState.model.maxTokens).toBe(32_000);
+    expect(getApiKey("ollama")).toBe("ollama");
+    expect(getApiKey("openai")).toBeUndefined();
+  } finally {
+    if (previousOllamaBaseUrl === undefined) {
+      delete process.env.OLLAMA_BASE_URL;
+    } else {
+      process.env.OLLAMA_BASE_URL = previousOllamaBaseUrl;
+    }
+  }
+});
+
+it("keeps configured ollama /v1 base URL and api key", async () => {
+  const previousOllamaBaseUrl = process.env.OLLAMA_BASE_URL;
+  const previousOllamaApiKey = process.env.OLLAMA_API_KEY;
+  process.env.OLLAMA_BASE_URL = "http://localhost:11434/v1";
+  process.env.OLLAMA_API_KEY = "custom-ollama-key";
+
+  try {
+    const loop = new PiMonoAgentLoop();
+    await loop.init({
+      systemPrompt: "system",
+      model: {
+        provider: "ollama",
+        model: "qwen2.5-coder",
+        ollama: {
+          baseUrl: "http://localhost:11434",
+          contextWindow: 16_384,
+          maxTokens: 4_096,
+        },
+      },
+      toolHandler: async (call) => ({
+        toolCallId: call.id,
+        output: "unused",
+      }),
+    });
+
+    expect(agentInstances).toHaveLength(1);
+    const agent = agentInstances[0];
+    const initialState = (
+      agent.options as {
+        initialState: {
+          model: {
+            baseUrl: string;
+            contextWindow: number;
+            maxTokens: number;
+          };
+        };
+      }
+    ).initialState;
+    const getApiKey = (agent.options as { getApiKey: (provider: string) => string | undefined }).getApiKey;
+
+    expect(initialState.model.baseUrl).toBe("http://localhost:11434/v1");
+    expect(initialState.model.contextWindow).toBe(16_384);
+    expect(initialState.model.maxTokens).toBe(4_096);
+    expect(getApiKey("ollama")).toBe("custom-ollama-key");
+  } finally {
+    if (previousOllamaBaseUrl === undefined) {
+      delete process.env.OLLAMA_BASE_URL;
+    } else {
+      process.env.OLLAMA_BASE_URL = previousOllamaBaseUrl;
+    }
+
+    if (previousOllamaApiKey === undefined) {
+      delete process.env.OLLAMA_API_KEY;
+    } else {
+      process.env.OLLAMA_API_KEY = previousOllamaApiKey;
+    }
+  }
 });
 
 it("throws when provider is not available in pi-ai", async () => {

@@ -10,14 +10,19 @@ vi.mock("e2b", () => ({
   },
 }));
 
-vi.mock("../sandbox_helpers.js", () => ({
-  findSandboxById: findSandboxByIdMock,
-}));
+vi.mock("../sandbox_helpers.js", () => {
+  return {
+    findSandboxById: findSandboxByIdMock,
+  };
+});
 
-vi.mock("../utils/time.js", () => ({
-  nowIso: () => "2026-02-21T00:00:00.000Z",
-  sleep: sleepMock,
-}));
+vi.mock("../utils/time.js", () => {
+  const fixedNowIso = "2026-02-21T00:00:00.000Z";
+  return {
+    nowIso: () => fixedNowIso,
+    sleep: sleepMock,
+  };
+});
 
 const { runAutoCleanupTest } = await import("./i3_auto_cleanup.js");
 

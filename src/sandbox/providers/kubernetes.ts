@@ -38,16 +38,20 @@ function isDeleteEndpointMissingError(error: unknown): boolean {
   return /HTTP 404 .*\/files\/delete/.test(error.message);
 }
 
-function createCoreApi(): CoreV1Api {
+function createCoreApi(kubeconfigPath?: string): CoreV1Api {
   const kubeConfig = new KubeConfig();
-  kubeConfig.loadFromDefault();
+  if (kubeconfigPath) {
+    kubeConfig.loadFromFile(kubeconfigPath);
+  } else {
+    kubeConfig.loadFromDefault();
+  }
   return kubeConfig.makeApiClient(CoreV1Api);
 }
 
 export class K8sSandbox implements Sandbox {
   public readonly id = `k8s-${randomUUID()}`;
 
-  private readonly coreApi = createCoreApi();
+  private readonly coreApi: CoreV1Api;
   private readonly namespace: string;
   private readonly podName: string;
   private runtimeStatus: SandboxStatus = "idle";
@@ -102,6 +106,7 @@ export class K8sSandbox implements Sandbox {
     private readonly config: SandboxConfig,
     private readonly hooks: SandboxHooks = {},
   ) {
+    this.coreApi = createCoreApi(this.config.kubernetes?.kubeconfig);
     this.namespace = this.config.kubernetes?.namespace ?? "default";
     this.podName = `agent-sandbox-${this.id}`;
   }
@@ -194,6 +199,7 @@ export class K8sSandbox implements Sandbox {
           {
             name: "execd",
             image: this.config.kubernetes?.image ?? "agent-bundle/execd:latest",
+            imagePullPolicy: "IfNotPresent",
             ports: [{ containerPort: EXECD_PORT, name: "http" }],
             resources: {
               requests: { cpu, memory },

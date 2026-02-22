@@ -15,10 +15,12 @@
     "test:e2e:e2b": "E2B_SANDBOX_E2E=1 vitest run src/sandbox/providers/e2b.e2e.test.ts",
     "test:e2e:k8s": "K8S_SANDBOX_E2E=1 vitest run src/sandbox/providers/kubernetes.e2e.test.ts",
     "test:e2e:pi-mono": "PI_MONO_E2E=1 vitest run src/agent-loop/pi-mono/pi-mono-loop.e2e.test.ts",
-    "test:e2e": "pnpm run test:e2e:skills && pnpm run test:e2e:e2b && pnpm run test:e2e:k8s && pnpm run test:e2e:pi-mono",
+    "test:e2e:service": "SERVICE_E2E=1 vitest run src/service/create-server.e2e.test.ts",
+    "test:e2e": "pnpm run test:e2e:skills && pnpm run test:e2e:e2b && pnpm run test:e2e:k8s && pnpm run test:e2e:pi-mono && pnpm run test:e2e:service",
     "quality": "pnpm run lint && pnpm run duplicate && pnpm run test",
     "ci": "pnpm run quality",
-    "ci:full": "pnpm run quality && pnpm run test:e2e"
+    "ci:full": "pnpm run quality && pnpm run test:e2e",
+    "demo:local-server": "tsx demo/local-server/main.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -27,11 +29,13 @@
     "eslint": "^9.39.1",
     "globals": "^16.4.0",
     "jscpd": "^4.0.5",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.4",
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.9",
     "@kubernetes/client-node": "^1.4.0",
     "@mariozechner/pi-agent-core": "^0.54.0",
     "@mariozechner/pi-ai": "^0.54.0",
@@ -39,6 +43,7 @@
     "citty": "^0.2.1",
     "dotenv": "^16.6.1",
     "e2b": "^2.12.1",
+    "hono": "^4.12.1",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"
   }

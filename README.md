@@ -176,6 +176,22 @@ model:
 
 API keys are resolved from environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.). No secrets in YAML.
 
+For `ollama`, `agent-bundle` uses the OpenAI-compatible endpoint from `OLLAMA_BASE_URL` (or `OLLAMA_HOST`), and auto-appends `/v1` when missing. Default: `http://127.0.0.1:11434/v1`. If both are set, `OLLAMA_BASE_URL` takes precedence. If your endpoint requires auth, set `OLLAMA_API_KEY`; otherwise a placeholder key is used automatically.
+
+You can override Ollama runtime hints in YAML:
+
+```yaml
+model:
+  provider: ollama
+  model: qwen2.5-coder
+  ollama:
+    baseUrl: http://127.0.0.1:11434
+    contextWindow: 16384
+    maxTokens: 4096
+```
+
+`contextWindow` and `maxTokens` are compatibility hints for planning token budgets; the actual limit is determined by the Ollama model and your runtime `num_ctx` setting.
+
 ### Sandbox
 
 ```yaml

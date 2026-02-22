@@ -8,6 +8,11 @@ export type ModelProvider =
 export type ModelConfig = {
   provider: ModelProvider;
   model: string;
+  ollama?: {
+    baseUrl?: string;
+    contextWindow?: number;
+    maxTokens?: number;
+  };
 };
 
 export type ToolCall = {

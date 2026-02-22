@@ -30,6 +30,25 @@ describe("parseBundleConfig", () => {
     expect(config.skills).toHaveLength(1);
   });
 
+  it("parses ollama model overrides", () => {
+    const config = makeBaseConfig();
+    config.model = {
+      provider: "ollama",
+      model: "qwen2.5-coder",
+      ollama: {
+        baseUrl: "http://localhost:11434",
+        contextWindow: 16_384,
+        maxTokens: 4_096,
+      },
+    };
+
+    const parsed = parseBundleConfig(config);
+    expect(parsed.model.provider).toBe("ollama");
+    expect(parsed.model.ollama?.baseUrl).toBe("http://localhost:11434");
+    expect(parsed.model.ollama?.contextWindow).toBe(16_384);
+    expect(parsed.model.ollama?.maxTokens).toBe(4_096);
+  });
+
   it("rejects missing required fields", () => {
     const config = makeBaseConfig();
     delete (config as { model?: unknown }).model;
@@ -45,6 +64,31 @@ describe("parseBundleConfig", () => {
       };
     };
     config.model.provider = "invalid-provider";
+
+    expect(() => parseBundleConfig(config)).toThrowError();
+  });
+
+  it("rejects invalid ollama model overrides", () => {
+    const config = makeBaseConfig() as {
+      model: {
+        provider: "ollama";
+        model: string;
+        ollama: {
+          baseUrl: string;
+          contextWindow: number;
+          maxTokens: number;
+        };
+      };
+    };
+    config.model = {
+      provider: "ollama",
+      model: "qwen2.5-coder",
+      ollama: {
+        baseUrl: "not-a-url",
+        contextWindow: 0,
+        maxTokens: -1,
+      },
+    };
 
     expect(() => parseBundleConfig(config)).toThrowError();
   });

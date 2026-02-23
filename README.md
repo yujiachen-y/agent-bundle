@@ -20,7 +20,7 @@
 
 ## Why
 
-Agent skills work great inside local coding agents. Getting them into production is a different story.
+Agent skills work great inside local coding agents. Deploying them to production is a different story.
 
 |  | Without agent-bundle | With agent-bundle |
 |--|---------------------|-------------------|

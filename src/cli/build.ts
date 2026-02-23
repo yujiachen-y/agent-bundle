@@ -2,9 +2,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { Writable } from "node:stream";
 
-import { generateSystemPromptTemplate, type SkillSummary } from "../agent-loop/system-prompt/generate.js";
+import { generateSystemPromptTemplate } from "../agent-loop/system-prompt/generate.js";
 import type { BundleConfig } from "../schema/bundle.js";
 import { loadAllSkills, type Skill } from "../skills/loader.js";
+import { toSkillSummaries } from "../skills/summaries.js";
 import {
   createResolvedBundleConfig,
   generateSources,
@@ -39,16 +40,6 @@ type BuildDependencies = {
   writeFileImpl?: typeof writeFile;
   mkdirImpl?: typeof mkdir;
 };
-
-function toSkillSummaries(skills: Awaited<ReturnType<typeof loadAllSkills>>): SkillSummary[] {
-  return skills.map((skill) => {
-    return {
-      name: skill.name,
-      description: skill.description,
-      sourcePath: skill.sourcePath,
-    };
-  });
-}
 
 function ensureKubernetesImage(config: BundleConfig): string {
   const image = config.sandbox.kubernetes?.image;

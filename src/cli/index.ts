@@ -4,7 +4,7 @@ import { defineCommand, runMain } from "citty";
 
 import { DEFAULT_OUTPUT_DIR, runBuildCommand } from "./build.js";
 import { runGenerateCommand } from "./generate.js";
-import { loadBundleConfig } from "./load-bundle-config.js";
+import { DEFAULT_SERVE_PORT, runServeCommand } from "./serve.js";
 
 const DEFAULT_CONFIG_PATH = "./agent-bundle.yaml";
 
@@ -16,15 +16,21 @@ function resolveConfigPath(configArg: string | boolean | undefined): string {
   return DEFAULT_CONFIG_PATH;
 }
 
-async function runStubCommand(command: "serve", configPath: string): Promise<void> {
-  const config = await loadBundleConfig(configPath);
-  const output = {
-    command,
-    configPath,
-    config,
-  };
+function resolvePort(portArg: string | boolean | undefined): number {
+  if (typeof portArg === "boolean") {
+    throw new Error("--port requires a numeric value.");
+  }
 
-  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+  if (typeof portArg !== "string" || portArg.trim().length === 0) {
+    return DEFAULT_SERVE_PORT;
+  }
+
+  const port = Number.parseInt(portArg, 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error("Invalid --port value. Expected an integer between 1 and 65535.");
+  }
+
+  return port;
 }
 
 const configArg = {
@@ -39,16 +45,35 @@ const outputArg = {
   default: DEFAULT_OUTPUT_DIR,
 } as const;
 
+const portArg = {
+  type: "string",
+  description: "Port for the local HTTP + WebUI server.",
+  default: String(DEFAULT_SERVE_PORT),
+} as const;
+
+const keyValueArg = {
+  type: "string",
+  description: "Key-value entry in key=value format. Repeat flag or use comma-separated values.",
+} as const;
+
 const serveCommand = defineCommand({
   meta: {
     name: "serve",
-    description: "Run local development server (stub).",
+    description: "Run local development server with TUI + WebUI.",
   },
   args: {
     config: configArg,
+    port: portArg,
+    var: keyValueArg,
+    mcpToken: keyValueArg,
   },
   run: async ({ args }): Promise<void> => {
-    await runStubCommand("serve", resolveConfigPath(args.config));
+    await runServeCommand({
+      configPath: resolveConfigPath(args.config),
+      port: resolvePort(args.port),
+      variableEntries: args.var,
+      mcpTokenEntries: args.mcpToken,
+    });
   },
 });
 

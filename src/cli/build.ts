@@ -101,12 +101,17 @@ async function buildE2BSandboxImage(input: {
   stderr: Writable;
 }): Promise<SandboxImageRef> {
   const template = ensureE2BTemplate(input.config);
+  const buildConfig = input.config.sandbox.e2b?.build;
+  const dockerfile = buildConfig
+    ? resolve(input.bundleDir, buildConfig.dockerfile)
+    : undefined;
 
   input.stdout.write(`Building sandbox template with E2B: ${template}\n`);
   const buildResult = await input.buildE2B({
     bundleDir: input.bundleDir,
     template,
     skills: input.skills,
+    ...(dockerfile ? { dockerfile } : {}),
     stdout: input.stdout,
     stderr: input.stderr,
   });

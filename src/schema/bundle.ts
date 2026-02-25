@@ -40,7 +40,7 @@ const resourcesSchema = z
     memory: "512MB",
   });
 
-const kubernetesBuildSchema = z
+const sandboxBuildSchema = z
   .object({
     dockerfile: z.string().min(1),
     context: z.string().min(1).optional(),
@@ -55,6 +55,7 @@ const sandboxSchema = z
     e2b: z
       .object({
         template: z.string().min(1).optional(),
+        build: sandboxBuildSchema.optional(),
       })
       .strict()
       .optional(),
@@ -65,7 +66,7 @@ const sandboxSchema = z
         nodeSelector: z.record(z.string(), z.string()).optional(),
         registry: z.string().min(1).optional(),
         image: z.string().min(1).optional(),
-        build: kubernetesBuildSchema.optional(),
+        build: sandboxBuildSchema.optional(),
       })
       .strict()
       .optional(),

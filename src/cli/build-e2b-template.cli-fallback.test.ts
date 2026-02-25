@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 
@@ -51,7 +51,7 @@ afterEach(async () => {
   await cleanupTempWorkspaces();
 });
 
-describe("buildE2BTemplate CLI fallback context", () => {
+describe("buildE2BTemplate CLI fallback context setup", () => {
   it("creates temp context with skills/tools and falls back to e2b CLI when SDK build fails", async () => {
     const workspaceDir = await createTempWorkspace("fallback");
     const processMock = new MockSpawnedProcess();
@@ -103,7 +103,9 @@ describe("buildE2BTemplate CLI fallback context", () => {
     expect(stderrText).toContain("E2B SDK template build failed");
     await expect(statPath(contextDir)).rejects.toMatchObject({ code: "ENOENT" });
   });
+});
 
+describe("buildE2BTemplate CLI fallback dockerfile selection", () => {
   it("falls back to configured template when CLI output has no matching ref", async () => {
     const workspaceDir = await createTempWorkspace("no-ref");
     const processMock = new MockSpawnedProcess();
@@ -129,6 +131,40 @@ describe("buildE2BTemplate CLI fallback context", () => {
     });
   });
 
+  it("uses provided dockerfile when creating fallback context", async () => {
+    const workspaceDir = await createTempWorkspace("custom-dockerfile");
+    const processMock = new MockSpawnedProcess();
+    const spawnMock = vi.fn<SpawnLike>(() => processMock);
+    const customDockerfilePath = join(workspaceDir, "e2b.custom.Dockerfile");
+
+    await writeFile(
+      customDockerfilePath,
+      ["FROM e2bdev/base:latest", "RUN echo custom-dockerfile", ""].join("\n"),
+      "utf8",
+    );
+
+    const buildPromise = buildE2BTemplate({
+      bundleDir: workspaceDir,
+      template: "code-formatter",
+      skills: [await createLocalSkill(workspaceDir)],
+      dockerfile: customDockerfilePath,
+      templateBuildImpl: vi.fn(throwSdkUnavailable),
+      spawnImpl: spawnMock,
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+    });
+
+    const { contextDir } = await waitForSpawnCall(spawnMock);
+    const dockerfile = await readFile(join(contextDir, "e2b.Dockerfile"), "utf8");
+    expect(dockerfile).toContain("RUN echo custom-dockerfile");
+    expect(dockerfile).not.toContain("COPY ./skills/ /skills/");
+
+    processMock.emitClose(0);
+    await expect(buildPromise).resolves.toEqual({
+      templateRef: "code-formatter",
+      exitCode: 0,
+    });
+  });
 });
 
 describe("buildE2BTemplate CLI fallback auth", () => {

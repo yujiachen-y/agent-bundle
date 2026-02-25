@@ -176,7 +176,9 @@ describe("parseBundleConfig sandbox and MCP validation", () => {
 
     expect(() => parseBundleConfig(config)).toThrowError();
   });
+});
 
+describe("parseBundleConfig sandbox build validation", () => {
   it("parses kubernetes build config with dockerfile and context", () => {
     const config = makeBaseConfig();
     config.sandbox = {
@@ -210,5 +212,22 @@ describe("parseBundleConfig sandbox and MCP validation", () => {
     const parsed = parseBundleConfig(config);
     expect(parsed.sandbox.kubernetes?.build?.dockerfile).toBe("./Dockerfile");
     expect(parsed.sandbox.kubernetes?.build?.context).toBeUndefined();
+  });
+
+  it("parses e2b build config with dockerfile only", () => {
+    const config = makeBaseConfig();
+    config.sandbox = {
+      provider: "e2b",
+      e2b: {
+        template: "invoice-processor",
+        build: {
+          dockerfile: "./e2b.Dockerfile",
+        },
+      },
+    };
+
+    const parsed = parseBundleConfig(config);
+    expect(parsed.sandbox.e2b?.build?.dockerfile).toBe("./e2b.Dockerfile");
+    expect(parsed.sandbox.e2b?.build?.context).toBeUndefined();
   });
 });

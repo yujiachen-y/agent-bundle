@@ -1,3 +1,5 @@
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +12,12 @@ import {
 } from "./build-e2b-template.test-helpers.js";
 import { buildE2BTemplate, type SpawnLike } from "./build-e2b-template.js";
 
+async function writeTestDockerfile(workspaceDir: string): Promise<string> {
+  const dockerfilePath = join(workspaceDir, "e2b.Dockerfile");
+  await writeFile(dockerfilePath, "FROM e2bdev/base:latest\n", "utf8");
+  return dockerfilePath;
+}
+
 afterEach(async () => {
   await cleanupTempWorkspaces();
 });
@@ -17,6 +25,7 @@ afterEach(async () => {
 describe("buildE2BTemplate SDK path", () => {
   it("uses E2B Template SDK by default and does not invoke CLI fallback", async () => {
     const workspaceDir = await createTempWorkspace("sdk");
+    const dockerfilePath = await writeTestDockerfile(workspaceDir);
     const localSkill = await createLocalSkill(workspaceDir);
     const spawnMock = vi.fn<SpawnLike>(() => {
       return new MockSpawnedProcess();
@@ -40,6 +49,7 @@ describe("buildE2BTemplate SDK path", () => {
       bundleDir: workspaceDir,
       template: "code-formatter",
       skills: [localSkill],
+      dockerfile: dockerfilePath,
       templateBuildImpl: templateBuildMock,
       spawnImpl: spawnMock,
       stdout,

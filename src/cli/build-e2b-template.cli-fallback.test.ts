@@ -15,6 +15,21 @@ import {
 } from "./build-e2b-template.test-helpers.js";
 import { buildE2BTemplate, type SpawnLike } from "./build-e2b-template.js";
 
+const DEFAULT_DOCKERFILE_CONTENT = [
+  "FROM e2bdev/base:latest",
+  "RUN mkdir -p /skills /tools /workspace",
+  "COPY ./skills/ /skills/",
+  "COPY ./tools/ /tools/",
+  "RUN if [ -f /tools/setup.sh ]; then chmod +x /tools/setup.sh && /tools/setup.sh; fi",
+  "",
+].join("\n");
+
+async function writeTestDockerfile(workspaceDir: string): Promise<string> {
+  const dockerfilePath = join(workspaceDir, "e2b.Dockerfile");
+  await writeFile(dockerfilePath, DEFAULT_DOCKERFILE_CONTENT, "utf8");
+  return dockerfilePath;
+}
+
 function throwSdkUnavailable(): never {
   throw new Error("sdk unavailable");
 }
@@ -54,6 +69,7 @@ afterEach(async () => {
 describe("buildE2BTemplate CLI fallback context setup", () => {
   it("creates temp context with skills/tools and falls back to e2b CLI when SDK build fails", async () => {
     const workspaceDir = await createTempWorkspace("fallback");
+    const dockerfilePath = await writeTestDockerfile(workspaceDir);
     const processMock = new MockSpawnedProcess();
     const spawnMock = vi.fn<SpawnLike>(() => processMock);
     const stdout = new PassThrough();
@@ -72,6 +88,7 @@ describe("buildE2BTemplate CLI fallback context setup", () => {
       bundleDir: workspaceDir,
       template: "code-formatter",
       skills: [await createLocalSkill(workspaceDir), createRemoteSkill()],
+      dockerfile: dockerfilePath,
       templateBuildImpl: vi.fn(throwSdkUnavailable),
       spawnImpl: spawnMock,
       stdout,
@@ -108,6 +125,7 @@ describe("buildE2BTemplate CLI fallback context setup", () => {
 describe("buildE2BTemplate CLI fallback dockerfile selection", () => {
   it("falls back to configured template when CLI output has no matching ref", async () => {
     const workspaceDir = await createTempWorkspace("no-ref");
+    const dockerfilePath = await writeTestDockerfile(workspaceDir);
     const processMock = new MockSpawnedProcess();
     const spawnMock = vi.fn<SpawnLike>(() => processMock);
 
@@ -115,6 +133,7 @@ describe("buildE2BTemplate CLI fallback dockerfile selection", () => {
       bundleDir: workspaceDir,
       template: "code-formatter",
       skills: [await createLocalSkill(workspaceDir)],
+      dockerfile: dockerfilePath,
       templateBuildImpl: vi.fn(throwSdkUnavailable),
       spawnImpl: spawnMock,
       stdout: new PassThrough(),
@@ -170,6 +189,7 @@ describe("buildE2BTemplate CLI fallback dockerfile selection", () => {
 describe("buildE2BTemplate CLI fallback auth", () => {
   it("maps E2B_API_KEY into E2B_ACCESS_TOKEN for CLI fallback", async () => {
     const workspaceDir = await createTempWorkspace("auth-map");
+    const dockerfilePath = await writeTestDockerfile(workspaceDir);
     const processMock = new MockSpawnedProcess();
     const spawnMock = vi.fn<SpawnLike>(() => processMock);
     const restoreEnv = withTemporaryEnv({
@@ -182,6 +202,7 @@ describe("buildE2BTemplate CLI fallback auth", () => {
         bundleDir: workspaceDir,
         template: "code-formatter",
         skills: [await createLocalSkill(workspaceDir)],
+        dockerfile: dockerfilePath,
         templateBuildImpl: vi.fn(throwSdkUnavailable),
         spawnImpl: spawnMock,
         stdout: new PassThrough(),
@@ -205,6 +226,7 @@ describe("buildE2BTemplate CLI fallback auth", () => {
 describe("buildE2BTemplate failures", () => {
   it("returns non-zero exit code when CLI fallback exits non-zero", async () => {
     const workspaceDir = await createTempWorkspace("non-zero");
+    const dockerfilePath = await writeTestDockerfile(workspaceDir);
     const processMock = new MockSpawnedProcess();
     const spawnMock = vi.fn<SpawnLike>(() => processMock);
 
@@ -212,6 +234,7 @@ describe("buildE2BTemplate failures", () => {
       bundleDir: workspaceDir,
       template: "code-formatter",
       skills: [await createLocalSkill(workspaceDir)],
+      dockerfile: dockerfilePath,
       templateBuildImpl: vi.fn(throwSdkUnavailable),
       spawnImpl: spawnMock,
       stdout: new PassThrough(),
@@ -229,6 +252,7 @@ describe("buildE2BTemplate failures", () => {
 
   it("rejects when CLI fallback spawn emits error", async () => {
     const workspaceDir = await createTempWorkspace("spawn-error");
+    const dockerfilePath = await writeTestDockerfile(workspaceDir);
     const processMock = new MockSpawnedProcess();
     const spawnMock = vi.fn<SpawnLike>(() => processMock);
 
@@ -236,6 +260,7 @@ describe("buildE2BTemplate failures", () => {
       bundleDir: workspaceDir,
       template: "code-formatter",
       skills: [await createLocalSkill(workspaceDir)],
+      dockerfile: dockerfilePath,
       templateBuildImpl: vi.fn(throwSdkUnavailable),
       spawnImpl: spawnMock,
       stdout: new PassThrough(),

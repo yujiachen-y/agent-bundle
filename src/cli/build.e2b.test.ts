@@ -29,6 +29,8 @@ describe("runBuildCommand e2b build success", () => {
           "  provider: e2b",
           "  e2b:",
           "    template: code-formatter",
+          "    build:",
+          "      dockerfile: ./e2b.Dockerfile",
         ],
       }),
     );
@@ -59,7 +61,10 @@ describe("runBuildCommand e2b build success", () => {
     );
 
     expect(buildE2BMock).toHaveBeenCalledTimes(1);
-    expect(buildE2BMock.mock.calls[0][0]).not.toHaveProperty("dockerfile");
+    expect(buildE2BMock.mock.calls[0][0]).toHaveProperty(
+      "dockerfile",
+      resolve(workspaceDir, "./e2b.Dockerfile"),
+    );
     expect(buildE2BMock).toHaveBeenCalledWith(
       expect.objectContaining({
         bundleDir: workspaceDir,
@@ -94,50 +99,6 @@ describe("runBuildCommand e2b build success", () => {
   });
 });
 
-describe("runBuildCommand e2b build dockerfile passthrough", () => {
-  it("passes resolved dockerfile to e2b template build when e2b build config is provided", async () => {
-    const workspaceDir = await createTempWorkspace("e2b-build-with-dockerfile");
-    await writeSkill(workspaceDir);
-    const configPath = await writeBundleConfig(
-      workspaceDir,
-      createBundleConfig({
-        sandboxLines: [
-          "  provider: e2b",
-          "  e2b:",
-          "    template: code-formatter",
-          "    build:",
-          "      dockerfile: ./e2b.Dockerfile",
-        ],
-      }),
-    );
-
-    const buildE2BMock = vi.fn(async (): Promise<BuildE2BTemplateResult> => {
-      return {
-        templateRef: "code-formatter:a3f8c2d",
-        exitCode: 0,
-      };
-    });
-
-    await runBuildCommand(
-      {
-        configPath,
-        outputDir: join(workspaceDir, "dist"),
-        stdout: new PassThrough(),
-        stderr: new PassThrough(),
-      },
-      {
-        buildE2B: buildE2BMock,
-      },
-    );
-
-    expect(buildE2BMock).toHaveBeenCalledTimes(1);
-    expect(buildE2BMock.mock.calls[0][0]).toHaveProperty(
-      "dockerfile",
-      resolve(workspaceDir, "./e2b.Dockerfile"),
-    );
-  });
-});
-
 describe("runBuildCommand e2b validation errors", () => {
   it("throws when e2b template is absent", async () => {
     const workspaceDir = await createTempWorkspace("e2b");
@@ -169,6 +130,8 @@ describe("runBuildCommand e2b validation errors", () => {
           "  provider: e2b",
           "  e2b:",
           "    template: code-formatter",
+          "    build:",
+          "      dockerfile: ./e2b.Dockerfile",
         ],
       }),
     );

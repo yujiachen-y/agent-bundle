@@ -19,5 +19,7 @@ sandbox:
     memory: 256MB
   e2b:
     template: code-formatter-e2b-demo
+    build:
+      dockerfile: ./e2b.Dockerfile
 skills:
   - path: ./skills/format-code

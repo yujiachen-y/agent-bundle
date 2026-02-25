@@ -44,7 +44,7 @@ export type BuildE2BTemplateOptions = {
   bundleDir: string;
   template: string;
   skills: Skill[];
-  dockerfile?: string;
+  dockerfile: string;
   templateBuildImpl?: TemplateBuildImpl;
   spawnImpl?: SpawnLike;
   stdout?: Writable;
@@ -58,14 +58,6 @@ export type BuildE2BTemplateResult = {
 
 const DEFAULT_STDIO: SpawnOptions["stdio"] = ["ignore", "pipe", "pipe"];
 const E2B_DOCKERFILE_NAME = "e2b.Dockerfile";
-const E2B_DOCKERFILE_CONTENT = [
-  "FROM e2bdev/base:latest",
-  "RUN mkdir -p /skills /tools /workspace",
-  "COPY ./skills/ /skills/",
-  "COPY ./tools/ /tools/",
-  "RUN if [ -f /tools/setup.sh ]; then chmod +x /tools/setup.sh && /tools/setup.sh; fi",
-  "",
-].join("\n");
 
 const defaultSpawn: SpawnLike = (command, args, options) => {
   return spawn(command, args, options);
@@ -224,11 +216,7 @@ async function createBuildContext(options: BuildE2BTemplateOptions): Promise<str
   const contextDir = await mkdtemp(join(tmpdir(), "agent-bundle-e2b-"));
   await writeSkillsBuildContext(contextDir, options.skills);
   await writeToolsBuildContext(contextDir, options.bundleDir);
-  if (options.dockerfile) {
-    await copyFile(options.dockerfile, join(contextDir, E2B_DOCKERFILE_NAME));
-  } else {
-    await writeFile(join(contextDir, E2B_DOCKERFILE_NAME), E2B_DOCKERFILE_CONTENT, "utf8");
-  }
+  await copyFile(options.dockerfile, join(contextDir, E2B_DOCKERFILE_NAME));
 
   return contextDir;
 }

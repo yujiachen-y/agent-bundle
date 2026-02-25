@@ -61,6 +61,17 @@ function ensureE2BTemplate(config: BundleConfig): string {
   return template;
 }
 
+function ensureE2BDockerfile(config: BundleConfig): string {
+  const dockerfile = config.sandbox.e2b?.build?.dockerfile;
+  if (!dockerfile) {
+    throw new Error(
+      "sandbox.e2b.build.dockerfile is required when sandbox provider is e2b.",
+    );
+  }
+
+  return dockerfile;
+}
+
 async function buildKubernetesSandboxImage(input: {
   config: BundleConfig;
   bundleDir: string;
@@ -101,17 +112,14 @@ async function buildE2BSandboxImage(input: {
   stderr: Writable;
 }): Promise<SandboxImageRef> {
   const template = ensureE2BTemplate(input.config);
-  const buildConfig = input.config.sandbox.e2b?.build;
-  const dockerfile = buildConfig
-    ? resolve(input.bundleDir, buildConfig.dockerfile)
-    : undefined;
+  const dockerfile = ensureE2BDockerfile(input.config);
 
   input.stdout.write(`Building sandbox template with E2B: ${template}\n`);
   const buildResult = await input.buildE2B({
     bundleDir: input.bundleDir,
     template,
     skills: input.skills,
-    ...(dockerfile ? { dockerfile } : {}),
+    dockerfile: resolve(input.bundleDir, dockerfile),
     stdout: input.stdout,
     stderr: input.stderr,
   });

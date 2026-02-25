@@ -10,12 +10,6 @@
 
 **Anthropic · OpenAI · Gemini · Ollama · OpenRouter** — **E2B · Kubernetes sandboxes**
 
-<p align="center">
-  <img src=".github/demo.gif" alt="agent-bundle generate, serve with TUI and WebUI, then build producing typed output" width="720">
-  <br>
-  <sub>TODO: Record with <a href="https://github.com/charmbracelet/vhs">VHS</a> — <code>generate</code> → <code>serve</code> (TUI + WebUI) → <code>build</code></sub>
-</p>
-
 ---
 
 ## Why
@@ -41,12 +35,19 @@ pnpm add -g agent-bundle
 ### 2. Define your bundle
 
 ```yaml
-# bundle.yaml
+# agent-bundle.yaml
 name: my-agent
 
 model:
   provider: anthropic
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5
+
+prompt:
+  system: |
+    You are a helpful agent.
+    Follow the skill instructions precisely.
+  variables:
+    - user_name
 
 sandbox:
   provider: kubernetes
@@ -92,9 +93,10 @@ Produces a typed, embeddable package:
 
 ```
 dist/my-agent/
-├── index.ts      ← typed agent factory
-├── types.ts      ← variable types
-└── bundle.json   ← config snapshot
+├── index.ts        ← typed agent factory
+├── types.ts        ← variable types
+├── bundle.json     ← config snapshot
+└── package.json    ← scoped package metadata
 ```
 
 If `sandbox.kubernetes.build` is configured, `agent-bundle build` runs a local `docker build` for that image tag. Image push/import is still an explicit user step.
@@ -109,7 +111,9 @@ const agent = await MyAgent.init({
   variables: { user_name: "Alice" },
 });
 
-const response = await agent.respond("Extract all line items");
+const response = await agent.respond([
+  { role: "user", content: "Extract all line items" },
+]);
 await agent.shutdown();
 ```
 

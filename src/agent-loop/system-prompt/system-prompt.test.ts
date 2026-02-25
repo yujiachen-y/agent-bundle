@@ -13,7 +13,28 @@ describe("generateSystemPromptTemplate", () => {
     expect(template).toBe("You are a helpful assistant.");
   });
 
-  it("appends one skill summary and skill location", () => {
+  it("inlines skill content when content is provided", () => {
+    const skills: SkillSummary[] = [
+      {
+        name: "Extract Line Items",
+        description: "Parse invoice rows from OCR output.",
+        sourcePath: "/skills/extract-line-items/SKILL.md",
+        content: "---\nname: Extract Line Items\n---\n\n# Extract\n\nDo the extraction.",
+      },
+    ];
+
+    const template = generateSystemPromptTemplate({
+      basePrompt: "You are an invoice assistant.",
+      skills,
+    });
+
+    expect(template).toContain("## Skills");
+    expect(template).toContain("### Extract Line Items");
+    expect(template).toContain("Do the extraction.");
+    expect(template).not.toContain("/skills/extract-line-items/SKILL.md");
+  });
+
+  it("falls back to path reference when content is not provided", () => {
     const skills: SkillSummary[] = [
       {
         name: "Extract Line Items",
@@ -41,11 +62,13 @@ describe("generateSystemPromptTemplate", () => {
           name: "Skill One",
           description: "First skill",
           sourcePath: "/skills/skill-one/SKILL.md",
+          content: "# Skill One\n\nFirst.",
         },
         {
           name: "Skill Two",
           description: "Second skill",
           sourcePath: "/skills/skill-two/SKILL.md",
+          content: "# Skill Two\n\nSecond.",
         },
       ],
     });
@@ -53,7 +76,7 @@ describe("generateSystemPromptTemplate", () => {
     expect(template).toMatch(/Skill One[\s\S]*Skill Two/);
   });
 
-  it("throws when a skill has an empty sourcePath", () => {
+  it("throws when a skill has no content and an empty sourcePath", () => {
     expect(() =>
       generateSystemPromptTemplate({
         basePrompt: "Base prompt",

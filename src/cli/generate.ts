@@ -41,6 +41,7 @@ function toSkillSummaries(skills: Awaited<ReturnType<typeof loadAllSkills>>): Sk
     name: skill.name,
     description: skill.description,
     sourcePath: skill.sourcePath,
+    content: skill.content,
   }));
 }
 

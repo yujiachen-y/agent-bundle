@@ -4,6 +4,7 @@ export type SkillSummarySource = {
   name: string;
   description: string;
   sourcePath: string;
+  content?: string;
 };
 
 export function toSkillSummaries(skills: readonly SkillSummarySource[]): SkillSummary[] {
@@ -11,5 +12,6 @@ export function toSkillSummaries(skills: readonly SkillSummarySource[]): SkillSu
     name: skill.name,
     description: skill.description,
     sourcePath: skill.sourcePath,
+    content: skill.content,
   }));
 }

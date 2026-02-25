@@ -2,8 +2,9 @@ import { serve } from "@hono/node-server";
 
 import { CodeFormatterE2b as factory } from "../../../dist/code-formatter-e2b/index.ts";
 import { createServer } from "../../../src/service/create-server.js";
+import { resolveServicePort } from "../../../src/cli/serve/worktree-port.js";
 
-const PORT = Number(process.env.PORT ?? 3001);
+const PORT = await resolveServicePort(1);
 const instance = await factory.init({ variables: {} as Record<never, string> });
 const app = createServer(instance);
 let shuttingDown = false;

@@ -55,5 +55,5 @@ info "Building TypeScript project"
 pnpm build
 ok "Build complete"
 
-info "Starting server on http://localhost:${PORT:-3003}"
+info "Starting server (port auto-detected, see output below)"
 exec pnpm exec tsx demo/financial-plugin/main.ts

@@ -18,36 +18,44 @@ pnpm run quality       # lint + duplicate check + test
 pre-commit run --all-files  # all quality gates
 ```
 
-## Git Worktree Port Allocation
+## Port Allocation (prefix × 1000 + suffix)
 
-This repo is frequently developed in parallel via Git worktrees (Claude Code, Codex, etc.). To avoid port conflicts, a **deterministic port allocation** mechanism exists in `src/cli/serve/worktree-port.ts`.
+All services use a **prefix/suffix** port scheme defined in `src/cli/serve/worktree-port.ts`:
 
-### How It Works
+```
+Port = prefix × 1000 + suffix
 
-- **Main repo**: uses port 3000 (default, unchanged).
-- **Worktrees**: port is computed as `3000 + (fnv1a32(worktree_dir_name) % 99 + 1) * 10`.
-- Each worktree gets a block of 10 ports (e.g. 3140–3149): main service at +0, demos at +1, +2.
-- Detection: if `.git` is a file (not a directory), the process is in a worktree.
+suffix (last 3 digits): stable service identity
+  000 = serve (CLI main service)
+  001 = demo/server/e2b
+  002 = demo/server/k8s
+  003 = demo/financial-plugin
+  … new demos increment
 
-### Port Priority (highest to lowest)
+prefix: worktree isolation
+  3      = main repo (ports 3000–3999, backward-compatible)
+  10–63  = worktrees (hash-based, ports 10000–63999)
+```
 
-1. `--port` CLI flag — explicit override, always wins.
-2. `PORT` environment variable.
-3. Worktree auto-detection via `resolveWorktreePort()`.
-4. `DEFAULT_SERVE_PORT` (3000).
+### Port Priority
 
-### For Agents: What You Must Do
+1. `PORT` environment variable → used directly.
+2. `--port` CLI flag → used directly.
+3. Auto-computed `prefix × 1000 + suffix`; collision rotates prefix (never suffix).
 
-- **Never hardcode port 3000** in new server code. Use `resolveWorktreePort(3000)` or read from `DEFAULT_SERVE_PORT`.
-- When adding a new service that listens on a port, assign it relative to the worktree base port (e.g. `base + 3` for the next available slot).
-- The `scripts/setup-worktree-hooks.sh` script installs a `post-checkout` hook that prints the port block on worktree creation. Run it once after cloning.
+### For Agents: Adding a New Demo
+
+1. Pick the next available suffix (currently **4**).
+2. Call `resolveServicePort(<suffix>)` in your `main.ts`.
+3. Update the suffix table above.
+4. **Never hardcode a port number** in new server code.
 
 ### Key Files
 
 | File | Role |
 |------|------|
-| `src/cli/serve/worktree-port.ts` | Core: worktree detection + FNV-1a hash + port resolution |
-| `src/cli/serve/serve.ts` | `DEFAULT_SERVE_PORT`, used by CLI `serve` command |
+| `src/cli/serve/worktree-port.ts` | Core: `resolveServicePort()`, worktree detection, FNV-1a hash |
+| `src/cli/serve/serve.ts` | `DEFAULT_SERVE_PORT` (3000), used by CLI `serve` command |
 | `src/cli/index.ts` | CLI entry, `--port` flag parsing |
 | `scripts/setup-worktree-hooks.sh` | Optional post-checkout hook installer |
 

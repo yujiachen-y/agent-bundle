@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
+import { createServer } from "node:net";
 import { basename, resolve } from "node:path";
 
 /**
@@ -55,6 +56,8 @@ export type WorktreePortResult = {
  * Port formula: basePort + (fnv1a(worktreeName) % 99 + 1) * 10
  * This yields offsets 10..990 in steps of 10, giving each worktree
  * a block of 10 ports (e.g. 3010-3019, 3140-3149).
+ *
+ * @deprecated Use {@link resolveServicePort} for new code.
  */
 export function resolveWorktreePort(
   basePort: number,
@@ -67,4 +70,68 @@ export function resolveWorktreePort(
 
   const offset = (fnv1a32(name) % 99 + 1) * 10;
   return { port: basePort + offset, worktreeName: name };
+}
+
+// ── Service port allocation (prefix × 1000 + suffix) ────────────
+
+const MIN_WORKTREE_PREFIX = 10;
+const PREFIX_COUNT = 54; // prefixes 10–63
+
+/**
+ * Check whether a TCP port is available on localhost.
+ */
+export async function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+/**
+ * Compute a service port: `prefix × 1000 + suffix`.
+ *
+ * - **suffix** (last three digits): stable service identity
+ *   (0 = serve, 1 = demo/e2b, 2 = demo/k8s, 3 = demo/financial, …).
+ * - **prefix**: `defaultPrefix` (3) for the main repo,
+ *   hash-based 10–63 for worktrees.
+ *
+ * Priority:
+ * 1. `PORT` env var → returned directly.
+ * 2. Auto-computed `prefix × 1000 + suffix`, with collision
+ *    fallback that rotates the prefix (never the suffix).
+ */
+export async function resolveServicePort(
+  suffix: number,
+  options?: { defaultPrefix?: number; cwd?: string },
+): Promise<number> {
+  const envPort = process.env.PORT;
+  if (envPort !== undefined && envPort !== "") {
+    return Number(envPort);
+  }
+
+  const defaultPrefix = options?.defaultPrefix ?? 3;
+  const cwd = options?.cwd ?? process.cwd();
+  const worktreeName = detectWorktreeName(cwd);
+
+  if (!worktreeName) {
+    const preferred = defaultPrefix * 1000 + suffix;
+    if (await isPortAvailable(preferred)) return preferred;
+    for (let i = 0; i < PREFIX_COUNT; i++) {
+      const candidate = (MIN_WORKTREE_PREFIX + i) * 1000 + suffix;
+      if (await isPortAvailable(candidate)) return candidate;
+    }
+    throw new Error(`No available port found for suffix ${suffix}`);
+  }
+
+  const base = MIN_WORKTREE_PREFIX + (fnv1a32(worktreeName) % PREFIX_COUNT);
+  for (let i = 0; i < PREFIX_COUNT; i++) {
+    const p = MIN_WORKTREE_PREFIX + ((base - MIN_WORKTREE_PREFIX + i) % PREFIX_COUNT);
+    const candidate = p * 1000 + suffix;
+    if (await isPortAvailable(candidate)) return candidate;
+  }
+  throw new Error(`No available port found for suffix ${suffix}`);
 }

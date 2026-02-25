@@ -15,6 +15,7 @@ import {
   type KeyValueArgInput,
 } from "./runtime.js";
 import { startHttpServer, type StartedHttpServer, type StartHttpServerInput } from "./http.js";
+import { resolveServicePort } from "./worktree-port.js";
 
 export const DEFAULT_SERVE_PORT = 3000;
 
@@ -186,7 +187,7 @@ export async function runServeCommand(
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
   const stdin = options.stdin ?? process.stdin;
-  const port = options.port ?? DEFAULT_SERVE_PORT;
+  const port = options.port ?? await resolveServicePort(0);
   validatePort(port);
 
   const context = await initializeServeContext(options, dependencies);

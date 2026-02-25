@@ -55,6 +55,6 @@ info "Building TypeScript project"
 pnpm build
 ok "Build complete"
 
-info "Starting agent-bundle serve on http://localhost:${PORT:-3002}"
+info "Starting agent-bundle serve (port auto-detected, see output below)"
 exec pnpm exec tsx src/cli/index.ts serve \
-  --config demo/web/e2b/agent-bundle.yaml --port "${PORT:-3002}"
+  --config demo/web/e2b/agent-bundle.yaml ${PORT:+--port "$PORT"}

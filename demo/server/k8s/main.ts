@@ -2,11 +2,12 @@ import { serve } from "@hono/node-server";
 
 import { CodeFormatter as factory } from "@agent-bundle/code-formatter";
 import { createServer } from "agent-bundle/service";
+import { resolveServicePort } from "../../../src/cli/serve/worktree-port.js";
 
 const instance = await factory.init({ variables: {} as Record<never, string> });
 
 const app = createServer(instance);
-const PORT = Number(process.env.PORT ?? 3000);
+const PORT = await resolveServicePort(2);
 let isShuttingDown = false;
 
 async function shutdownAndExit(exitCode: number, context: string, error?: unknown): Promise<never> {

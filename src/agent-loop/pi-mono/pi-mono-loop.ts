@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { Agent } from "@mariozechner/pi-agent-core";
 import type { Api, Model } from "@mariozechner/pi-ai";
+import { streamSimple } from "@mariozechner/pi-ai";
 
 import type { AgentLoop, AgentLoopConfig, RunOptions, ToolHandler } from "../agent-loop.js";
 import type { ResponseEvent, ResponseInput, ResponseOutput } from "../types.js";
@@ -27,6 +28,30 @@ function resolveOllamaApiKey(provider: string): string | undefined {
   return "ollama";
 }
 
+// Workaround: pi-ai hardcodes store: false in OpenAI Responses API requests,
+// which breaks multi-turn reasoning models (gpt-5.x) because reasoning item IDs
+// (rs_xxx) are not persisted and cannot be referenced in subsequent turns.
+// See: https://github.com/openai/openai-agents-python/issues/919
+// See: https://github.com/badlogic/pi-mono/pull/1504
+const OPENAI_RESPONSES_APIS = new Set([
+  "openai-responses",
+  "openai-codex-responses",
+  "azure-openai-responses",
+]);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const storeEnabledStreamFn = (model: any, context: any, options: any): any => {
+  return streamSimple(model, context, {
+    ...options,
+    onPayload: (params: Record<string, unknown>) => {
+      if (OPENAI_RESPONSES_APIS.has(model.api as string)) {
+        params.store = true;
+      }
+      options?.onPayload?.(params);
+    },
+  });
+};
+
 export class PiMonoAgentLoop implements AgentLoop {
   private agent: Agent | null = null;
   private toolHandler: ToolHandler | null = null;
@@ -41,6 +66,7 @@ export class PiMonoAgentLoop implements AgentLoop {
         model: this.model,
       },
       getApiKey: resolveOllamaApiKey,
+      streamFn: storeEnabledStreamFn,
     });
 
     this.agent.setSystemPrompt(config.systemPrompt);

@@ -33,7 +33,7 @@
     "quality": "pnpm run lint && pnpm run duplicate && pnpm run test",
     "ci": "pnpm run quality",
     "ci:full": "pnpm run quality && pnpm run test:e2e",
-    "demo:k8s-server": "pnpm build && tsx demo/server/k8s/main.ts",
+    "demo:k8s-server": "./demo/server/k8s/setup.sh",
     "demo:e2b-server": "pnpm build && tsx demo/server/e2b/main.ts"
   },
   "devDependencies": {

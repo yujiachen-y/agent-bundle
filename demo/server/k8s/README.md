@@ -27,60 +27,28 @@ main.ts  ← your application code (imports factory, starts HTTP server)
 
 Run all commands from the **repository root**.
 
-## Quick setup
+## Quick start
 
-A setup script handles cluster creation, image build, and kubeconfig in one
-command:
+One command handles everything — cluster creation, image build, code
+generation, and server startup:
 
 ```bash
-./demo/server/k8s/setup.sh
+ANTHROPIC_API_KEY=sk-... pnpm demo:k8s-server
 ```
 
-Then skip to [Run the server](#run-the-server).
-
-## Manual setup
-
-### 1. Create a k3d cluster
+Or equivalently:
 
 ```bash
-k3d cluster create agent-sandbox
+ANTHROPIC_API_KEY=sk-... ./demo/server/k8s/setup.sh
 ```
 
-### 2. Build and import the demo sandbox image
+The script is idempotent: on repeat runs, already-completed steps (cluster
+exists, images built) are skipped automatically.
 
-```bash
-# Build base execd image, then build demo bundle + sandbox image
-pnpm build:demo:k8s-server
+You should see:
 
-# Import into k3d
-k3d image import agent-bundle/k8s-server-execd:latest -c agent-sandbox
 ```
-
-### 3. Fix kubeconfig (macOS / Docker Desktop)
-
-On macOS, k3d writes `host.docker.internal` as the API server address, which
-is usually unreachable from the host. Generate a fixed kubeconfig:
-
-```bash
-k3d kubeconfig get agent-sandbox \
-  | sed 's#https://host.docker.internal:#https://127.0.0.1:#' \
-  > /tmp/agent-sandbox.kubeconfig
-
-export KUBECONFIG=/tmp/agent-sandbox.kubeconfig
-```
-
-> **Note**: The agent-bundle runtime auto-normalizes `host.docker.internal`
-> for k3d clusters, so the server itself works without this step. The fixed
-> kubeconfig is only needed for `kubectl` commands to work on the host.
-
-If you are on Linux or your default kubeconfig already works, you can skip
-this step.
-
-### 4. Verify the cluster is ready
-
-```bash
-kubectl get nodes
-# Should show one node with STATUS=Ready
+Listening on http://localhost:3000
 ```
 
 ### LLM provider
@@ -102,18 +70,6 @@ To switch providers, edit `agent-bundle.yaml`:
 model:
   provider: ollama          # or openai, gemini, openrouter
   model: qwen2.5-coder      # model name for the chosen provider
-```
-
-## Run the server
-
-```bash
-ANTHROPIC_API_KEY=sk-... pnpm demo:k8s-server
-```
-
-You should see:
-
-```
-Listening on http://localhost:3000
 ```
 
 ## Test with curl
@@ -208,7 +164,7 @@ and uses `agent-bundle/execd:latest` as its base image.
 demo/server/k8s/
 ├── agent-bundle.yaml           # Bundle config: model, sandbox, skills, docker build inputs
 ├── Dockerfile                  # Demo-only sandbox image (execd + autopep8)
-├── setup.sh                    # One-command environment setup
+├── setup.sh                    # One-command setup + start (entry point)
 ├── skills/
 │   └── format-code/
 │       └── SKILL.md            # Skill: Write → Bash → Read in sandbox

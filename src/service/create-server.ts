@@ -5,6 +5,8 @@ import { z } from "zod";
 
 import type { ResponseInput } from "../agent-loop/types.js";
 import type { Agent } from "../agent/types.js";
+import type { Command } from "../commands/types.js";
+import { createCommandRoutes, type CommandRegistry } from "./command-routes.js";
 
 type ErrorResponse = {
   error: {
@@ -92,8 +94,18 @@ function createEventStreamResponse(c: Context, agent: Agent, input: ResponseInpu
   });
 }
 
-export function createServer(agent: Agent): Hono {
+export type CreateServerOptions = {
+  commands?: readonly Command[];
+};
+
+export function createServer(agent: Agent, options?: CreateServerOptions): Hono {
   const app = new Hono();
+
+  if (options?.commands && options.commands.length > 0) {
+    const registry: CommandRegistry = { commands: options.commands };
+    const commandRoutes = createCommandRoutes(agent, registry);
+    app.route("/", commandRoutes);
+  }
 
   app.get("/health", (c): Response => {
     return c.json({ status: "ok" });

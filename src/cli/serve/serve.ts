@@ -1,5 +1,6 @@
 import { defineAgent } from "../../agent/define-agent.js";
 import type { Agent, AgentConfig, AgentFactory, InitOptions } from "../../agent/types.js";
+import type { Command } from "../../commands/types.js";
 import type { BundleConfig } from "../../schema/bundle.js";
 import type { Sandbox, SandboxIO } from "../../sandbox/types.js";
 import { serveTUI } from "../../tui/tui.js";
@@ -45,6 +46,7 @@ type InitializedServeContext = {
   config: BundleConfig;
   agent: Agent;
   webUISandbox: Sandbox;
+  commands: Command[];
 };
 
 export type RunServeOptions = {
@@ -125,7 +127,7 @@ async function initializeServeContext(
   const variableOverrides = parseKeyValueEntries(options.variableEntries, "--var");
   const mcpTokenOverrides = parseKeyValueEntries(options.mcpTokenEntries, "--mcp-token");
 
-  const { configPath, config, systemPrompt } = await resolveServeInputs(
+  const { configPath, config, systemPrompt, commands } = await resolveServeInputs(
     options.configPath,
     dependencies.loadConfig,
     dependencies.loadSkills,
@@ -167,6 +169,7 @@ async function initializeServeContext(
     config,
     agent,
     webUISandbox: toWebUISandboxAdapter(capturedSandboxIO),
+    commands,
   };
 }
 
@@ -212,7 +215,11 @@ export async function runServeCommand(
   signalProcess.on("SIGTERM", onSignal);
 
   try {
-    webUI = createWebUIServerImpl({ agent: context.agent, sandbox: context.webUISandbox });
+    webUI = createWebUIServerImpl({
+      agent: context.agent,
+      sandbox: context.webUISandbox,
+      commands: context.commands,
+    });
     httpServer = await startHttpServerImpl({
       appFetch: webUI.app.fetch.bind(webUI.app),
       handleUpgrade: webUI.handleUpgrade,
@@ -220,7 +227,11 @@ export async function runServeCommand(
       stderr,
     });
     stdout.write(`Serve ready at http://localhost:${httpServer.port}\n`);
-    await serveTUIImpl(context.agent, { input: stdin, output: stdout });
+    await serveTUIImpl(context.agent, {
+      input: stdin,
+      output: stdout,
+      commands: context.commands,
+    });
   } finally {
     signalProcess.off("SIGINT", onSignal);
     signalProcess.off("SIGTERM", onSignal);

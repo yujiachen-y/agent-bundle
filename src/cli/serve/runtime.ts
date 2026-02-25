@@ -2,6 +2,10 @@ import { dirname, resolve } from "node:path";
 
 import { generateSystemPromptTemplate } from "../../agent-loop/system-prompt/generate.js";
 import type { McpServerConfig } from "../../agent/types.js";
+import { loadAllCommands } from "../../commands/loader.js";
+import type { Command } from "../../commands/types.js";
+import { loadAllPlugins, type LoadPluginOptions } from "../../plugins/loader.js";
+import { mergePluginComponents } from "../../plugins/merge.js";
 import type { BundleConfig } from "../../schema/bundle.js";
 import { loadAllSkills } from "../../skills/loader.js";
 import { toSkillSummaries } from "../../skills/summaries.js";
@@ -17,6 +21,7 @@ export type ResolvedServeInputs = {
   configPath: string;
   config: BundleConfig;
   systemPrompt: string;
+  commands: Command[];
 };
 
 function toEnvSuffix(name: string): string {
@@ -164,20 +169,37 @@ export async function resolveServeInputs(
   loadConfigImpl: typeof loadBundleConfig = loadBundleConfig,
   loadSkillsImpl: typeof loadAllSkills = loadAllSkills,
   generateSystemPromptImpl: typeof generateSystemPromptTemplate = generateSystemPromptTemplate,
+  loadPluginsImpl: typeof loadAllPlugins = loadAllPlugins,
+  pluginOptions?: LoadPluginOptions,
+  loadCommandsImpl: typeof loadAllCommands = loadAllCommands,
 ): Promise<ResolvedServeInputs> {
   const absoluteConfigPath = resolve(configPath);
   const config = await loadConfigImpl(absoluteConfigPath);
   const bundleDir = dirname(absoluteConfigPath);
-  const skills = await loadSkillsImpl(config.skills, bundleDir);
+  const baseSkills = await loadSkillsImpl(config.skills, bundleDir);
+  const baseCommands = config.commands
+    ? await loadCommandsImpl(config.commands, bundleDir)
+    : [];
+
+  const pluginResults = config.plugins
+    ? await loadPluginsImpl(config.plugins, pluginOptions)
+    : [];
+  const existingMcpServers = config.mcp?.servers ?? [];
+  const merged = mergePluginComponents(baseSkills, baseCommands, existingMcpServers, pluginResults);
 
   const systemPrompt = generateSystemPromptImpl({
     basePrompt: config.prompt.system,
-    skills: toSkillSummaries(skills),
+    skills: toSkillSummaries(merged.skills),
   });
+
+  const mergedConfig = merged.mcpServers.length > 0
+    ? { ...config, mcp: { servers: merged.mcpServers } }
+    : config;
 
   return {
     configPath: absoluteConfigPath,
-    config,
+    config: mergedConfig,
     systemPrompt,
+    commands: merged.commands,
   };
 }

@@ -294,6 +294,42 @@ html, body {
   max-height: 0 !important;
 }
 
+/* ─── Command Panel ─── */
+#command-panel {
+  border-top: 1px solid var(--border);
+}
+
+.command-list {
+  padding: 4px 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cmd-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.cmd-item:hover {
+  background: rgba(122, 162, 247, 0.08);
+}
+
+.cmd-name {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.cmd-desc {
+  color: var(--text-subtle);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* ─── Main Panel ─── */
 #main-panel {
   flex: 1;

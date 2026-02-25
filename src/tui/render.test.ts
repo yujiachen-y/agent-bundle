@@ -3,6 +3,7 @@ import { expect, it } from "vitest";
 import type { ResponseEvent } from "../agent-loop/types.js";
 
 import {
+  renderCommandNotFound,
   renderError,
   renderEvent,
   renderExitHint,
@@ -104,4 +105,10 @@ it("renderError contains error message", () => {
   const result = renderError("something went wrong");
   expect(result).toContain("Error:");
   expect(result).toContain("something went wrong");
+});
+
+it("renderCommandNotFound returns formatted error with command name", () => {
+  const result = renderCommandNotFound("foobar");
+  expect(result).toContain("Unknown command");
+  expect(result).toContain("/foobar");
 });

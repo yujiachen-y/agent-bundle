@@ -96,6 +96,10 @@
     }
   }
 
+  // ─── Command panel refs ───
+  var commandPanel = document.getElementById("command-panel");
+  var commandList = document.getElementById("command-list");
+
   // ─── State ───
   var isStreaming = false;
   var FILE_POLL_MS = 3000;
@@ -104,6 +108,7 @@
   var previousFilePaths = {};
   var collapsedDirs = {};
   var activeFilePath = null;
+  var availableCommands = [];
 
   // ─── Status badge ───
   function setStatus(status) {
@@ -499,6 +504,11 @@
     ws.onmessage = function (msg) {
       try {
         var event = JSON.parse(msg.data);
+        if (event.type === "commands") {
+          availableCommands = event.commands || [];
+          renderCommandPanel(availableCommands);
+          return;
+        }
         handleAgentEvent(event);
       } catch (_) {
         // ignore malformed messages
@@ -522,6 +532,63 @@
     };
   }
 
+  // ─── Command panel ───
+  function renderCommandPanel(commands) {
+    if (!commandPanel || !commandList) return;
+    if (!commands || commands.length === 0) {
+      commandPanel.style.display = "none";
+      return;
+    }
+    commandPanel.style.display = "";
+    commandList.innerHTML = "";
+    commands.forEach(function (cmd) {
+      var item = document.createElement("div");
+      item.className = "cmd-item";
+      item.title = cmd.description || cmd.name;
+
+      var name = document.createElement("span");
+      name.className = "cmd-name";
+      name.textContent = "/" + cmd.name;
+      item.appendChild(name);
+
+      if (cmd.description) {
+        var desc = document.createElement("span");
+        desc.className = "cmd-desc";
+        desc.textContent = cmd.description;
+        item.appendChild(desc);
+      }
+
+      item.addEventListener("click", function () {
+        triggerCommand(cmd);
+      });
+      commandList.appendChild(item);
+    });
+  }
+
+  function triggerCommand(cmd) {
+    if (isStreaming) return;
+    if (cmd.argumentHint) {
+      var args = prompt("Arguments for /" + cmd.name + " (" + cmd.argumentHint + "):");
+      if (args === null) return;
+      sendCommand(cmd.name, args);
+    } else {
+      sendCommand(cmd.name, "");
+    }
+  }
+
+  function sendCommand(name, args) {
+    if (isStreaming) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      term.writeln("\x1b[31mNot connected to agent.\x1b[0m");
+      return;
+    }
+    isStreaming = true;
+    setStatus("running");
+    setInputEnabled(false);
+    term.writeln("\x1b[36m> /" + name + (args ? " " + args : "") + "\x1b[0m\n");
+    ws.send(JSON.stringify({ type: "command", name: name, args: args }));
+  }
+
   // ─── Agent event handling ───
   function handleAgentEvent(event) {
     switch (event.type) {
@@ -534,11 +601,8 @@
       case "response.output_text.delta":
         term.write(event.delta);
         break;
-
       case "response.output_text.done":
-        // final text already streamed via deltas
         break;
-
       case "response.tool_call.created":
         showActivity("Running " + event.toolCall.name + "...");
         term.writeln("\n\x1b[90m\u250C\u2500 " + event.toolCall.name + " \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\x1b[0m");
@@ -578,6 +642,11 @@
         setInputEnabled(true);
         isStreaming = false;
         hideActivity(0);
+        break;
+
+      case "command_error":
+        term.writeln("\x1b[31mCommand error: " + (event.error || "Unknown error") + "\x1b[0m\n");
+        setStatus("idle"); setInputEnabled(true); isStreaming = false;
         break;
 
       case "files_changed":

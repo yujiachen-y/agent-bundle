@@ -42,3 +42,7 @@ export function renderExitHint(): string {
 export function renderError(message: string): string {
   return chalk.red(`\nError: ${message}\n`);
 }
+
+export function renderCommandNotFound(name: string): string {
+  return chalk.red(`\nUnknown command: /${name}\n`);
+}

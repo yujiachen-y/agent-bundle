@@ -161,4 +161,5 @@ it("resolveServeInputs resolves absolute config path and passes bundle dirname",
   expect(resolved.configPath).toBe("/tmp/workspace/agent-bundle.yaml");
   expect(resolved.config).toBe(config);
   expect(resolved.systemPrompt).toBe("generated-prompt");
+  expect(resolved.commands).toEqual([]);
 });

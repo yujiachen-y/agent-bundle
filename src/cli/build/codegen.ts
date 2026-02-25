@@ -1,7 +1,15 @@
 import ts from "typescript";
 
 import type { SkillSummary } from "../../agent-loop/system-prompt/generate.js";
+import type { Command } from "../../commands/types.js";
 import type { BundleConfig } from "../../schema/bundle.js";
+
+export type CommandSummary = {
+  name: string;
+  description: string;
+  argumentHint?: string;
+  sourcePath: string;
+};
 
 type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
@@ -19,6 +27,7 @@ export type ResolvedBundleConfig = {
   prompt: BundleConfig["prompt"];
   systemPrompt: string;
   skills: SkillSummary[];
+  commands: CommandSummary[];
   mcp?: BundleConfig["mcp"];
   sandboxImage: SandboxImageRef;
 };
@@ -187,10 +196,20 @@ export function applySandboxImageRef(
   };
 }
 
+export function toCommandSummaries(commands: readonly Command[]): CommandSummary[] {
+  return commands.map((cmd) => ({
+    name: cmd.name,
+    description: cmd.description,
+    argumentHint: cmd.argumentHint,
+    sourcePath: cmd.sourcePath,
+  }));
+}
+
 export function createResolvedBundleConfig(input: {
   config: BundleConfig;
   systemPrompt: string;
   skills: SkillSummary[];
+  commands?: CommandSummary[];
   sandboxImage: SandboxImageRef;
 }): ResolvedBundleConfig {
   return {
@@ -201,6 +220,7 @@ export function createResolvedBundleConfig(input: {
     prompt: input.config.prompt,
     systemPrompt: input.systemPrompt,
     skills: input.skills,
+    commands: input.commands ?? [],
     mcp: input.config.mcp,
     sandboxImage: input.sandboxImage,
   };

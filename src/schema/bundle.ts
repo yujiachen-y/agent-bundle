@@ -104,6 +104,31 @@ const urlSkillSchema = z
 
 const skillEntrySchema = z.union([localSkillSchema, githubSkillSchema, urlSkillSchema]);
 
+const localCommandSchema = z
+  .object({
+    path: z.string().min(1),
+  })
+  .strict();
+
+const githubCommandSchema = z
+  .object({
+    github: z
+      .string()
+      .regex(GITHUB_REPO_PATTERN, "GitHub command source must be in owner/repo format."),
+    command: z.string().min(1).optional(),
+    ref: z.string().min(1).default("main"),
+  })
+  .strict();
+
+const urlCommandSchema = z
+  .object({
+    url: z.string().url(),
+    version: z.string().min(1).optional(),
+  })
+  .strict();
+
+const commandEntrySchema = z.union([localCommandSchema, githubCommandSchema, urlCommandSchema]);
+
 const mcpServerSchema = z
   .object({
     name: z.string().min(1),
@@ -115,6 +140,18 @@ const mcpServerSchema = z
 const mcpSchema = z
   .object({
     servers: z.array(mcpServerSchema).min(1),
+  })
+  .strict();
+
+const pluginEntrySchema = z
+  .object({
+    marketplace: z
+      .string()
+      .regex(GITHUB_REPO_PATTERN, "Plugin marketplace source must be in owner/repo format."),
+    name: z.string().min(1),
+    ref: z.string().min(1).default("main"),
+    skills: z.array(z.string().min(1)).optional(),
+    commands: z.array(z.string().min(1)).optional(),
   })
   .strict();
 
@@ -138,12 +175,16 @@ export const bundleSchema = z
       .strict(),
     sandbox: sandboxSchema,
     skills: z.array(skillEntrySchema).min(1),
+    commands: z.array(commandEntrySchema).optional(),
     mcp: mcpSchema.optional(),
+    plugins: z.array(pluginEntrySchema).min(1).optional(),
   })
   .strict();
 
 export type BundleConfig = z.infer<typeof bundleSchema>;
 export type SkillEntry = BundleConfig["skills"][number];
+export type CommandEntry = z.infer<typeof commandEntrySchema>;
+export type PluginEntry = z.infer<typeof pluginEntrySchema>;
 
 export function parseBundleConfig(raw: unknown): BundleConfig {
   return bundleSchema.parse(raw);

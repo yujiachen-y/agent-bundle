@@ -36,7 +36,9 @@
     "demo:k8s-server": "./demo/server/k8s/setup.sh",
     "demo:e2b-server": "./demo/server/e2b/setup.sh",
     "build:demo:web-e2b": "pnpm exec tsx src/cli/index.ts build --config demo/web/e2b/agent-bundle.yaml",
-    "demo:web-e2b": "./demo/web/e2b/setup.sh"
+    "demo:web-e2b": "./demo/web/e2b/setup.sh",
+    "build:demo:financial-plugin": "pnpm exec tsx src/cli/index.ts build --config demo/financial-plugin/agent-bundle.yaml",
+    "demo:financial-plugin": "./demo/financial-plugin/setup.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

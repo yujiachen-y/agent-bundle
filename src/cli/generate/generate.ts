@@ -3,11 +3,15 @@ import { dirname, join, resolve } from "node:path";
 import type { Writable } from "node:stream";
 
 import { generateSystemPromptTemplate, type SkillSummary } from "../../agent-loop/system-prompt/generate.js";
+import { loadAllCommands } from "../../commands/loader.js";
+import { loadAllPlugins, type LoadPluginOptions } from "../../plugins/loader.js";
+import { mergePluginComponents } from "../../plugins/merge.js";
 import type { BundleConfig } from "../../schema/bundle.js";
 import { loadAllSkills } from "../../skills/loader.js";
 import {
   createResolvedBundleConfig,
   generateSources,
+  toCommandSummaries,
   type GeneratedSources,
   type ResolvedBundleConfig,
   type SandboxImageRef,
@@ -30,10 +34,13 @@ export type RunGenerateResult = {
 export type GenerateDependencies = {
   loadConfig?: typeof loadBundleConfig;
   loadSkills?: typeof loadAllSkills;
+  loadCommands?: typeof loadAllCommands;
+  loadPlugins?: typeof loadAllPlugins;
   generateSystemPrompt?: typeof generateSystemPromptTemplate;
   writeFileImpl?: typeof writeFile;
   mkdirImpl?: typeof mkdir;
   resolveRoot?: typeof resolveProjectRoot;
+  pluginOptions?: LoadPluginOptions;
 };
 
 function toSkillSummaries(skills: Awaited<ReturnType<typeof loadAllSkills>>): SkillSummary[] {
@@ -113,6 +120,8 @@ export async function runGenerateCommand(
 ): Promise<RunGenerateResult> {
   const loadConfigImpl = dependencies.loadConfig ?? loadBundleConfig;
   const loadSkillsImpl = dependencies.loadSkills ?? loadAllSkills;
+  const loadCommandsImpl = dependencies.loadCommands ?? loadAllCommands;
+  const loadPluginsImpl = dependencies.loadPlugins ?? loadAllPlugins;
   const promptGenerator = dependencies.generateSystemPrompt ?? generateSystemPromptTemplate;
   const writeFileImpl = dependencies.writeFileImpl ?? writeFile;
   const mkdirImpl = dependencies.mkdirImpl ?? mkdir;
@@ -125,16 +134,29 @@ export async function runGenerateCommand(
 
   stdout.write(`Generating bundle "${config.name}" from ${configPath}\n`);
 
-  const skills = await loadSkillsImpl(config.skills, bundleDir);
-  const skillSummaries = toSkillSummaries(skills);
+  const baseSkills = await loadSkillsImpl(config.skills, bundleDir);
+  const baseCommands = config.commands
+    ? await loadCommandsImpl(config.commands, bundleDir)
+    : [];
+  const pluginResults = config.plugins
+    ? await loadPluginsImpl(config.plugins, dependencies.pluginOptions)
+    : [];
+  const existingMcpServers = config.mcp?.servers ?? [];
+  const merged = mergePluginComponents(baseSkills, baseCommands, existingMcpServers, pluginResults);
+  const skillSummaries = toSkillSummaries(merged.skills);
+  const commandSummaries = toCommandSummaries(merged.commands);
   const sandboxImage = resolveSandboxImageRefFromConfig(config);
   const systemPrompt = promptGenerator({
     basePrompt: config.prompt.system,
     skills: skillSummaries,
   });
+  const configWithMergedMcp = merged.mcpServers.length > 0
+    ? { ...config, mcp: { servers: merged.mcpServers } }
+    : config;
   const resolvedConfig = createResolvedBundleConfig({
-    config,
+    config: configWithMergedMcp,
     skills: skillSummaries,
+    commands: commandSummaries,
     systemPrompt,
     sandboxImage,
   });

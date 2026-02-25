@@ -9,13 +9,16 @@ import { WebSocketServer, type WebSocket } from "ws";
 
 import type { ResponseEvent, ResponseInput } from "../agent-loop/types.js";
 import type { Agent } from "../agent/types.js";
+import type { Command } from "../commands/types.js";
 import type { Sandbox, FileEntry } from "../sandbox/types.js";
 import { createServer } from "../service/create-server.js";
+import { substituteArguments } from "../service/command-routes.js";
 import { WebUIEventBus, type WebUIEvent } from "./event-bus.js";
 
 export type WebUIServerOptions = {
   agent: Agent;
   sandbox: Sandbox;
+  commands?: readonly Command[];
 };
 
 type FileTreeNode = {
@@ -97,12 +100,12 @@ export function createWebUIServer(options: WebUIServerOptions): {
   handleUpgrade: (request: IncomingMessage, socket: unknown, head: Buffer) => void;
   shutdown: () => void;
 } {
-  const { agent, sandbox } = options;
+  const { agent, sandbox, commands } = options;
   const eventBus = new WebUIEventBus();
   const clients = new Set<WsClient>();
 
-  // Start with the existing API server (health + /v1/responses)
-  const app = createServer(agent);
+  // Start with the existing API server (health + /v1/responses + optional /commands)
+  const app = createServer(agent, commands ? { commands } : undefined);
 
   // ─── File tree API ───
   app.get("/api/files", async (c): Promise<Response> => {
@@ -156,30 +159,7 @@ export function createWebUIServer(options: WebUIServerOptions): {
 
   // ─── WebSocket server (standalone, not part of Hono routes) ───
   const wss = new WebSocketServer({ noServer: true });
-
-  wss.on("connection", (ws: WebSocket) => {
-    const unsubscribe = eventBus.subscribe((event: WebUIEvent) => {
-      if (ws.readyState === ws.OPEN) {
-        if (event.type === "agent_event") {
-          ws.send(JSON.stringify(event.event));
-        } else {
-          ws.send(JSON.stringify({ type: event.type }));
-        }
-      }
-    });
-
-    const client: WsClient = { ws, unsubscribe };
-    clients.add(client);
-
-    ws.on("message", (raw: Buffer | string) => {
-      handleWsMessage(raw, agent, eventBus);
-    });
-
-    ws.on("close", () => {
-      unsubscribe();
-      clients.delete(client);
-    });
-  });
+  setupWsConnections(wss, clients, eventBus, agent, commands);
 
   function handleUpgrade(request: IncomingMessage, socket: unknown, head: Buffer): void {
     const url = request.url ?? "";
@@ -203,7 +183,54 @@ export function createWebUIServer(options: WebUIServerOptions): {
   return { app, eventBus, handleUpgrade, shutdown };
 }
 
-function handleWsMessage(raw: Buffer | string, agent: Agent, eventBus: WebUIEventBus): void {
+function setupWsConnections(
+  wss: WebSocketServer,
+  clients: Set<WsClient>,
+  eventBus: WebUIEventBus,
+  agent: Agent,
+  commands: readonly Command[] | undefined,
+): void {
+  wss.on("connection", (ws: WebSocket) => {
+    const unsubscribe = eventBus.subscribe((event: WebUIEvent) => {
+      if (ws.readyState === ws.OPEN) {
+        if (event.type === "agent_event") {
+          ws.send(JSON.stringify(event.event));
+        } else {
+          ws.send(JSON.stringify({ type: event.type }));
+        }
+      }
+    });
+
+    const client: WsClient = { ws, unsubscribe };
+    clients.add(client);
+
+    if (commands && commands.length > 0) {
+      const summaries = commands.map((cmd) => ({
+        name: cmd.name,
+        description: cmd.description,
+        ...(cmd.argumentHint ? { argumentHint: cmd.argumentHint } : {}),
+      }));
+      ws.send(JSON.stringify({ type: "commands", commands: summaries }));
+    }
+
+    ws.on("message", (raw: Buffer | string) => {
+      handleWsMessage(raw, ws, agent, eventBus, commands ?? []);
+    });
+
+    ws.on("close", () => {
+      unsubscribe();
+      clients.delete(client);
+    });
+  });
+}
+
+function handleWsMessage(
+  raw: Buffer | string,
+  ws: WebSocket,
+  agent: Agent,
+  eventBus: WebUIEventBus,
+  commands: readonly Command[],
+): void {
   let parsed: unknown;
   try {
     parsed = JSON.parse(typeof raw === "string" ? raw : raw.toString("utf-8"));
@@ -211,7 +238,25 @@ function handleWsMessage(raw: Buffer | string, agent: Agent, eventBus: WebUIEven
     return;
   }
 
-  if (!isRecord(parsed) || parsed.type !== "chat") return;
+  if (!isRecord(parsed)) return;
+
+  if (parsed.type === "command") {
+    const name = typeof parsed.name === "string" ? parsed.name : "";
+    const args = typeof parsed.args === "string" ? parsed.args : "";
+    const command = commands.find(
+      (cmd) => cmd.name === name || cmd.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (!command) {
+      ws.send(JSON.stringify({ type: "command_error", name, error: "Command not found" }));
+      return;
+    }
+    const content = substituteArguments(command.content, args);
+    const input: ResponseInput = [{ role: "user", content }];
+    void streamAgentResponse(agent, input, eventBus);
+    return;
+  }
+
+  if (parsed.type !== "chat") return;
 
   const input = parsed.input;
   if (!Array.isArray(input) || input.length === 0) return;

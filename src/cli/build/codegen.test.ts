@@ -175,3 +175,49 @@ describe("build code generation outputs", () => {
     expect(sources.indexSource).toContain('"node-selector": "pool-a"');
   });
 });
+
+describe("build code generation commands in bundle.json", () => {
+  it("includes commands in bundle.json when provided", () => {
+    const config = createBaseConfig();
+    const resolved = createResolvedBundleConfig({
+      config,
+      systemPrompt: "You are helpful.",
+      skills: [],
+      commands: [
+        {
+          name: "Quick Analysis",
+          description: "Run a quick financial analysis.",
+          argumentHint: "<ticker>",
+          sourcePath: "./commands/quick-analysis",
+        },
+        {
+          name: "Reconciliation",
+          description: "",
+          sourcePath: "./commands/reconciliation",
+        },
+      ],
+      sandboxImage: {
+        provider: "kubernetes",
+        ref: "registry.local/invoice:abc123",
+      },
+    });
+
+    const sources = generateSources(resolved);
+    const parsedBundle = JSON.parse(sources.bundleJsonSource) as {
+      commands: Array<{ name: string; description: string; argumentHint?: string; sourcePath: string }>;
+    };
+
+    expect(parsedBundle.commands).toHaveLength(2);
+    expect(parsedBundle.commands[0]).toEqual({
+      name: "Quick Analysis",
+      description: "Run a quick financial analysis.",
+      argumentHint: "<ticker>",
+      sourcePath: "./commands/quick-analysis",
+    });
+    expect(parsedBundle.commands[1]).toEqual({
+      name: "Reconciliation",
+      description: "",
+      sourcePath: "./commands/reconciliation",
+    });
+  });
+});

@@ -1,0 +1,33 @@
+name: financial-analyst
+model:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+prompt:
+  system: |
+    You are a financial analysis agent. Use the tools and skills available to you
+    to help users with financial analysis tasks including variance analysis,
+    financial statement generation, and data reconciliation.
+  variables: []
+sandbox:
+  provider: e2b
+  timeout: 300
+  resources:
+    cpu: 2
+    memory: 512MB
+  e2b:
+    template: financial-analyst-demo
+    build:
+      dockerfile: ./Dockerfile
+skills:
+  - path: ./skills/report-formatter
+commands:
+  - path: ./commands/quick-analysis
+plugins:
+  - marketplace: anthropics/knowledge-work-plugins
+    name: finance
+    skills:
+      - variance-analysis
+      - month-end-close
+    commands:
+      - journal-entry
+      - reconciliation

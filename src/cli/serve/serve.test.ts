@@ -46,9 +46,12 @@ it("wires config, system prompt, agent init, http/webui, and tui flow", async ()
   expect(harness.startHttpServerMock).toHaveBeenCalledWith(
     expect.objectContaining({ port: 4400 }),
   );
+  expect(harness.createWebUIServerMock).toHaveBeenCalledWith(
+    expect.objectContaining({ commands: [] }),
+  );
   expect(harness.serveTUIMock).toHaveBeenCalledWith(
     harness.agent,
-    expect.objectContaining({ input: stdin, output: stdout }),
+    expect.objectContaining({ input: stdin, output: stdout, commands: [] }),
   );
   expect(harness.closeServerMock).toHaveBeenCalledTimes(1);
   expect(harness.webUIShutdownMock).toHaveBeenCalledTimes(1);

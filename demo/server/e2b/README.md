@@ -15,37 +15,49 @@ This demo skill formats Python with `black` (available in the default E2B base i
 
 Run all commands from repository root.
 
-## Quick setup
+## Quick start
 
-Recommended with Infisical:
-
-```bash
-infisical run --env=dev -- ./demo/server/e2b/setup.sh
-```
-
-Manual setup:
+One command handles everything — E2B API validation, bundle build, and
+server startup:
 
 ```bash
-e2b template list -f json >/dev/null
-pnpm build:demo:e2b-server
+infisical run --env=dev -- pnpm demo:e2b-server
 ```
 
-## Run server
+Or with explicit environment variables:
 
 ```bash
-infisical run --env=dev -- sh -lc 'PORT=3001 pnpm demo:e2b-server'
+E2B_API_KEY=... ANTHROPIC_API_KEY=sk-... pnpm demo:e2b-server
 ```
 
-If your secret store only has `CLAUDE_CODE_OAUTH_TOKEN`, map it explicitly in the launch command:
-
-```bash
-infisical run --env=dev -- sh -lc 'export ANTHROPIC_OAUTH_TOKEN="${ANTHROPIC_OAUTH_TOKEN:-${CLAUDE_CODE_OAUTH_TOKEN:-}}"; PORT=3001 pnpm demo:e2b-server'
-```
+The script is idempotent: on repeat runs, already-built templates are
+reused automatically.
 
 Expected log:
 
 ```text
 Listening on http://localhost:3001
+```
+
+### LLM provider
+
+The demo ships with `provider: anthropic` / `model: claude-sonnet-4-5` in
+`agent-bundle.yaml`. Set the matching API key as an environment variable:
+
+| Provider | Environment variable | Notes |
+|---|---|---|
+| `anthropic` | `ANTHROPIC_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` | |
+| `openai` | `OPENAI_API_KEY` | |
+| `gemini` | `GEMINI_API_KEY` | |
+| `openrouter` | `OPENROUTER_API_KEY` | |
+| `ollama` | *(none required)* | Needs a running Ollama instance |
+
+To switch providers, edit `agent-bundle.yaml`:
+
+```yaml
+model:
+  provider: ollama          # or openai, gemini, openrouter
+  model: qwen2.5-coder      # model name for the chosen provider
 ```
 
 ## Test with curl

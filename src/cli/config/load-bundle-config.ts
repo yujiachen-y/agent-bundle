@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { parse } from "yaml";
 
-import { type BundleConfig, parseBundleConfig } from "../schema/bundle.js";
+import { type BundleConfig, parseBundleConfig } from "../../schema/bundle.js";
 
 function parseYamlOrThrow(fileContents: string, configPath: string): unknown {
   try {

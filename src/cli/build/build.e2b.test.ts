@@ -4,7 +4,7 @@ import { PassThrough } from "node:stream";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { BuildE2BTemplateResult } from "./build-e2b-template.js";
+import type { BuildE2BTemplateResult } from "./e2b-template.js";
 import { runBuildCommand } from "./build.js";
 import {
   cleanupTempWorkspaces,

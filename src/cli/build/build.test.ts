@@ -4,7 +4,7 @@ import { PassThrough } from "node:stream";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { BuildSandboxImageResult } from "./build-sandbox-image.js";
+import type { BuildSandboxImageResult } from "./sandbox-image.js";
 import { runBuildCommand } from "./build.js";
 import {
   cleanupTempWorkspaces,

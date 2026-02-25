@@ -24,6 +24,13 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: directory-size-gate
+        name: limit code files per directory under src
+        entry: bash scripts/check_directory_size.sh 15 src
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: pytest-coverage
         name: pytest coverage gate
         entry: pytest

@@ -1,10 +1,10 @@
-import { defineAgent } from "../agent/define-agent.js";
-import type { Agent, AgentConfig, AgentFactory, InitOptions } from "../agent/types.js";
-import type { BundleConfig } from "../schema/bundle.js";
-import type { Sandbox, SandboxIO } from "../sandbox/types.js";
-import { serveTUI } from "../tui/tui.js";
-import { createWebUIServer } from "../webui/create-webui-server.js";
-import { toErrorMessage } from "./error.js";
+import { defineAgent } from "../../agent/define-agent.js";
+import type { Agent, AgentConfig, AgentFactory, InitOptions } from "../../agent/types.js";
+import type { BundleConfig } from "../../schema/bundle.js";
+import type { Sandbox, SandboxIO } from "../../sandbox/types.js";
+import { serveTUI } from "../../tui/tui.js";
+import { createWebUIServer } from "../../webui/create-webui-server.js";
+import { toErrorMessage } from "../error.js";
 import {
   parseKeyValueEntries,
   resolveInitVariables,
@@ -12,8 +12,8 @@ import {
   resolveServeInputs,
   resolveServeSandboxConfig,
   type KeyValueArgInput,
-} from "./serve-runtime.js";
-import { startHttpServer, type StartedHttpServer, type StartHttpServerInput } from "./serve-http.js";
+} from "./runtime.js";
+import { startHttpServer, type StartedHttpServer, type StartHttpServerInput } from "./http.js";
 
 export const DEFAULT_SERVE_PORT = 3000;
 

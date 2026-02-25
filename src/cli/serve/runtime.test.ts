@@ -1,13 +1,13 @@
 import { expect, it } from "vitest";
 
-import type { BundleConfig } from "../schema/bundle.js";
+import type { BundleConfig } from "../../schema/bundle.js";
 import {
   parseKeyValueEntries,
   resolveInitVariables,
   resolveMcpTokens,
   resolveServeSandboxConfig,
   resolveServeInputs,
-} from "./serve-runtime.js";
+} from "./runtime.js";
 
 function createBaseConfig(): BundleConfig {
   return {

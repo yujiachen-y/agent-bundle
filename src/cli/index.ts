@@ -2,9 +2,9 @@
 
 import { defineCommand, runMain } from "citty";
 
-import { DEFAULT_OUTPUT_DIR, runBuildCommand } from "./build.js";
-import { runGenerateCommand } from "./generate.js";
-import { DEFAULT_SERVE_PORT, runServeCommand } from "./serve.js";
+import { DEFAULT_OUTPUT_DIR, runBuildCommand } from "./build/build.js";
+import { runGenerateCommand } from "./generate/generate.js";
+import { DEFAULT_SERVE_PORT, runServeCommand } from "./serve/serve.js";
 
 const DEFAULT_CONFIG_PATH = "./agent-bundle.yaml";
 

@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildSandboxImage,
   type SpawnLike,
-} from "./build-sandbox-image.js";
+} from "./sandbox-image.js";
 
 class MockSpawnedProcess {
   public readonly stdout = new PassThrough();

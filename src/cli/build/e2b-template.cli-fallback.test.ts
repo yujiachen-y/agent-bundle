@@ -12,8 +12,8 @@ import {
   statPath,
   MockSpawnedProcess,
   withTemporaryEnv,
-} from "./build-e2b-template.test-helpers.js";
-import { buildE2BTemplate, type SpawnLike } from "./build-e2b-template.js";
+} from "./e2b-template.test-helpers.js";
+import { buildE2BTemplate, type SpawnLike } from "./e2b-template.js";
 
 const DEFAULT_DOCKERFILE_CONTENT = [
   "FROM e2bdev/base:latest",

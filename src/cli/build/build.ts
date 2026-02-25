@@ -2,20 +2,20 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { Writable } from "node:stream";
 
-import { generateSystemPromptTemplate } from "../agent-loop/system-prompt/generate.js";
-import type { BundleConfig } from "../schema/bundle.js";
-import { loadAllSkills, type Skill } from "../skills/loader.js";
-import { toSkillSummaries } from "../skills/summaries.js";
+import { generateSystemPromptTemplate } from "../../agent-loop/system-prompt/generate.js";
+import type { BundleConfig } from "../../schema/bundle.js";
+import { loadAllSkills, type Skill } from "../../skills/loader.js";
+import { toSkillSummaries } from "../../skills/summaries.js";
 import {
   createResolvedBundleConfig,
   generateSources,
   type ResolvedBundleConfig,
   type SandboxImageRef,
-} from "./build-codegen.js";
-import { buildE2BTemplate, type BuildE2BTemplateResult } from "./build-e2b-template.js";
-import { buildSandboxImage, type BuildSandboxImageResult } from "./build-sandbox-image.js";
-import { writeGeneratedFiles } from "./generate.js";
-import { loadBundleConfig } from "./load-bundle-config.js";
+} from "./codegen.js";
+import { buildE2BTemplate, type BuildE2BTemplateResult } from "./e2b-template.js";
+import { buildSandboxImage, type BuildSandboxImageResult } from "./sandbox-image.js";
+import { writeGeneratedFiles } from "../generate/generate.js";
+import { loadBundleConfig } from "../config/load-bundle-config.js";
 
 export const DEFAULT_OUTPUT_DIR = "dist";
 

@@ -1,11 +1,11 @@
 import { dirname, resolve } from "node:path";
 
-import { generateSystemPromptTemplate } from "../agent-loop/system-prompt/generate.js";
-import type { McpServerConfig } from "../agent/types.js";
-import type { BundleConfig } from "../schema/bundle.js";
-import { loadAllSkills } from "../skills/loader.js";
-import { toSkillSummaries } from "../skills/summaries.js";
-import { loadBundleConfig } from "./load-bundle-config.js";
+import { generateSystemPromptTemplate } from "../../agent-loop/system-prompt/generate.js";
+import type { McpServerConfig } from "../../agent/types.js";
+import type { BundleConfig } from "../../schema/bundle.js";
+import { loadAllSkills } from "../../skills/loader.js";
+import { toSkillSummaries } from "../../skills/summaries.js";
+import { loadBundleConfig } from "../config/load-bundle-config.js";
 
 const VARIABLE_ENV_PREFIX = "AGENT_BUNDLE_VAR_";
 const MCP_TOKEN_ENV_PREFIX = "AGENT_BUNDLE_MCP_TOKEN_";

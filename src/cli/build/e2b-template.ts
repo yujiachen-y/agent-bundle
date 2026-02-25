@@ -6,7 +6,7 @@ import type { Readable, Writable } from "node:stream";
 
 import { Template, type TemplateClass } from "e2b";
 
-import type { Skill } from "../skills/loader.js";
+import type { Skill } from "../../skills/loader.js";
 
 type SpawnOptions = {
   stdio: ["ignore", "pipe", "pipe"];

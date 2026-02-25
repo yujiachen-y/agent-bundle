@@ -4,7 +4,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
-import { toErrorMessage } from "./error.js";
+import { toErrorMessage } from "../error.js";
 
 type RequestInitWithDuplex = RequestInit & {
   duplex?: "half";

@@ -2,18 +2,18 @@ import { lstat, mkdir, symlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { Writable } from "node:stream";
 
-import { generateSystemPromptTemplate, type SkillSummary } from "../agent-loop/system-prompt/generate.js";
-import type { BundleConfig } from "../schema/bundle.js";
-import { loadAllSkills } from "../skills/loader.js";
+import { generateSystemPromptTemplate, type SkillSummary } from "../../agent-loop/system-prompt/generate.js";
+import type { BundleConfig } from "../../schema/bundle.js";
+import { loadAllSkills } from "../../skills/loader.js";
 import {
   createResolvedBundleConfig,
   generateSources,
   type GeneratedSources,
   type ResolvedBundleConfig,
   type SandboxImageRef,
-} from "./build-codegen.js";
-import { loadBundleConfig } from "./load-bundle-config.js";
-import { resolveProjectRoot } from "./resolve-project-root.js";
+} from "../build/codegen.js";
+import { loadBundleConfig } from "../config/load-bundle-config.js";
+import { resolveProjectRoot } from "../config/resolve-project-root.js";
 
 export type RunGenerateOptions = {
   configPath: string;

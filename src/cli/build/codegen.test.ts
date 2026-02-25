@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { parseBundleConfig } from "../schema/bundle.js";
+import { parseBundleConfig } from "../../schema/bundle.js";
 import {
   applySandboxImageRef,
   createResolvedBundleConfig,
   generatePackageJsonSource,
   generateSources,
   toPascalCase,
-} from "./build-codegen.js";
+} from "./codegen.js";
 
 function createBaseConfig() {
   return parseBundleConfig({

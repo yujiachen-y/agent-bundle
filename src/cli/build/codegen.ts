@@ -1,7 +1,7 @@
 import ts from "typescript";
 
-import type { SkillSummary } from "../agent-loop/system-prompt/generate.js";
-import type { BundleConfig } from "../schema/bundle.js";
+import type { SkillSummary } from "../../agent-loop/system-prompt/generate.js";
+import type { BundleConfig } from "../../schema/bundle.js";
 
 type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };

@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 
-import type { Skill } from "../skills/loader.js";
-import { withTemporaryEnv, type EnvRestore } from "../test-helpers/env.js";
+import type { Skill } from "../../skills/loader.js";
+import { withTemporaryEnv, type EnvRestore } from "../../test-helpers/env.js";
 
 const CREATED_DIRS: string[] = [];
 

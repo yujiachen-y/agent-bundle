@@ -1,8 +1,8 @@
-import type { Agent, AgentConfig, AgentFactory, InitOptions } from "../agent/types.js";
-import type { BundleConfig } from "../schema/bundle.js";
-import type { SandboxIO } from "../sandbox/types.js";
-import type { Skill } from "../skills/loader.js";
-import type { StartedHttpServer, StartHttpServerInput } from "./serve-http.js";
+import type { Agent, AgentConfig, AgentFactory, InitOptions } from "../../agent/types.js";
+import type { BundleConfig } from "../../schema/bundle.js";
+import type { SandboxIO } from "../../sandbox/types.js";
+import type { Skill } from "../../skills/loader.js";
+import type { StartedHttpServer, StartHttpServerInput } from "./http.js";
 
 import { vi } from "vitest";
 

@@ -9,8 +9,8 @@ import {
   createLocalSkill,
   createTempWorkspace,
   MockSpawnedProcess,
-} from "./build-e2b-template.test-helpers.js";
-import { buildE2BTemplate, type SpawnLike } from "./build-e2b-template.js";
+} from "./e2b-template.test-helpers.js";
+import { buildE2BTemplate, type SpawnLike } from "./e2b-template.js";
 
 async function writeTestDockerfile(workspaceDir: string): Promise<string> {
   const dockerfilePath = join(workspaceDir, "e2b.Dockerfile");

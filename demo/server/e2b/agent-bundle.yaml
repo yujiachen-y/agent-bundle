@@ -1,7 +1,7 @@
 name: code-formatter-e2b
 model:
-  provider: anthropic
-  model: claude-sonnet-4-5
+  provider: openai
+  model: gpt-5.1-codex
 prompt:
   system: |
     You are a code formatting agent.

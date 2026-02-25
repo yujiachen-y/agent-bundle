@@ -2,14 +2,14 @@
 
 End-to-end demo: HTTP request -> Agent -> E2B sandbox -> skill execution -> response.
 
-This demo skill formats Python with `black` (available in the default E2B base image).
+This demo skill formats Python with `autopep8` (installed via `tools/setup.sh` during template build).
 
 ## Prerequisites
 
 - Node.js >= 20 and pnpm
 - API secrets:
   - `E2B_API_KEY` (for E2B sandbox + template build)
-  - one model key (`ANTHROPIC_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` by default in this demo)
+  - `OPENAI_API_KEY` (for OpenAI model)
 
 `agent-bundle build` uses the E2B SDK template build API by default. e2b CLI is only used as a fallback when SDK build fails.
 
@@ -21,13 +21,7 @@ One command handles everything — E2B API validation, bundle build, and
 server startup:
 
 ```bash
-infisical run --env=dev -- pnpm demo:e2b-server
-```
-
-Or with explicit environment variables:
-
-```bash
-E2B_API_KEY=... ANTHROPIC_API_KEY=sk-... pnpm demo:e2b-server
+E2B_API_KEY=... OPENAI_API_KEY=sk-... pnpm demo:e2b-server
 ```
 
 The script is idempotent: on repeat runs, already-built templates are
@@ -41,7 +35,7 @@ Listening on http://localhost:3001
 
 ### LLM provider
 
-The demo ships with `provider: anthropic` / `model: claude-sonnet-4-5` in
+The demo ships with `provider: openai` / `model: gpt-5.1-codex` in
 `agent-bundle.yaml`. Set the matching API key as an environment variable:
 
 | Provider | Environment variable | Notes |

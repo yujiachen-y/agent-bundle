@@ -3,8 +3,7 @@
 # E2B server demo — one-command setup + start
 #
 # Usage (from repo root):
-#   E2B_API_KEY=... ANTHROPIC_API_KEY=sk-... ./demo/server/e2b/setup.sh
-#   infisical run --env=dev -- ./demo/server/e2b/setup.sh
+#   E2B_API_KEY=... OPENAI_API_KEY=sk-... ./demo/server/e2b/setup.sh
 #
 # What it does:
 #   1. Validates API keys and prerequisites
@@ -24,16 +23,12 @@ check_cmd() {
 }
 
 # ── 1. API keys + prerequisites ───────────────────────────────────
-# Fall back to CLAUDE_CODE_OAUTH_TOKEN when ANTHROPIC_OAUTH_TOKEN is unset
-# (matches the key name used in some secret stores like Infisical).
-export ANTHROPIC_OAUTH_TOKEN="${ANTHROPIC_OAUTH_TOKEN:-${CLAUDE_CODE_OAUTH_TOKEN:-}}"
-
 if [ -z "${E2B_API_KEY:-}" ]; then
-  fail "E2B_API_KEY is required. Set it directly or use a secret manager (e.g. infisical run --env=dev -- ./demo/server/e2b/setup.sh)."
+  fail "E2B_API_KEY is required."
 fi
 
-if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -z "${ANTHROPIC_OAUTH_TOKEN:-}" ]; then
-  fail "A model API key is required. Set ANTHROPIC_API_KEY, ANTHROPIC_OAUTH_TOKEN, or CLAUDE_CODE_OAUTH_TOKEN."
+if [ -z "${OPENAI_API_KEY:-}" ]; then
+  fail "OPENAI_API_KEY is required."
 fi
 
 info "Checking prerequisites"

@@ -5,7 +5,6 @@
 # Usage (from repo root):
 #   ANTHROPIC_API_KEY=sk-... ./demo/server/k8s/setup.sh
 #   ANTHROPIC_OAUTH_TOKEN=... ./demo/server/k8s/setup.sh
-#   infisical run --env=dev -- ./demo/server/k8s/setup.sh
 #
 # What it does:
 #   1. Validates API key and prerequisites

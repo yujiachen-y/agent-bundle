@@ -16,7 +16,7 @@ done
 ok "All prerequisites found"
 
 if [ -z "${E2B_API_KEY:-}" ]; then
-  fail "E2B_API_KEY is required. Run with injected secrets (for example: infisical run --env=dev -- ./demo/e2b-server/setup.sh)."
+  fail "E2B_API_KEY is required. Run with injected secrets (for example: infisical run --env=dev -- ./demo/server/e2b/setup.sh)."
 fi
 
 info "Checking E2B API access with SDK"

@@ -1,4 +1,4 @@
-# Local Server Demo
+# K8s Server Demo
 
 End-to-end demo: HTTP request → Agent → K8s sandbox → skill execution → response.
 
@@ -9,7 +9,7 @@ agent-bundle.yaml           ← bundle definition (model, sandbox, skills)
 skills/format-code/SKILL.md ← skill instructions
         │
         ▼
-agent-bundle generate --config demo/local-server/agent-bundle.yaml
+agent-bundle generate --config demo/server/k8s/agent-bundle.yaml
         │
         ▼
 node_modules/@agent-bundle/code-formatter/index.ts ← generated output (exports AgentFactory)
@@ -33,7 +33,7 @@ A setup script handles cluster creation, image build, and kubeconfig in one
 command:
 
 ```bash
-./demo/local-server/setup.sh
+./demo/server/k8s/setup.sh
 ```
 
 Then skip to [Run the server](#run-the-server).
@@ -50,10 +50,10 @@ k3d cluster create agent-sandbox
 
 ```bash
 # Build base execd image, then build demo bundle + sandbox image
-pnpm build:demo:local-server
+pnpm build:demo:k8s-server
 
 # Import into k3d
-k3d image import agent-bundle/local-server-execd:latest -c agent-sandbox
+k3d image import agent-bundle/k8s-server-execd:latest -c agent-sandbox
 ```
 
 ### 3. Fix kubeconfig (macOS / Docker Desktop)
@@ -107,7 +107,7 @@ model:
 ## Run the server
 
 ```bash
-ANTHROPIC_API_KEY=sk-... pnpm demo:local-server
+ANTHROPIC_API_KEY=sk-... pnpm demo:k8s-server
 ```
 
 You should see:
@@ -198,14 +198,14 @@ sandbox:
 
 The sandbox image is configured in `agent-bundle.yaml` under
 `sandbox.kubernetes.image`. The demo defaults to
-`agent-bundle/local-server-execd:latest`, built from
-`demo/local-server/Dockerfile` (which includes `autopep8` for this demo flow),
+`agent-bundle/k8s-server-execd:latest`, built from
+`demo/server/k8s/Dockerfile` (which includes `autopep8` for this demo flow),
 and uses `agent-bundle/execd:latest` as its base image.
 
 ### Project structure
 
 ```
-demo/local-server/
+demo/server/k8s/
 ├── agent-bundle.yaml           # Bundle config: model, sandbox, skills, docker build inputs
 ├── Dockerfile                  # Demo-only sandbox image (execd + autopep8)
 ├── setup.sh                    # One-command environment setup
@@ -213,7 +213,7 @@ demo/local-server/
 │   └── format-code/
 │       └── SKILL.md            # Skill: Write → Bash → Read in sandbox
 ├── main.ts                     # Entry point: imports generated factory
-└── ../../node_modules/@agent-bundle/code-formatter/
+└── ../../../node_modules/@agent-bundle/code-formatter/
     ├── index.ts                # Generated agent factory
     ├── types.ts                # Generated variable interface
     ├── bundle.json             # Resolved config snapshot

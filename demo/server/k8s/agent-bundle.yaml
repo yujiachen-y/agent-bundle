@@ -21,7 +21,7 @@ sandbox:
     build:
       dockerfile: ./Dockerfile
       context: .
-    image: agent-bundle/local-server-execd:latest
+    image: agent-bundle/k8s-server-execd:latest
     # kubeconfig: /path/to/kubeconfig  # optional: override ~/.kube/config
 skills:
   - path: ./skills/format-code

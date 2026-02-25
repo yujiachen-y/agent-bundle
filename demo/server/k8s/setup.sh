@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------
-# Local-server demo — one-command environment setup
+# K8s server demo — one-command environment setup
 #
 # Usage:
-#   ./demo/local-server/setup.sh          # run from repo root
-#   bash demo/local-server/setup.sh       # also fine
+#   ./demo/server/k8s/setup.sh          # run from repo root
+#   bash demo/server/k8s/setup.sh       # also fine
 #
 # What it does:
 #   1. Checks prerequisites  (docker, k3d, kubectl, pnpm, node)
@@ -15,12 +15,12 @@
 #   6. Verifies the cluster is reachable
 #
 # After this script succeeds, start the server with:
-#   ANTHROPIC_API_KEY=sk-... pnpm demo:local-server
+#   ANTHROPIC_API_KEY=sk-... pnpm demo:k8s-server
 # ------------------------------------------------------------------
 set -euo pipefail
 
 CLUSTER_NAME="agent-sandbox"
-IMAGE_NAME="agent-bundle/local-server-execd:latest"
+IMAGE_NAME="agent-bundle/k8s-server-execd:latest"
 KUBECONFIG_PATH="/tmp/agent-sandbox.kubeconfig"
 
 # ── helpers ──────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ fi
 
 # ── 3. build sandbox images ─────────────────────────────────────
 info "Building sandbox images (execd base + demo image)"
-pnpm build:demo:local-server
+pnpm build:demo:k8s-server
 ok "Images built"
 
 # ── 4. import image into k3d ────────────────────────────────────
@@ -80,8 +80,8 @@ echo ""
 info "Setup complete! Start the demo server with:"
 echo ""
 echo "  export KUBECONFIG=${KUBECONFIG_PATH}"
-echo "  ANTHROPIC_API_KEY=<your-key> pnpm demo:local-server"
+echo "  ANTHROPIC_API_KEY=<your-key> pnpm demo:k8s-server"
 echo ""
 echo "  Or with Anthropic OAuth token:"
-echo "  ANTHROPIC_OAUTH_TOKEN=<your-token> pnpm demo:local-server"
+echo "  ANTHROPIC_OAUTH_TOKEN=<your-token> pnpm demo:k8s-server"
 echo ""

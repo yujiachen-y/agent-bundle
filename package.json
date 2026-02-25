@@ -19,8 +19,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && rm -rf dist/webui/public && cp -r src/webui/public dist/webui/public",
     "build:sandbox:execd": "docker build -t agent-bundle/execd:latest -f packages/execd/Dockerfile packages/execd",
-    "build:demo:local-server": "pnpm build:sandbox:execd && pnpm exec tsx src/cli/index.ts build --config demo/local-server/agent-bundle.yaml && pnpm exec tsx src/cli/index.ts generate --config demo/local-server/agent-bundle.yaml",
-    "build:demo:e2b-server": "pnpm exec tsx src/cli/index.ts build --config demo/e2b-server/agent-bundle.yaml",
+    "build:demo:k8s-server": "pnpm build:sandbox:execd && pnpm exec tsx src/cli/index.ts build --config demo/server/k8s/agent-bundle.yaml && pnpm exec tsx src/cli/index.ts generate --config demo/server/k8s/agent-bundle.yaml",
+    "build:demo:e2b-server": "pnpm exec tsx src/cli/index.ts build --config demo/server/e2b/agent-bundle.yaml",
     "lint": "eslint \"spikes/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\" \"src/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\"",
     "duplicate": "jscpd --config .jscpd.json",
     "test": "vitest run --coverage",
@@ -33,8 +33,8 @@
     "quality": "pnpm run lint && pnpm run duplicate && pnpm run test",
     "ci": "pnpm run quality",
     "ci:full": "pnpm run quality && pnpm run test:e2e",
-    "demo:local-server": "pnpm build && tsx demo/local-server/main.ts",
-    "demo:e2b-server": "pnpm build && tsx demo/e2b-server/main.ts"
+    "demo:k8s-server": "pnpm build && tsx demo/server/k8s/main.ts",
+    "demo:e2b-server": "pnpm build && tsx demo/server/e2b/main.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

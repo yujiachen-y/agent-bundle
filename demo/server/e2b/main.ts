@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 
-import { CodeFormatterE2b as factory } from "../../dist/code-formatter-e2b/index.ts";
-import { createServer } from "../../src/service/create-server.js";
+import { CodeFormatterE2b as factory } from "../../../dist/code-formatter-e2b/index.ts";
+import { createServer } from "../../../src/service/create-server.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const instance = await factory.init({ variables: {} as Record<never, string> });
@@ -16,14 +16,14 @@ async function shutdownAndExit(code: number, reason: string, error?: unknown): P
   shuttingDown = true;
 
   if (error !== undefined) {
-    console.error(`[demo/e2b-server] ${reason}`);
+    console.error(`[demo/server/e2b] ${reason}`);
     console.error(error);
   }
 
   try {
     await instance.shutdown();
   } catch (shutdownError) {
-    console.error("[demo/e2b-server] Failed to shutdown agent instance cleanly.");
+    console.error("[demo/server/e2b] Failed to shutdown agent instance cleanly.");
     console.error(shutdownError);
   }
 

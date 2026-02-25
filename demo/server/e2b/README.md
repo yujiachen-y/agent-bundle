@@ -20,7 +20,7 @@ Run all commands from repository root.
 Recommended with Infisical:
 
 ```bash
-infisical run --env=dev -- ./demo/e2b-server/setup.sh
+infisical run --env=dev -- ./demo/server/e2b/setup.sh
 ```
 
 Manual setup:

@@ -20,6 +20,6 @@ sandbox:
   e2b:
     template: code-formatter-e2b-demo
     build:
-      dockerfile: ./e2b.Dockerfile
+      dockerfile: ./Dockerfile
 skills:
   - path: ./skills/format-code

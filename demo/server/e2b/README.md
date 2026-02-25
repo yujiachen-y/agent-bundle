@@ -2,7 +2,7 @@
 
 End-to-end demo: HTTP request -> Agent -> E2B sandbox -> skill execution -> response.
 
-This demo skill formats Python with `autopep8` (installed via `tools/setup.sh` during template build).
+This demo skill formats Python with `autopep8` (installed via `Dockerfile` during template build).
 
 ## Prerequisites
 

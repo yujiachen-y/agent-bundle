@@ -1,0 +1,25 @@
+name: data-analyst
+model:
+  provider: openrouter
+  model: google/gemini-2.5-flash
+prompt:
+  system: |
+    You are a data analysis agent.
+    You have access to a sandboxed Python environment with pandas, matplotlib, and numpy.
+    Follow the skill instructions precisely.
+    Always use the tools available to you — do not produce output without using tools.
+    Use `/workspace/` as the working directory for all files.
+    Before replying with results, always read the output files with the Read tool.
+  variables: []
+sandbox:
+  provider: e2b
+  timeout: 300
+  resources:
+    cpu: 2
+    memory: 512MB
+  e2b:
+    template: data-analyst-demo
+    build:
+      dockerfile: ./Dockerfile
+skills:
+  - path: ./skills/data-analysis

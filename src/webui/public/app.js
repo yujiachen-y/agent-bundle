@@ -123,13 +123,20 @@
   }
 
   // ─── WebSocket ───
+  var disconnectedShown = false;
+
   function connectWebSocket() {
     var protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     var url = protocol + "//" + window.location.host + "/ws";
     ws = new WebSocket(url);
 
     ws.onopen = function () {
-      term.writeln("\x1b[32mConnected to agent.\x1b[0m\n");
+      if (disconnectedShown) {
+        term.writeln("\x1b[32mReconnected.\x1b[0m\n");
+      } else {
+        term.writeln("\x1b[32mConnected to agent.\x1b[0m\n");
+      }
+      disconnectedShown = false;
     };
 
     ws.onmessage = function (msg) {
@@ -142,7 +149,10 @@
     };
 
     ws.onclose = function () {
-      term.writeln("\n\x1b[33mDisconnected.\x1b[0m");
+      if (!disconnectedShown) {
+        term.writeln("\n\x1b[33mDisconnected.\x1b[0m");
+        disconnectedShown = true;
+      }
       setStatus("idle");
       setInputEnabled(true);
       isStreaming = false;

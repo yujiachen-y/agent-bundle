@@ -110,6 +110,37 @@ export function createWebUIServer(options: WebUIServerOptions): {
     return c.json({ entries });
   });
 
+  // ─── File content API (for preview panel) ───
+  app.get("/api/file-content/*", async (c): Promise<Response> => {
+    const reqPath = c.req.path.replace("/api/file-content", "");
+    const resolved = path.normalize(reqPath);
+
+    // Path traversal protection: must stay within /workspace
+    if (!resolved.startsWith(WORKSPACE_ROOT)) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+
+    try {
+      const content = await sandbox.file.read(resolved);
+      const ext = path.extname(resolved).toLowerCase();
+      const isImage = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"].includes(ext);
+
+      if (isImage) {
+        // Return base64-encoded image
+        const base64 = typeof content === "string"
+          ? Buffer.from(content).toString("base64")
+          : Buffer.from(content as ArrayBuffer).toString("base64");
+        return c.json({ type: "image", ext, base64 });
+      }
+
+      // Return text content
+      const text = typeof content === "string" ? content : new TextDecoder().decode(content as ArrayBuffer);
+      return c.json({ type: "text", ext, content: text });
+    } catch {
+      return c.json({ error: "Not found" }, 404);
+    }
+  });
+
   // ─── Static file serving ───
   app.get("/assets/:filename", (c): Response | Promise<Response> => {
     const filename = c.req.param("filename");

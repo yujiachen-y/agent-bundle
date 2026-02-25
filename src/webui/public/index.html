@@ -4,40 +4,89 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>agent-bundle</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpolygon points='16,2 28,9 28,23 16,30 4,23 4,9' fill='none' stroke='%237aa2f7' stroke-width='2'/%3E%3Ccircle cx='16' cy='10' r='2' fill='%237aa2f7'/%3E%3Ccircle cx='10' cy='22' r='2' fill='%237aa2f7'/%3E%3Ccircle cx='22' cy='22' r='2' fill='%237aa2f7'/%3E%3Cline x1='16' y1='10' x2='10' y2='22' stroke='%237aa2f7' stroke-width='1.5'/%3E%3Cline x1='16' y1='10' x2='22' y2='22' stroke='%237aa2f7' stroke-width='1.5'/%3E%3Cline x1='10' y1='22' x2='22' y2='22' stroke='%237aa2f7' stroke-width='1.5'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/assets/styles.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/tokyo-night-dark.min.css">
 </head>
 <body>
   <div id="app">
     <header id="header">
-      <span class="logo">agent-bundle</span>
+      <span class="logo">
+        <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="none" stroke="currentColor" stroke-width="2"/>
+          <circle cx="16" cy="10" r="2" fill="currentColor"/>
+          <circle cx="10" cy="22" r="2" fill="currentColor"/>
+          <circle cx="22" cy="22" r="2" fill="currentColor"/>
+          <line x1="16" y1="10" x2="10" y2="22" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="16" y1="10" x2="22" y2="22" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="10" y1="22" x2="22" y2="22" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+        agent-bundle
+      </span>
       <span id="status-badge" class="badge badge--idle">idle</span>
     </header>
 
+    <div id="activity-bar" class="activity-bar hidden">
+      <span class="activity-spinner"></span>
+      <span id="activity-text"></span>
+    </div>
+
+    <!-- Mobile tab bar (shown below 720px) -->
+    <div id="mobile-tabs" class="mobile-tabs">
+      <button class="mobile-tab mobile-tab--active" data-tab="terminal">Terminal</button>
+      <button class="mobile-tab" data-tab="files">Files</button>
+      <button class="mobile-tab" data-tab="preview">Preview</button>
+    </div>
+
     <div id="panels">
-      <aside id="file-panel">
+      <aside id="file-panel" data-panel="files">
         <div class="panel-header">Files <span class="subtle">/workspace</span></div>
         <div id="file-tree" class="file-tree"></div>
       </aside>
 
-      <main id="main-panel">
+      <main id="main-panel" data-panel="terminal">
+        <div id="welcome-card" class="welcome-card">
+          <div class="welcome-content">
+            <h1 class="welcome-title">Data Analysis Agent</h1>
+            <p class="welcome-subtitle">Powered by E2B sandbox with pandas, matplotlib, numpy</p>
+            <div class="welcome-prompts">
+              <button class="prompt-chip" data-prompt="Generate sample sales data and show monthly revenue trends">
+                Generate sample sales data and show monthly revenue trends
+              </button>
+              <button class="prompt-chip" data-prompt="Create a dataset of 100 students with random grades, then show the grade distribution">
+                Create a dataset of 100 students with random grades, then show the grade distribution
+              </button>
+              <button class="prompt-chip" data-prompt="Analyze the correlation between temperature and ice cream sales">
+                Analyze the correlation between temperature and ice cream sales
+              </button>
+            </div>
+          </div>
+        </div>
         <div id="terminal-container"></div>
+        <div id="completion-card" class="completion-card hidden"></div>
         <form id="chat-form">
-          <input
-            id="chat-input"
-            type="text"
-            placeholder="Send a message..."
-            autocomplete="off"
-            autofocus
-          >
+          <textarea id="chat-input" rows="1" placeholder="Send a message..." autocomplete="off" autofocus></textarea>
           <button type="submit" id="send-btn">Send</button>
         </form>
       </main>
+
+      <aside id="preview-panel" class="preview-panel hidden" data-panel="preview">
+        <div class="panel-header preview-header">
+          <span id="preview-filename" class="preview-filename">Preview</span>
+          <button id="preview-close" class="preview-close" title="Close preview">&times;</button>
+        </div>
+        <div id="preview-content" class="preview-content">
+          <div class="preview-empty">Click a file to preview</div>
+        </div>
+      </aside>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
   <script src="/assets/app.js"></script>
 </body>
 </html>

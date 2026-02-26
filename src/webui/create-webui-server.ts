@@ -134,7 +134,10 @@ export function createWebUIServer(options: WebUIServerOptions): {
   // ─── File content API (for preview panel) ───
   app.get("/api/file-content/*", async (c): Promise<Response> => {
     const reqPath = c.req.path.replace("/api/file-content", "");
-    const resolved = path.normalize(reqPath);
+    // Resolve relative to /workspace if not already absolute within it
+    const resolved = path.normalize(
+      reqPath.startsWith(WORKSPACE_ROOT) ? reqPath : path.join(WORKSPACE_ROOT, reqPath),
+    );
 
     // Path traversal protection: must stay within /workspace
     if (!resolved.startsWith(WORKSPACE_ROOT)) {

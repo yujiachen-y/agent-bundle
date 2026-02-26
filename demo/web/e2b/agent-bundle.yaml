@@ -1,7 +1,7 @@
 name: data-analyst
 model:
-  provider: openrouter
-  model: google/gemini-2.5-flash
+  provider: openai
+  model: gpt-5.3-codex
 prompt:
   system: |
     You are a data analysis agent.

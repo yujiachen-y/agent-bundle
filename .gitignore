@@ -11,6 +11,7 @@ __pycache__/
 node_modules/
 dist/
 coverage/
+.generated/
 *.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*

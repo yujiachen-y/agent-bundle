@@ -4,8 +4,11 @@ import { parseBundleConfig } from "../../schema/bundle.js";
 import {
   applySandboxImageRef,
   createResolvedBundleConfig,
+  generateIndexSource,
   generatePackageJsonSource,
   generateSources,
+  generateTypesSource,
+  toCamelCase,
   toPascalCase,
 } from "./codegen.js";
 
@@ -202,7 +205,7 @@ describe("build code generation commands in bundle.json", () => {
       },
     });
 
-    const sources = generateSources(resolved);
+    const sources = generateSources(resolved, defaultCommandContents());
     const parsedBundle = JSON.parse(sources.bundleJsonSource) as {
       commands: Array<{ name: string; description: string; argumentHint?: string; sourcePath: string }>;
     };
@@ -219,5 +222,136 @@ describe("build code generation commands in bundle.json", () => {
       description: "",
       sourcePath: "./commands/reconciliation",
     });
+  });
+});
+
+describe("toCamelCase", () => {
+  it("converts space-separated names", () => {
+    expect(toCamelCase("Quick Analysis")).toBe("quickAnalysis");
+  });
+
+  it("converts single-word names", () => {
+    expect(toCamelCase("Reconciliation")).toBe("reconciliation");
+  });
+
+  it("converts kebab-case names", () => {
+    expect(toCamelCase("data-export")).toBe("dataExport");
+  });
+
+  it("handles mixed spaces and hyphens", () => {
+    expect(toCamelCase("run full-report")).toBe("runFullReport");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(toCamelCase("")).toBe("");
+  });
+
+  it("throws for names producing invalid identifiers", () => {
+    expect(() => toCamelCase("123 bad")).toThrowError('produces invalid identifier');
+  });
+});
+
+function createResolvedWithCommands() {
+  const config = createBaseConfig();
+  return createResolvedBundleConfig({
+    config,
+    systemPrompt: "You are helpful.",
+    skills: [],
+    commands: [
+      {
+        name: "Quick Analysis",
+        description: "Run a quick financial analysis.",
+        argumentHint: "<ticker>",
+        sourcePath: "./commands/quick-analysis",
+      },
+      {
+        name: "Reconciliation",
+        description: "",
+        sourcePath: "./commands/reconciliation",
+      },
+    ],
+    sandboxImage: { provider: "kubernetes", ref: "registry.local/invoice:abc123" },
+  });
+}
+
+function defaultCommandContents(): Map<string, string> {
+  return new Map([
+    ["Quick Analysis", "Analyze $ARGUMENTS quickly"],
+    ["Reconciliation", "Run reconciliation on $ARGUMENTS"],
+  ]);
+}
+
+describe("command codegen index.ts", () => {
+  it("generates withCommands wrapper when commands are present", () => {
+    const resolved = createResolvedWithCommands();
+    const source = generateIndexSource(resolved, defaultCommandContents());
+
+    expect(source).toContain("withCommands");
+    expect(source).toContain("_factory");
+    expect(source).toContain("_commandDefs");
+    expect(source).toContain("quickAnalysis");
+    expect(source).toContain("reconciliation");
+    expect(source).toContain("Analyze $ARGUMENTS quickly");
+    expect(source).toContain("InvoiceProcessorCommands");
+  });
+
+  it("generates command type interface", () => {
+    const source = generateIndexSource(createResolvedWithCommands(), defaultCommandContents());
+    expect(source).toContain("export type InvoiceProcessorCommands");
+    expect(source).toContain("quickAnalysis(args?: string): Promise<ResponseOutput>");
+    expect(source).toContain("reconciliation(args?: string): Promise<ResponseOutput>");
+  });
+
+  it("generates agent type alias", () => {
+    const source = generateIndexSource(createResolvedWithCommands(), defaultCommandContents());
+    expect(source).toContain("export type InvoiceProcessorAgent = Agent & InvoiceProcessorCommands");
+  });
+
+  it("wraps factory init with explicit return type", () => {
+    const source = generateIndexSource(createResolvedWithCommands(), defaultCommandContents());
+    expect(source).toContain("export const InvoiceProcessor = {");
+    expect(source).toContain("..._factory");
+    expect(source).toContain("_factory.init(options)");
+    expect(source).toContain("withCommands<InvoiceProcessorCommands>");
+    expect(source).toContain("Promise<Agent & InvoiceProcessorCommands>");
+  });
+
+  it("produces unchanged output without commands", () => {
+    const config = createBaseConfig();
+    const resolved = createResolvedBundleConfig({
+      config,
+      systemPrompt: "You are helpful.",
+      skills: [],
+      sandboxImage: { provider: "kubernetes", ref: "registry.local/invoice:abc123" },
+    });
+    const source = generateIndexSource(resolved);
+    expect(source).toContain("export const InvoiceProcessor = defineAgent");
+    expect(source).not.toContain("withCommands");
+    expect(source).not.toContain("_factory");
+    expect(source).not.toContain("_commandDefs");
+  });
+});
+
+describe("command codegen types.ts", () => {
+  it("generates command types when commands are present", () => {
+    const source = generateTypesSource(createResolvedWithCommands());
+    expect(source).toContain("export interface InvoiceProcessorVariables");
+    expect(source).toContain("export type InvoiceProcessorCommands");
+    expect(source).toContain("export type InvoiceProcessorAgent = Agent & InvoiceProcessorCommands");
+    expect(source).toContain('import type { Agent, ResponseOutput } from "agent-bundle/runtime"');
+  });
+
+  it("does not generate command types without commands", () => {
+    const config = createBaseConfig();
+    const resolved = createResolvedBundleConfig({
+      config,
+      systemPrompt: "You are helpful.",
+      skills: [],
+      sandboxImage: { provider: "kubernetes", ref: "registry.local/invoice:abc123" },
+    });
+    const source = generateTypesSource(resolved);
+    expect(source).toContain("export interface InvoiceProcessorVariables");
+    expect(source).not.toContain("InvoiceProcessorCommands");
+    expect(source).not.toContain("InvoiceProcessorAgent");
   });
 });

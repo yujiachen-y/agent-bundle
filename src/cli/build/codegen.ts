@@ -3,6 +3,14 @@ import ts from "typescript";
 import type { SkillSummary } from "../../agent-loop/system-prompt/generate.js";
 import type { Command } from "../../commands/types.js";
 import type { BundleConfig } from "../../schema/bundle.js";
+import {
+  createCommandDefsStatement,
+  createCommandTypeStatements,
+  createRuntimeTypeImport,
+  createRuntimeValueImport,
+  createWrapperExport,
+  resolveCommandMethods,
+} from "./codegen-commands.js";
 
 export type CommandSummary = {
   name: string;
@@ -71,6 +79,26 @@ export function toPascalCase(bundleName: string): string {
   return segments.join("");
 }
 
+export function toCamelCase(name: string): string {
+  const segments = name
+    .split(/[\s-]+/)
+    .map((segment) => toPascalSegment(segment))
+    .filter((segment) => segment.length > 0);
+
+  const pascal = segments.join("");
+  if (pascal.length === 0) {
+    return "";
+  }
+
+  const result = pascal[0].toLowerCase() + pascal.slice(1);
+
+  if (!IDENTIFIER_PATTERN.test(result)) {
+    throw new Error(`Command name "${name}" produces invalid identifier "${result}".`);
+  }
+
+  return result;
+}
+
 function sanitizeJsonValue(raw: unknown): JsonValue {
   if (
     typeof raw === "string"
@@ -129,7 +157,7 @@ function toExpression(value: JsonValue): ts.Expression {
   );
 }
 
-function printStatements(statements: ts.Statement[], filename: string): string {
+export function printStatements(statements: ts.Statement[], filename: string): string {
   const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
   const sourceFile = ts.createSourceFile(filename, "", ts.ScriptTarget.ES2022, false, ts.ScriptKind.TS);
 
@@ -142,7 +170,7 @@ function printStatements(statements: ts.Statement[], filename: string): string {
   return `${rendered}\n`;
 }
 
-function createFactoryConfigExpression(resolved: ResolvedBundleConfig): ts.ObjectLiteralExpression {
+export function createFactoryConfigExpression(resolved: ResolvedBundleConfig): ts.ObjectLiteralExpression {
   const variableArray = ts.factory.createAsExpression(
     toExpression(sanitizeJsonValue(resolved.prompt.variables)),
     ts.factory.createTypeReferenceNode("const", undefined),
@@ -151,20 +179,13 @@ function createFactoryConfigExpression(resolved: ResolvedBundleConfig): ts.Objec
 
   const properties = [
     ts.factory.createPropertyAssignment("name", ts.factory.createStringLiteral(resolved.name)),
-    ts.factory.createPropertyAssignment(
-      "sandbox",
-      toExpression(sanitizeJsonValue(resolved.sandbox)),
-    ),
+    ts.factory.createPropertyAssignment("sandbox", toExpression(sanitizeJsonValue(resolved.sandbox))),
     ts.factory.createPropertyAssignment("model", toExpression(sanitizeJsonValue(resolved.model))),
-    ts.factory.createPropertyAssignment(
-      "systemPrompt",
-      ts.factory.createStringLiteral(resolved.systemPrompt),
-    ),
+    ts.factory.createPropertyAssignment("systemPrompt", ts.factory.createStringLiteral(resolved.systemPrompt)),
     ts.factory.createPropertyAssignment("variables", variableArray),
   ];
 
   if (mcpServers) {
-    // AgentConfig expects an array; BundleConfig stores it under mcp.servers.
     properties.push(ts.factory.createPropertyAssignment("mcp", toExpression(sanitizeJsonValue(mcpServers))));
   }
 
@@ -179,20 +200,14 @@ export function applySandboxImageRef(
     return {
       ...sandbox,
       provider: "kubernetes",
-      kubernetes: {
-        ...sandbox.kubernetes,
-        image: imageRef.ref,
-      },
+      kubernetes: { ...sandbox.kubernetes, image: imageRef.ref },
     };
   }
 
   return {
     ...sandbox,
     provider: "e2b",
-    e2b: {
-      ...sandbox.e2b,
-      template: imageRef.ref,
-    },
+    e2b: { ...sandbox.e2b, template: imageRef.ref },
   };
 }
 
@@ -226,62 +241,92 @@ export function createResolvedBundleConfig(input: {
   };
 }
 
-export function generateIndexSource(resolved: ResolvedBundleConfig): string {
-  const importDeclaration = ts.factory.createImportDeclaration(
+function generateIndexSourceWithoutCommands(resolved: ResolvedBundleConfig): string {
+  const importDecl = ts.factory.createImportDeclaration(
     undefined,
-    ts.factory.createImportClause(
-      false,
-      undefined,
-      ts.factory.createNamedImports([
-        ts.factory.createImportSpecifier(false, undefined, ts.factory.createIdentifier("defineAgent")),
-      ]),
-    ),
+    ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
+      ts.factory.createImportSpecifier(false, undefined, ts.factory.createIdentifier("defineAgent")),
+    ])),
     ts.factory.createStringLiteral("agent-bundle/runtime"),
     undefined,
   );
 
-  const declaration = ts.factory.createVariableStatement(
+  const exportDecl = ts.factory.createVariableStatement(
     [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
-    ts.factory.createVariableDeclarationList(
-      [
-        ts.factory.createVariableDeclaration(
-          ts.factory.createIdentifier(resolved.namePascal),
-          undefined,
-          undefined,
-          ts.factory.createCallExpression(ts.factory.createIdentifier("defineAgent"), undefined, [
-            createFactoryConfigExpression(resolved),
-          ]),
-        ),
-      ],
-      ts.NodeFlags.Const,
-    ),
+    ts.factory.createVariableDeclarationList([
+      ts.factory.createVariableDeclaration(
+        ts.factory.createIdentifier(resolved.namePascal), undefined, undefined,
+        ts.factory.createCallExpression(ts.factory.createIdentifier("defineAgent"), undefined, [
+          createFactoryConfigExpression(resolved),
+        ]),
+      ),
+    ], ts.NodeFlags.Const),
   );
 
-  return printStatements([importDeclaration, declaration], "index.ts");
+  return printStatements([importDecl, exportDecl], "index.ts");
+}
+
+export function generateIndexSource(
+  resolved: ResolvedBundleConfig,
+  commandContents: Map<string, string> = new Map(),
+): string {
+  if (resolved.commands.length === 0) {
+    return generateIndexSourceWithoutCommands(resolved);
+  }
+
+  const methods = resolveCommandMethods(resolved.commands, commandContents);
+  const commandsTypeName = `${resolved.namePascal}Commands`;
+  const runtimeImport = createRuntimeValueImport();
+  const typeImport = createRuntimeTypeImport();
+  const factoryDecl = ts.factory.createVariableStatement(
+    undefined,
+    ts.factory.createVariableDeclarationList([
+      ts.factory.createVariableDeclaration(
+        ts.factory.createIdentifier("_factory"), undefined, undefined,
+        ts.factory.createCallExpression(ts.factory.createIdentifier("defineAgent"), undefined, [
+          createFactoryConfigExpression(resolved),
+        ]),
+      ),
+    ], ts.NodeFlags.Const),
+  );
+  const { commandTypeAlias, agentTypeAlias } = createCommandTypeStatements(resolved, methods);
+  const commandDefs = createCommandDefsStatement(methods);
+  const wrapper = createWrapperExport(resolved.namePascal, commandsTypeName);
+
+  return printStatements(
+    [runtimeImport, typeImport, factoryDecl, commandTypeAlias, agentTypeAlias, commandDefs, wrapper],
+    "index.ts",
+  );
 }
 
 export function generateTypesSource(resolved: ResolvedBundleConfig): string {
+  const statements: ts.Statement[] = [];
   const interfaceName = `${resolved.namePascal}Variables`;
   const variableNames = Array.from(new Set(resolved.prompt.variables));
 
   const members = variableNames.map((variableName) => {
     return ts.factory.createPropertySignature(
-      undefined,
-      ts.factory.createIdentifier(variableName),
-      undefined,
+      undefined, ts.factory.createIdentifier(variableName), undefined,
       ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
     );
   });
 
-  const declaration = ts.factory.createInterfaceDeclaration(
+  statements.push(ts.factory.createInterfaceDeclaration(
     [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
-    ts.factory.createIdentifier(interfaceName),
-    undefined,
-    undefined,
-    members,
-  );
+    ts.factory.createIdentifier(interfaceName), undefined, undefined, members,
+  ));
 
-  return printStatements([declaration], "types.ts");
+  if (resolved.commands.length > 0) {
+    const methods = resolved.commands.map((cmd) => ({
+      methodName: toCamelCase(cmd.name),
+      content: "",
+    }));
+    const { commandTypeAlias, agentTypeAlias } = createCommandTypeStatements(resolved, methods);
+    statements.unshift(createRuntimeTypeImport());
+    statements.push(commandTypeAlias, agentTypeAlias);
+  }
+
+  return printStatements(statements, "types.ts");
 }
 
 export function generateBundleJsonSource(resolved: ResolvedBundleConfig): string {
@@ -295,17 +340,18 @@ export function generatePackageJsonSource(bundleName: string): string {
     type: "module",
     main: "./index.ts",
     types: "./index.ts",
-    dependencies: {
-      "agent-bundle": "*",
-    },
+    dependencies: { "agent-bundle": "*" },
   };
 
   return `${JSON.stringify(packageJson, null, 2)}\n`;
 }
 
-export function generateSources(resolved: ResolvedBundleConfig): GeneratedSources {
+export function generateSources(
+  resolved: ResolvedBundleConfig,
+  commandContents: Map<string, string> = new Map(),
+): GeneratedSources {
   return {
-    indexSource: generateIndexSource(resolved),
+    indexSource: generateIndexSource(resolved, commandContents),
     typesSource: generateTypesSource(resolved),
     bundleJsonSource: generateBundleJsonSource(resolved),
     packageJsonSource: generatePackageJsonSource(resolved.name),

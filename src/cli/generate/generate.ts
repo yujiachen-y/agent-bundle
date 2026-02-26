@@ -160,7 +160,8 @@ export async function runGenerateCommand(
     systemPrompt,
     sandboxImage,
   });
-  const sources = generateSources(resolvedConfig);
+  const commandContents = new Map(merged.commands.map((cmd) => [cmd.name, cmd.content]));
+  const sources = generateSources(resolvedConfig, commandContents);
 
   let outputDir: string;
   if (options.outputDir) {

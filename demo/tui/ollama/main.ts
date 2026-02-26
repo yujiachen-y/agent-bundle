@@ -1,5 +1,5 @@
-import { CodingAssistantOllama as factory } from "../../../dist/coding-assistant-ollama/index.ts";
-import { serveTUI } from "../../../src/tui/tui.js";
+import { CodingAssistantOllama as factory } from "@agent-bundle/coding-assistant-ollama";
+import { serveTUI } from "agent-bundle/tui";
 
 const instance = await factory.init({ variables: {} as Record<never, string> });
 

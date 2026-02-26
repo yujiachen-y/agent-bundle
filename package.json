@@ -11,6 +11,14 @@
     "./service": {
       "types": "./dist/service/create-server.d.ts",
       "default": "./dist/service/create-server.js"
+    },
+    "./tui": {
+      "types": "./dist/tui/tui.d.ts",
+      "default": "./dist/tui/tui.js"
+    },
+    "./worktree-port": {
+      "types": "./dist/cli/serve/worktree-port.d.ts",
+      "default": "./dist/cli/serve/worktree-port.js"
     }
   },
   "bin": {

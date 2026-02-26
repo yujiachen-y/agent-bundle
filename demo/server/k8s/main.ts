@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server";
 
 import { CodeFormatter as factory } from "@agent-bundle/code-formatter";
 import { createServer } from "agent-bundle/service";
-import { resolveServicePort } from "../../../src/cli/serve/worktree-port.js";
+import { resolveServicePort } from "agent-bundle/worktree-port";
 
 const instance = await factory.init({ variables: {} as Record<never, string> });
 

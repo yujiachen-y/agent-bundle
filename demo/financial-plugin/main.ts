@@ -1,8 +1,8 @@
 import { serve } from "@hono/node-server";
 
-import { FinancialAnalyst as factory } from "../../dist/financial-analyst/index.ts";
-import { createServer } from "../../src/service/create-server.js";
-import { resolveServicePort } from "../../src/cli/serve/worktree-port.js";
+import { FinancialAnalyst as factory } from "@agent-bundle/financial-analyst";
+import { createServer } from "agent-bundle/service";
+import { resolveServicePort } from "agent-bundle/worktree-port";
 
 const PORT = await resolveServicePort(3);
 const instance = await factory.init({ variables: {} as Record<never, string> });

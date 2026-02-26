@@ -1,8 +1,8 @@
 import { serve } from "@hono/node-server";
 
-import { CodeFormatterE2b as factory } from "../../../dist/code-formatter-e2b/index.ts";
-import { createServer } from "../../../src/service/create-server.js";
-import { resolveServicePort } from "../../../src/cli/serve/worktree-port.js";
+import { CodeFormatterE2b as factory } from "@agent-bundle/code-formatter-e2b";
+import { createServer } from "agent-bundle/service";
+import { resolveServicePort } from "agent-bundle/worktree-port";
 
 const PORT = await resolveServicePort(1);
 const instance = await factory.init({ variables: {} as Record<never, string> });

@@ -3,23 +3,19 @@
 (function () {
   "use strict";
 
-  // =========================================================================
-  //  DOM References
-  // =========================================================================
-
+  // -- DOM References --
   var chatMessages = document.getElementById("chat-messages");
   var welcomeState = document.getElementById("welcome-state");
   var promptChips = document.getElementById("prompt-chips");
   var skillBadges = document.getElementById("skill-badges");
-  var terminalSection = document.getElementById("terminal-section");
-  var terminalToggle = document.getElementById("terminal-toggle");
-  var terminalContainer = document.getElementById("terminal-container");
   var fileTreeEl = document.getElementById("file-tree");
   var filePanel = document.getElementById("file-panel");
-  var filePreview = document.getElementById("file-preview");
+  var previewArea = document.getElementById("preview-area");
   var previewContent = document.getElementById("preview-content");
   var previewFilename = document.getElementById("preview-filename");
   var previewClose = document.getElementById("preview-close");
+  var terminalArea = document.getElementById("terminal-area");
+  var terminalContainer = document.getElementById("terminal-container");
   var imageModal = document.getElementById("image-modal");
   var modalImage = document.getElementById("modal-image");
   var modalClose = document.getElementById("modal-close");
@@ -27,21 +23,14 @@
   var chatInput = document.getElementById("chat-input");
   var sendBtn = document.getElementById("send-btn");
   var statusBadge = document.getElementById("status-badge");
-  var header = document.getElementById("header");
+  var menuToggle = document.getElementById("menu-toggle");
+  var panelOverlay = document.querySelector(".panel-overlay");
+  var workspaceTabs = document.querySelectorAll(".workspace-tab");
 
-  // =========================================================================
-  //  Markdown Configuration
-  // =========================================================================
+  // --  Markdown Configuration
+  marked.setOptions({ breaks: true, gfm: true });
 
-  marked.setOptions({
-    breaks: true,
-    gfm: true,
-  });
-
-  // =========================================================================
-  //  xterm.js Setup
-  // =========================================================================
-
+  // --  xterm.js Setup
   var fitAddon = new FitAddon.FitAddon();
   var term = new Terminal({
     theme: {
@@ -62,19 +51,15 @@
   term.loadAddon(fitAddon);
   term.open(terminalContainer);
 
-  // Terminal starts collapsed — defer fit until visible
   function fitTerminalIfVisible() {
-    if (!terminalSection.classList.contains("terminal-section--collapsed")) {
-      try { fitAddon.fit(); } catch (_) { /* ignore if not visible */ }
+    if (activeTab === "terminal" && terminalArea.style.display !== "none") {
+      try { fitAddon.fit(); } catch (_) { /* ignore */ }
     }
   }
 
   window.addEventListener("resize", fitTerminalIfVisible);
 
-  // =========================================================================
-  //  State
-  // =========================================================================
-
+  // --  State
   var isStreaming = false;
   var FILE_POLL_MS = 3000;
   var filePollingTimer = null;
@@ -86,8 +71,10 @@
   var renderTimer = null;
   var RENDER_DEBOUNCE_MS = 80;
 
-  // File tree change detection
+  // File tree state
   var previousFilePaths = new Set();
+  var expandedDirs = new Set(); // tracks expanded directories
+  var expandedDirsInitialized = false;
 
   // Currently active tool message for status updates
   var currentToolEl = null;
@@ -95,10 +82,74 @@
   // Track active file for preview highlighting
   var activeFilePath = null;
 
-  // =========================================================================
-  //  Status Badge
-  // =========================================================================
+  // Workspace tab state
+  var activeTab = "preview";
+  var terminalAutoSwitched = false;
 
+  // Welcome state
+  var welcomeVisible = true;
+
+  // --  Workspace Tab Switching
+  function switchTab(tabName) {
+    activeTab = tabName;
+
+    workspaceTabs.forEach(function (btn) {
+      if (btn.getAttribute("data-tab") === tabName) {
+        btn.classList.add("workspace-tab--active");
+      } else {
+        btn.classList.remove("workspace-tab--active");
+      }
+    });
+
+    if (tabName === "preview") {
+      terminalArea.style.display = "none";
+      // Show preview or welcome depending on state
+      if (activeFilePath) {
+        previewArea.style.display = "";
+        welcomeState.style.display = "none";
+      } else if (welcomeVisible) {
+        previewArea.style.display = "none";
+        welcomeState.style.display = "";
+      } else {
+        previewArea.style.display = "none";
+        welcomeState.style.display = "none";
+      }
+    } else if (tabName === "terminal") {
+      welcomeState.style.display = "none";
+      previewArea.style.display = "none";
+      terminalArea.style.display = "";
+      setTimeout(function () { fitAddon.fit(); }, 50);
+    }
+  }
+
+  workspaceTabs.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      switchTab(btn.getAttribute("data-tab"));
+    });
+  });
+
+  // --  Hamburger Menu (Mobile File Tree Toggle)
+  function openFilePanel() {
+    filePanel.classList.add("panel--open");
+    panelOverlay.classList.add("panel-overlay--visible");
+  }
+
+  function closeFilePanel() {
+    filePanel.classList.remove("panel--open");
+    panelOverlay.classList.remove("panel-overlay--visible");
+  }
+
+  menuToggle.addEventListener("click", function () {
+    if (filePanel.classList.contains("panel--open")) {
+      closeFilePanel();
+    } else {
+      openFilePanel();
+    }
+  });
+
+  panelOverlay.addEventListener("click", closeFilePanel);
+
+  // --  Status Badge
   function setStatus(status) {
     statusBadge.textContent = status;
     statusBadge.className = "badge badge--" + status;
@@ -110,17 +161,11 @@
     if (enabled) chatInput.focus();
   }
 
-  // =========================================================================
-  //  Welcome State
-  // =========================================================================
-
-  var welcomeVisible = true;
-
+  // --  Welcome State
   function hideWelcome() {
     if (!welcomeVisible) return;
     welcomeVisible = false;
     welcomeState.style.display = "none";
-    chatMessages.style.display = "";
   }
 
   function fetchAgentInfo() {
@@ -144,10 +189,7 @@
       .catch(function () { /* silent */ });
   }
 
-  // =========================================================================
-  //  Prompt Chips
-  // =========================================================================
-
+  // --  Prompt Chips
   promptChips.addEventListener("click", function (e) {
     var chip = e.target.closest(".prompt-chip");
     if (!chip) return;
@@ -159,10 +201,7 @@
     }
   });
 
-  // =========================================================================
-  //  Chat Message Rendering
-  // =========================================================================
-
+  // --  Chat Message Rendering
   function scrollToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
@@ -193,7 +232,6 @@
     });
   }
 
-  /** Append a user message bubble */
   function addUserMessage(text) {
     hideWelcome();
     var msg = document.createElement("div");
@@ -203,7 +241,6 @@
     scrollToBottom();
   }
 
-  /** Create and append a new agent message block; returns the content element */
   function createAgentMessage() {
     hideWelcome();
     var msg = document.createElement("div");
@@ -216,7 +253,6 @@
     return content;
   }
 
-  /** Render accumulated markdown text into the current agent element */
   function renderAgentText(final) {
     if (!currentAgentEl) return;
     currentAgentEl.innerHTML = marked.parse(currentAgentText);
@@ -229,7 +265,6 @@
     scrollToBottom();
   }
 
-  /** Schedule a debounced re-render of accumulated text */
   function scheduleRender() {
     if (renderTimer) return;
     renderTimer = setTimeout(function () {
@@ -238,7 +273,6 @@
     }, RENDER_DEBOUNCE_MS);
   }
 
-  /** Show thinking indicator */
   function showThinkingIndicator() {
     hideWelcome();
     removeThinkingIndicator();
@@ -259,7 +293,6 @@
     if (el) el.remove();
   }
 
-  /** Add a tool call message block */
   function addToolCallMessage(toolName) {
     hideWelcome();
     var msg = document.createElement("div");
@@ -300,7 +333,6 @@
     return msg;
   }
 
-  /** Update tool status in the most recent tool message */
   function updateToolStatus(isError) {
     if (!currentToolEl) return;
     var statusEl = currentToolEl.querySelector(".tool-status");
@@ -314,7 +346,6 @@
     }
   }
 
-  /** Add an error message */
   function addErrorMessage(text) {
     hideWelcome();
     var msg = document.createElement("div");
@@ -324,10 +355,7 @@
     scrollToBottom();
   }
 
-  // =========================================================================
-  //  Inline Image Detection
-  // =========================================================================
-
+  // --  Inline Image Detection
   var IMAGE_EXTENSIONS = /\.(png|jpg|jpeg|gif|svg|webp)$/i;
   var WORKSPACE_PATH_RE = /(?:\/workspace\/|(?:^|\s))([^\s]+\.(png|jpg|jpeg|gif|svg|webp))/gi;
 
@@ -343,7 +371,6 @@
     var match;
     while ((match = WORKSPACE_PATH_RE.exec(rawText)) !== null) {
       var filePath = match[1];
-      // Normalize: remove leading /workspace/ if present
       var relative = filePath.replace(/^\/workspace\//, "");
       if (matches.indexOf(relative) === -1) {
         matches.push(relative);
@@ -351,7 +378,6 @@
     }
 
     matches.forEach(function (relPath) {
-      // Check if image already inserted
       if (container.querySelector('img[data-path="' + relPath + '"]')) return;
 
       fetch("/api/file-content/" + encodeURIComponent(relPath))
@@ -371,10 +397,7 @@
     });
   }
 
-  // =========================================================================
-  //  Image Modal
-  // =========================================================================
-
+  // --  Image Modal
   function openImageModal(src) {
     modalImage.src = src;
     imageModal.style.display = "flex";
@@ -395,31 +418,28 @@
     if (e.key === "Escape") closeImageModal();
   });
 
-  // =========================================================================
-  //  File Tree
-  // =========================================================================
-
+  // --  File Tree
   var FILE_ICON_MAP = {
-    ".py": { icon: "\uD83D\uDC0D", cls: "ft-icon--py" },       // snake
-    ".js": { icon: "\u2B21", cls: "ft-icon--js" },              // hexagon
+    ".py": { icon: "\uD83D\uDC0D", cls: "ft-icon--py" },
+    ".js": { icon: "\u2B21", cls: "ft-icon--js" },
     ".ts": { icon: "\u2B21", cls: "ft-icon--ts" },
     ".json": { icon: "{}", cls: "ft-icon--json" },
-    ".md": { icon: "\u270E", cls: "ft-icon--md" },              // pencil
-    ".csv": { icon: "\u2637", cls: "ft-icon--csv" },            // trigram
-    ".html": { icon: "\u2039\u203A", cls: "ft-icon--html" },    // angle brackets
+    ".md": { icon: "\u270E", cls: "ft-icon--md" },
+    ".csv": { icon: "\u2637", cls: "ft-icon--csv" },
+    ".html": { icon: "\u2039\u203A", cls: "ft-icon--html" },
     ".css": { icon: "#", cls: "ft-icon--css" },
-    ".png": { icon: "\u25A3", cls: "ft-icon--png" },            // filled square
+    ".png": { icon: "\u25A3", cls: "ft-icon--png" },
     ".jpg": { icon: "\u25A3", cls: "ft-icon--jpg" },
     ".jpeg": { icon: "\u25A3", cls: "ft-icon--jpg" },
     ".gif": { icon: "\u25A3", cls: "ft-icon--gif" },
-    ".svg": { icon: "\u25C7", cls: "ft-icon--svg" },            // diamond
+    ".svg": { icon: "\u25C7", cls: "ft-icon--svg" },
     ".yaml": { icon: "\u2699", cls: "ft-icon--yaml" },
     ".yml": { icon: "\u2699", cls: "ft-icon--yml" },
     ".txt": { icon: "\u2261", cls: "ft-icon--default" },
   };
 
   function getFileIcon(name, isDir) {
-    if (isDir) return { icon: "\u25B8", cls: "ft-icon--dir" };
+    if (isDir) return { icon: "\u25B6", cls: "ft-icon--dir" };
     var ext = name.lastIndexOf(".") !== -1 ? name.substring(name.lastIndexOf(".")) : "";
     return FILE_ICON_MAP[ext.toLowerCase()] || { icon: "\u2022", cls: "ft-icon--default" };
   }
@@ -431,6 +451,15 @@
     });
   }
 
+  function collectDirPaths(entries, set) {
+    entries.forEach(function (entry) {
+      if (entry.type === "directory") {
+        set.add(entry.path);
+        if (entry.children) collectDirPaths(entry.children, set);
+      }
+    });
+  }
+
   function renderFileTree(entries, parentEl, depth, newPaths) {
     var sorted = entries.slice().sort(function (a, b) {
       if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
@@ -438,24 +467,32 @@
     });
 
     sorted.forEach(function (entry) {
+      var isDir = entry.type === "directory";
+      var isExpanded = isDir && expandedDirs.has(entry.path);
+
       var item = document.createElement("div");
       item.className = "ft-item";
-      if (newPaths.has(entry.path)) {
-        item.classList.add("ft-item--new");
-      }
-      if (entry.path === activeFilePath) {
-        item.classList.add("ft-item--active");
-      }
+      if (newPaths.has(entry.path)) item.classList.add("ft-item--new");
+      if (entry.path === activeFilePath) item.classList.add("ft-item--active");
 
       var indent = document.createElement("span");
       indent.className = "ft-indent";
       indent.style.width = depth * 16 + "px";
       item.appendChild(indent);
 
-      var fi = getFileIcon(entry.name, entry.type === "directory");
+      if (isDir) {
+        // Chevron for expand/collapse
+        var chevron = document.createElement("span");
+        chevron.className = "ft-icon--dir-chevron";
+        chevron.textContent = "\u25B8";
+        if (isExpanded) chevron.classList.add("expanded");
+        item.appendChild(chevron);
+      }
+
+      var fi = getFileIcon(entry.name, isDir);
       var icon = document.createElement("span");
       icon.className = "ft-icon " + fi.cls;
-      icon.textContent = fi.icon;
+      icon.textContent = isDir ? "\uD83D\uDCC1" : fi.icon;
       item.appendChild(icon);
 
       var nameSpan = document.createElement("span");
@@ -463,7 +500,16 @@
       nameSpan.textContent = entry.name;
       item.appendChild(nameSpan);
 
-      if (entry.type === "file") {
+      if (isDir) {
+        item.addEventListener("click", function () {
+          if (expandedDirs.has(entry.path)) {
+            expandedDirs.delete(entry.path);
+          } else {
+            expandedDirs.add(entry.path);
+          }
+          refreshFileTreeUI();
+        });
+      } else {
         item.addEventListener("click", function () {
           openFilePreview(entry.path, entry.name);
         });
@@ -471,10 +517,29 @@
 
       parentEl.appendChild(item);
 
-      if (entry.children && entry.children.length > 0) {
+      // Render children only if expanded
+      if (isDir && isExpanded && entry.children && entry.children.length > 0) {
         renderFileTree(entry.children, parentEl, depth + 1, newPaths);
       }
     });
+  }
+
+  // Cache the last fetched entries for UI-only refreshes
+  var lastFileEntries = null;
+  var lastNewPaths = new Set();
+
+  function refreshFileTreeUI() {
+    if (!lastFileEntries) return;
+    fileTreeEl.innerHTML = "";
+    if (lastFileEntries.length > 0) {
+      renderFileTree(lastFileEntries, fileTreeEl, 0, lastNewPaths);
+    } else {
+      var empty = document.createElement("div");
+      empty.className = "ft-item";
+      empty.style.color = "var(--text-muted)";
+      empty.textContent = "(empty)";
+      fileTreeEl.appendChild(empty);
+    }
   }
 
   function refreshFileTree() {
@@ -483,7 +548,6 @@
       .then(function (data) {
         if (!data.entries) return;
 
-        // Detect new files
         var currentPaths = new Set();
         collectPaths(data.entries, currentPaths);
 
@@ -495,18 +559,17 @@
         }
         previousFilePaths = currentPaths;
 
-        fileTreeEl.innerHTML = "";
-        if (data.entries.length > 0) {
-          renderFileTree(data.entries, fileTreeEl, 0, newPaths);
-        } else {
-          var empty = document.createElement("div");
-          empty.className = "ft-item";
-          empty.style.color = "var(--text-muted)";
-          empty.textContent = "(empty)";
-          fileTreeEl.appendChild(empty);
+        // Initialize expanded dirs: expand all on first load
+        if (!expandedDirsInitialized) {
+          expandedDirsInitialized = true;
+          collectDirPaths(data.entries, expandedDirs);
         }
+
+        lastFileEntries = data.entries;
+        lastNewPaths = newPaths;
+        refreshFileTreeUI();
       })
-      .catch(function () { /* silent retry on next poll */ });
+      .catch(function () { /* silent retry */ });
   }
 
   function startFilePolling() {
@@ -521,10 +584,7 @@
     }
   }
 
-  // =========================================================================
-  //  File Preview Panel
-  // =========================================================================
-
+  // --  File Preview (in Workspace)
   var IMAGE_EXT_SET = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
 
   function getExtension(name) {
@@ -544,9 +604,12 @@
     activeFilePath = filePath;
     previewFilename.textContent = fileName;
     previewContent.innerHTML = '<div style="color:var(--text-muted);padding:12px;">Loading...</div>';
-    filePreview.style.display = "";
 
-    // Strip /workspace/ prefix for the API path
+    // Switch to preview tab and show preview area
+    switchTab("preview");
+    previewArea.style.display = "";
+    welcomeState.style.display = "none";
+
     var relative = filePath.replace(/^\/workspace\//, "");
     var ext = getExtension(fileName);
 
@@ -582,54 +645,27 @@
         previewContent.innerHTML = '<div style="color:var(--red);padding:12px;">Failed to load file.</div>';
       });
 
-    // Refresh tree to update active state
     refreshFileTree();
   }
 
   function closeFilePreview() {
-    filePreview.style.display = "none";
+    previewArea.style.display = "none";
     activeFilePath = null;
+    if (activeTab === "preview" && welcomeVisible) {
+      welcomeState.style.display = "";
+    }
     refreshFileTree();
   }
 
   previewClose.addEventListener("click", closeFilePreview);
 
-  // =========================================================================
-  //  Terminal Panel (Collapsible)
-  // =========================================================================
-
-  // Start collapsed
-  terminalSection.classList.add("terminal-section--collapsed");
-
-  function toggleTerminal() {
-    var isCollapsed = terminalSection.classList.toggle("terminal-section--collapsed");
-    terminalToggle.setAttribute("aria-expanded", String(!isCollapsed));
-    if (!isCollapsed) {
-      // Just expanded — fit the terminal
-      setTimeout(function () { fitAddon.fit(); }, 50);
-    }
-  }
-
-  function expandTerminal() {
-    if (terminalSection.classList.contains("terminal-section--collapsed")) {
-      terminalSection.classList.remove("terminal-section--collapsed");
-      terminalToggle.setAttribute("aria-expanded", "true");
-      setTimeout(function () { fitAddon.fit(); }, 50);
-    }
-  }
-
-  terminalToggle.addEventListener("click", toggleTerminal);
-
-  // =========================================================================
-  //  Chat Input (Auto-expand Textarea)
-  // =========================================================================
-
-  var INPUT_LINE_HEIGHT = 21; // ~14px font * 1.5 line-height
+  // --  Chat Input (Auto-expand Textarea)
+  var INPUT_LINE_HEIGHT = 21;
   var INPUT_MAX_ROWS = 4;
 
   chatInput.addEventListener("input", function () {
     chatInput.style.height = "auto";
-    var maxH = INPUT_LINE_HEIGHT * INPUT_MAX_ROWS + 20; // 20px for padding
+    var maxH = INPUT_LINE_HEIGHT * INPUT_MAX_ROWS + 20;
     chatInput.style.height = Math.min(chatInput.scrollHeight, maxH) + "px";
   });
 
@@ -640,10 +676,7 @@
     }
   });
 
-  // =========================================================================
-  //  Chat Submission
-  // =========================================================================
-
+  // --  Chat Submission
   function sendMessage(text) {
     if (!text || isStreaming) return;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -654,7 +687,6 @@
     isStreaming = true;
     setStatus("running");
     setInputEnabled(false);
-
     addUserMessage(text);
 
     ws.send(JSON.stringify({
@@ -672,10 +704,7 @@
     sendMessage(text);
   });
 
-  // =========================================================================
-  //  Agent Event Handling (WebSocket)
-  // =========================================================================
-
+  // --  Agent Event Handling (WebSocket)
   function handleAgentEvent(event) {
     switch (event.type) {
       case "response.created":
@@ -696,22 +725,16 @@
       case "response.output_text.done":
         removeThinkingIndicator();
         if (currentAgentEl) {
-          // Use the final full text if provided, else keep accumulated
           if (event.text) currentAgentText = event.text;
-          if (renderTimer) {
-            clearTimeout(renderTimer);
-            renderTimer = null;
-          }
+          if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
           renderAgentText(true);
         }
-        // Reset for next output segment
         currentAgentEl = null;
         currentAgentText = "";
         break;
 
       case "response.tool_call.created":
         removeThinkingIndicator();
-        // Finalize any in-progress agent text
         if (currentAgentEl) {
           if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
           renderAgentText(true);
@@ -720,18 +743,18 @@
         }
         var toolName = (event.toolCall && event.toolCall.name) || "tool";
         addToolCallMessage(toolName);
-        expandTerminal();
         break;
 
       case "response.tool_call.done":
         var isError = event.result && event.result.isError;
         updateToolStatus(isError);
         if (isError && event.result.output) {
-          // Write error into the tool body
           if (currentToolEl) {
             var body = currentToolEl.querySelector(".tool-body");
             if (body) {
-              body.textContent = typeof event.result.output === 'string' ? event.result.output : JSON.stringify(event.result.output, null, 2);
+              body.textContent = typeof event.result.output === "string"
+                ? event.result.output
+                : JSON.stringify(event.result.output, null, 2);
               body.classList.add("tool-body--open");
               var chevron = currentToolEl.querySelector(".tool-chevron");
               if (chevron) chevron.classList.add("tool-chevron--open");
@@ -744,12 +767,16 @@
       case "tool_execution_update":
         if (event.chunk) {
           term.write(event.chunk);
+          // Auto-switch to terminal tab on first execution update
+          if (!terminalAutoSwitched) {
+            terminalAutoSwitched = true;
+            switchTab("terminal");
+          }
         }
         break;
 
       case "response.completed":
         removeThinkingIndicator();
-        // Finalize any pending agent text
         if (currentAgentEl) {
           if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
           renderAgentText(true);
@@ -782,10 +809,7 @@
     }
   }
 
-  // =========================================================================
-  //  WebSocket Connection
-  // =========================================================================
-
+  // --  WebSocket Connection
   var disconnectedShown = false;
 
   function connectWebSocket() {
@@ -802,9 +826,7 @@
       try {
         var event = JSON.parse(msg.data);
         handleAgentEvent(event);
-      } catch (_) {
-        // ignore malformed messages
-      }
+      } catch (_) { /* ignore */ }
     };
 
     ws.onclose = function () {
@@ -814,19 +836,13 @@
       setStatus("idle");
       setInputEnabled(true);
       isStreaming = false;
-      // Reconnect after delay
       setTimeout(connectWebSocket, 3000);
     };
 
-    ws.onerror = function () {
-      // onclose will fire after this
-    };
+    ws.onerror = function () { /* onclose fires after */ };
   }
 
-  // =========================================================================
-  //  Init
-  // =========================================================================
-
+  // --  Init
   fetchAgentInfo();
   startFilePolling();
   connectWebSocket();

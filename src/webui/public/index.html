@@ -18,8 +18,8 @@
   <div id="app">
     <!-- Header -->
     <header id="header">
+      <button id="menu-toggle" class="menu-toggle" type="button" aria-label="Toggle file tree">&#9776;</button>
       <span class="logo">agent<span class="logo-dot">&middot;</span>bundle</span>
-      <span id="status-badge" class="badge badge--idle">idle</span>
     </header>
 
     <div id="panels">
@@ -32,42 +32,64 @@
         <div id="file-tree" class="file-tree"></div>
       </aside>
 
-      <!-- Center: Main Content -->
-      <main id="main-panel">
-        <!-- Welcome State (shown when no messages) -->
-        <div id="welcome-state" class="welcome-state">
-          <div class="welcome-icon">&#9889;</div>
-          <h2 class="welcome-title">agent-bundle</h2>
-          <p class="welcome-subtitle">Data Analysis Agent</p>
-          <div id="skill-badges" class="skill-badges">
-            <!-- Filled by JS -->
-          </div>
-          <div class="welcome-heading">Try an example</div>
-          <div id="prompt-chips" class="prompt-chips">
-            <button class="prompt-chip" data-prompt="Generate sample sales data for 12 months and show monthly revenue trends">
-              &#128202; Monthly revenue trends
-            </button>
-            <button class="prompt-chip" data-prompt="Create a dataset of 100 students with random grades, then show the grade distribution histogram">
-              &#128200; Grade distribution analysis
-            </button>
-            <button class="prompt-chip" data-prompt="Analyze the correlation between temperature and ice cream sales with sample data">
-              &#128279; Correlation analysis
-            </button>
-          </div>
+      <!-- Center: Workspace (hero) -->
+      <main id="workspace-panel">
+        <!-- Tab bar -->
+        <div class="workspace-tabs">
+          <button class="workspace-tab workspace-tab--active" data-tab="preview" type="button">Preview</button>
+          <button class="workspace-tab" data-tab="terminal" type="button">Terminal</button>
         </div>
 
-        <!-- Chat Messages Area (hidden initially, shown after first message) -->
-        <div id="chat-messages" class="chat-messages" style="display:none;">
+        <!-- Workspace content area -->
+        <div id="workspace-content" class="workspace-content">
+          <!-- Welcome State (shown when no file selected and no messages) -->
+          <div id="welcome-state" class="welcome-state">
+            <div class="welcome-icon">&#9889;</div>
+            <h2 class="welcome-title">agent-bundle</h2>
+            <p class="welcome-subtitle">Data Analysis Agent</p>
+            <div id="skill-badges" class="skill-badges">
+              <!-- Filled by JS -->
+            </div>
+            <div class="welcome-heading">Try an example</div>
+            <div id="prompt-chips" class="prompt-chips">
+              <button class="prompt-chip" data-prompt="Generate sample sales data for 12 months and show monthly revenue trends">
+                &#128202; Monthly revenue trends
+              </button>
+              <button class="prompt-chip" data-prompt="Create a dataset of 100 students with random grades, then show the grade distribution histogram">
+                &#128200; Grade distribution analysis
+              </button>
+              <button class="prompt-chip" data-prompt="Analyze the correlation between temperature and ice cream sales with sample data">
+                &#128279; Correlation analysis
+              </button>
+            </div>
+          </div>
+
+          <!-- Preview content (shown when a file is selected) -->
+          <div id="preview-area" class="preview-area" style="display:none;">
+            <div class="preview-header">
+              <span id="preview-filename" class="preview-filename">filename</span>
+              <button id="preview-close" class="preview-close" type="button" aria-label="Close preview">&times;</button>
+            </div>
+            <div id="preview-content" class="preview-content"></div>
+          </div>
+
+          <!-- Terminal area (shown when terminal tab active) -->
+          <div id="terminal-area" class="terminal-area" style="display:none;">
+            <div id="terminal-container" class="terminal-container"></div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Right: Chat Sidebar -->
+      <aside id="chat-sidebar" class="chat-sidebar">
+        <div class="chat-sidebar-header">
+          <span class="chat-sidebar-title">Chat</span>
+          <span id="status-badge" class="badge badge--idle">idle</span>
+        </div>
+
+        <!-- Chat Messages Area -->
+        <div id="chat-messages" class="chat-messages">
           <!-- Messages injected by JS -->
-        </div>
-
-        <!-- Terminal Section (collapsible) -->
-        <div id="terminal-section" class="terminal-section collapsed">
-          <button id="terminal-toggle" class="terminal-toggle" type="button" aria-expanded="false" aria-controls="terminal-container">
-            <span class="terminal-toggle-icon">&#9656;</span>
-            <span class="terminal-toggle-label">Terminal</span>
-          </button>
-          <div id="terminal-container" class="terminal-container"></div>
         </div>
 
         <!-- Chat Input -->
@@ -90,18 +112,12 @@
           </div>
           <div class="input-hint">Enter to send &middot; Shift+Enter for newline</div>
         </form>
-      </main>
-
-      <!-- Right: File Preview (shown when clicking a file) -->
-      <aside id="file-preview" class="file-preview" style="display:none;">
-        <div class="panel-header">
-          <span id="preview-filename" class="panel-title">filename</span>
-          <button id="preview-close" class="preview-close" type="button" aria-label="Close preview">&times;</button>
-        </div>
-        <div id="preview-content" class="preview-content"></div>
       </aside>
     </div>
   </div>
+
+  <!-- Panel overlay (mobile backdrop) -->
+  <div class="panel-overlay"></div>
 
   <!-- Image Modal -->
   <div id="image-modal" class="image-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="Image preview">

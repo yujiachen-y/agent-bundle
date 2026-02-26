@@ -53,7 +53,12 @@ info "Building Ollama TUI demo bundle, template, and generating agent code"
 pnpm build:demo:tui-ollama
 ok "Demo bundle built and agent code generated"
 
-# ── 5. build project + start TUI ───────────────────────────────
+# ── 5. generate package link for @agent-bundle/* imports ───────
+info "Generating package link"
+pnpm exec tsx src/cli/index.ts generate --config demo/tui/ollama/agent-bundle.yaml
+ok "Package link created"
+
+# ── 6. build project + start TUI ───────────────────────────────
 info "Building TypeScript project"
 pnpm build
 ok "Build complete"

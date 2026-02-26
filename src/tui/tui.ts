@@ -6,6 +6,8 @@ import { findCommand } from "../commands/find.js";
 import type { Command } from "../commands/types.js";
 import { substituteArguments } from "../service/command-routes.js";
 
+import { createSlashCompleter, findBuiltinCommand, type BuiltinContext } from "./builtin-commands.js";
+import { attachCompletionHint } from "./completion-hint.js";
 import {
   renderError,
   renderEvent,
@@ -74,6 +76,32 @@ export function resolveSlashInput(
   return substituteArguments(command.content, parsed.args);
 }
 
+type SigintCallbacks = {
+  abort: () => void;
+  shutdown: () => void;
+  write: (text: string) => void;
+  prompt: () => void;
+};
+
+export function dispatchSigint(action: SigintAction, cb: SigintCallbacks): void {
+  switch (action) {
+    case "ignore":
+      return;
+    case "abort":
+      cb.abort();
+      cb.write(renderInterrupted());
+      return;
+    case "shutdown":
+      cb.shutdown();
+      cb.write(renderShuttingDown());
+      return;
+    case "exit_hint":
+      cb.write(renderExitHint());
+      cb.prompt();
+      return;
+  }
+}
+
 export async function serveTUI(agent: Agent, options?: TUIOptions): Promise<void> {
   const input = options?.input ?? process.stdin;
   const output = options?.output ?? process.stdout;
@@ -82,15 +110,25 @@ export async function serveTUI(agent: Agent, options?: TUIOptions): Promise<void
   let state: TUIState = "idle";
   let lastCtrlCTime = 0;
   let currentAbort: AbortController | null = null;
+  let closed = false;
 
   // Reads current state without TypeScript narrowing. Needed because `state` is
   // mutated from both the line handler and the SIGINT handler closures; TS
   // cannot track cross-closure mutations and produces false TS2367 errors.
   const readState = (): TUIState => state;
 
-  const rl = readline.createInterface({ input, output, prompt: PROMPT });
-  const write = (text: string): void => {
-    output.write(text);
+  const rl = readline.createInterface({
+    input, output, prompt: PROMPT, completer: createSlashCompleter(commands),
+  });
+  const write = (text: string): void => { output.write(text); };
+  const clearHint = "isTTY" in output ? attachCompletionHint(rl, input, output, commands) : (): void => {};
+
+  const builtinCtx: BuiltinContext = {
+    write,
+    close: () => { closed = true; rl.close(); },
+    clearScreen: () => output.write("\x1b[2J\x1b[H"),
+    agent,
+    commands,
   };
 
   write(renderReady(agent.name));
@@ -104,6 +142,16 @@ export async function serveTUI(agent: Agent, options?: TUIOptions): Promise<void
     }
 
     if (readState() !== "idle") return;
+
+    const parsed = parseSlashCommand(trimmed);
+    if (parsed) {
+      const builtin = findBuiltinCommand(parsed.commandName);
+      if (builtin) {
+        builtin.handler(builtinCtx, parsed.args);
+        if (!closed) rl.prompt();
+        return;
+      }
+    }
 
     const resolvedContent = resolveSlashInput(trimmed, commands, write);
     if (resolvedContent === null) {
@@ -136,35 +184,19 @@ export async function serveTUI(agent: Agent, options?: TUIOptions): Promise<void
     }
   };
 
-  rl.on("line", (line: string) => {
-    void handleLine(line);
-  });
+  rl.on("line", (line: string) => { clearHint(); void handleLine(line); });
 
   rl.on("SIGINT", () => {
     const now = Date.now();
-    const action = determineSigintAction(readState(), currentAbort !== null, now - lastCtrlCTime);
-
-    switch (action) {
-      case "ignore":
-        return;
-      case "abort":
-        lastCtrlCTime = now;
-        currentAbort?.abort();
-        write(renderInterrupted());
-        return;
-      case "shutdown":
-        state = "shutting_down";
-        write(renderShuttingDown());
-        agent.shutdown().finally(() => {
-          rl.close();
-        });
-        return;
-      case "exit_hint":
-        lastCtrlCTime = now;
-        write(renderExitHint());
-        rl.prompt();
-        return;
-    }
+    const elapsed = now - lastCtrlCTime;
+    const action = determineSigintAction(readState(), currentAbort !== null, elapsed);
+    lastCtrlCTime = now;
+    dispatchSigint(action, {
+      abort: () => currentAbort?.abort(),
+      shutdown: () => { state = "shutting_down"; agent.shutdown().finally(() => rl.close()); },
+      write,
+      prompt: () => rl.prompt(),
+    });
   });
 
   return new Promise<void>((resolve) => {

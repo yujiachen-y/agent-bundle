@@ -347,3 +347,4 @@ it("renders response.error events", async () => {
 
   expect(env.getOutput()).toContain("rate limit exceeded");
 });
+

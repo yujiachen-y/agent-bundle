@@ -17,14 +17,14 @@ async function shutdownAndExit(code: number, reason: string, error?: unknown): P
   shuttingDown = true;
 
   if (error !== undefined) {
-    console.error(`[demo/server/e2b] ${reason}`);
+    console.error(`[demo/code-formatter-e2b] ${reason}`);
     console.error(error);
   }
 
   try {
     await instance.shutdown();
   } catch (shutdownError) {
-    console.error("[demo/server/e2b] Failed to shutdown agent instance cleanly.");
+    console.error("[demo/code-formatter-e2b] Failed to shutdown agent instance cleanly.");
     console.error(shutdownError);
   }
 

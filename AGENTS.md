@@ -27,10 +27,10 @@ Port = prefix × 1000 + suffix
 
 suffix (last 3 digits): stable service identity
   000 = serve (CLI main service)
-  001 = demo/server/e2b
-  002 = demo/server/k8s
+  001 = demo/code-formatter-e2b
+  002 = demo/code-formatter-k8s
   003 = demo/financial-plugin
-  004 = demo/tui/ollama
+  004 = demo/coding-assistant-ollama
   … new demos increment
 
 prefix: worktree isolation

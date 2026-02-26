@@ -95,7 +95,7 @@ export async function isPortAvailable(port: number): Promise<boolean> {
  * Compute a service port: `prefix × 1000 + suffix`.
  *
  * - **suffix** (last three digits): stable service identity
- *   (0 = serve, 1 = demo/e2b, 2 = demo/k8s, 3 = demo/financial, …).
+ *   (0 = serve, 1 = code-formatter-e2b, 2 = code-formatter-k8s, 3 = financial-plugin, 4 = coding-assistant-ollama, …).
  * - **prefix**: `defaultPrefix` (3) for the main repo,
  *   hash-based 10–63 for worktrees.
  *

@@ -3,7 +3,7 @@
 # Ollama TUI demo — one-command setup + start
 #
 # Usage (from repo root):
-#   E2B_API_KEY=... ./demo/tui/ollama/setup.sh
+#   E2B_API_KEY=... ./demo/coding-assistant-ollama/setup.sh
 #
 # What it does:
 #   1. Validates prerequisites (Ollama running, E2B API key)
@@ -59,4 +59,4 @@ pnpm build
 ok "Build complete"
 
 info "Starting TUI (type a question at the > prompt, Ctrl+C twice to exit)"
-exec pnpm exec tsx demo/tui/ollama/main.ts
+exec pnpm exec tsx demo/coding-assistant-ollama/main.ts

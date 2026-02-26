@@ -3,8 +3,8 @@
 # K8s server demo — one-command setup + start
 #
 # Usage (from repo root):
-#   ANTHROPIC_API_KEY=sk-... ./demo/server/k8s/setup.sh
-#   ANTHROPIC_OAUTH_TOKEN=... ./demo/server/k8s/setup.sh
+#   ANTHROPIC_API_KEY=sk-... ./demo/code-formatter-k8s/setup.sh
+#   ANTHROPIC_OAUTH_TOKEN=... ./demo/code-formatter-k8s/setup.sh
 #
 # What it does:
 #   1. Validates API key and prerequisites
@@ -88,4 +88,4 @@ pnpm build
 ok "Build complete"
 
 info "Starting server (port auto-detected, see output below)"
-exec pnpm exec tsx demo/server/k8s/main.ts
+exec pnpm exec tsx demo/code-formatter-k8s/main.ts

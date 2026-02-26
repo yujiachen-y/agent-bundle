@@ -60,7 +60,7 @@ describe("buildSandboxImage args and streaming", () => {
     });
 
     const buildPromise = buildSandboxImage({
-      bundleDir: "/repo/demo/server/k8s",
+      bundleDir: "/repo/demo/code-formatter-k8s",
       dockerfile: "../../packages/execd/Dockerfile",
       context: "../../packages/execd",
       imageTag: "agent-bundle/execd:latest",
@@ -88,8 +88,8 @@ describe("buildSandboxImage args and streaming", () => {
         "-t",
         "agent-bundle/execd:latest",
         "-f",
-        resolve("/repo/demo/server/k8s", "../../packages/execd/Dockerfile"),
-        resolve("/repo/demo/server/k8s", "../../packages/execd"),
+        resolve("/repo/demo/code-formatter-k8s", "../../packages/execd/Dockerfile"),
+        resolve("/repo/demo/code-formatter-k8s", "../../packages/execd"),
       ],
       { stdio: ["ignore", "pipe", "pipe"] },
     );
@@ -100,7 +100,7 @@ describe("buildSandboxImage args and streaming", () => {
     const spawnMock = vi.fn<SpawnLike>(() => processMock);
 
     const buildPromise = buildSandboxImage({
-      bundleDir: "/repo/demo/server/k8s",
+      bundleDir: "/repo/demo/code-formatter-k8s",
       dockerfile: "../../packages/execd/Dockerfile",
       imageTag: "agent-bundle/execd:latest",
       spawnImpl: spawnMock,
@@ -111,7 +111,7 @@ describe("buildSandboxImage args and streaming", () => {
     await buildPromise;
 
     const resolvedDockerfile = resolve(
-      "/repo/demo/server/k8s",
+      "/repo/demo/code-formatter-k8s",
       "../../packages/execd/Dockerfile",
     );
     expect(spawnMock).toHaveBeenCalledWith(

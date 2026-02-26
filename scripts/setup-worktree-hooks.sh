@@ -60,8 +60,8 @@ if [ "$_ab_prev_ref" = "0000000000000000000000000000000000000000" ]; then
   echo ""
   echo "  [agent-bundle] Worktree port block: ${_ab_port}-$((_ab_port + 9))"
   echo "  [agent-bundle]   serve:  ${_ab_port}"
-  echo "  [agent-bundle]   demo/e2b: $((_ab_port + 1))"
-  echo "  [agent-bundle]   demo/web: $((_ab_port + 2))"
+  echo "  [agent-bundle]   code-formatter-e2b: $((_ab_port + 1))"
+  echo "  [agent-bundle]   code-formatter-k8s: $((_ab_port + 2))"
   echo ""
 fi
 # ── end agent-bundle-worktree-port ──────────────────────────────

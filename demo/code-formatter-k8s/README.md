@@ -9,7 +9,7 @@ agent-bundle.yaml           ← bundle definition (model, sandbox, skills)
 skills/format-code/SKILL.md ← skill instructions
         │
         ▼
-agent-bundle generate --config demo/server/k8s/agent-bundle.yaml
+agent-bundle generate --config demo/code-formatter-k8s/agent-bundle.yaml
         │
         ▼
 node_modules/@agent-bundle/code-formatter/index.ts ← generated output (exports AgentFactory)
@@ -39,7 +39,7 @@ ANTHROPIC_API_KEY=sk-... pnpm demo:k8s-server
 Or equivalently:
 
 ```bash
-ANTHROPIC_API_KEY=sk-... ./demo/server/k8s/setup.sh
+ANTHROPIC_API_KEY=sk-... ./demo/code-formatter-k8s/setup.sh
 ```
 
 The script is idempotent: on repeat runs, already-completed steps (cluster
@@ -155,13 +155,13 @@ sandbox:
 The sandbox image is configured in `agent-bundle.yaml` under
 `sandbox.kubernetes.image`. The demo defaults to
 `agent-bundle/k8s-server-execd:latest`, built from
-`demo/server/k8s/Dockerfile` (which includes `autopep8` for this demo flow),
+`demo/code-formatter-k8s/Dockerfile` (which includes `autopep8` for this demo flow),
 and uses `agent-bundle/execd:latest` as its base image.
 
 ### Project structure
 
 ```
-demo/server/k8s/
+demo/code-formatter-k8s/
 ├── agent-bundle.yaml           # Bundle config: model, sandbox, skills, docker build inputs
 ├── Dockerfile                  # Demo-only sandbox image (execd + autopep8)
 ├── setup.sh                    # One-command setup + start (entry point)

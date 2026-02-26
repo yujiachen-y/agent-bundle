@@ -27,8 +27,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && rm -rf dist/webui/public && cp -r src/webui/public dist/webui/public",
     "build:sandbox:execd": "docker build -t agent-bundle/execd:latest -f packages/execd/Dockerfile packages/execd",
-    "build:demo:k8s-server": "pnpm build:sandbox:execd && pnpm exec tsx src/cli/index.ts build --config demo/server/k8s/agent-bundle.yaml && pnpm exec tsx src/cli/index.ts generate --config demo/server/k8s/agent-bundle.yaml",
-    "build:demo:e2b-server": "pnpm exec tsx src/cli/index.ts build --config demo/server/e2b/agent-bundle.yaml",
+    "build:demo:k8s-server": "pnpm build:sandbox:execd && pnpm exec tsx src/cli/index.ts build --config demo/code-formatter-k8s/agent-bundle.yaml && pnpm exec tsx src/cli/index.ts generate --config demo/code-formatter-k8s/agent-bundle.yaml",
+    "build:demo:e2b-server": "pnpm exec tsx src/cli/index.ts build --config demo/code-formatter-e2b/agent-bundle.yaml",
     "lint": "eslint \"spikes/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\" \"src/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\"",
     "duplicate": "jscpd --config .jscpd.json",
     "test": "vitest run --coverage",
@@ -41,14 +41,14 @@
     "quality": "pnpm run lint && pnpm run duplicate && pnpm run test",
     "ci": "pnpm run quality",
     "ci:full": "pnpm run quality && pnpm run test:e2e",
-    "demo:k8s-server": "./demo/server/k8s/setup.sh",
-    "demo:e2b-server": "./demo/server/e2b/setup.sh",
-    "build:demo:web-e2b": "pnpm exec tsx src/cli/index.ts build --config demo/web/e2b/agent-bundle.yaml",
-    "demo:web-e2b": "./demo/web/e2b/setup.sh",
+    "demo:k8s-server": "./demo/code-formatter-k8s/setup.sh",
+    "demo:e2b-server": "./demo/code-formatter-e2b/setup.sh",
+    "build:demo:web-e2b": "pnpm exec tsx src/cli/index.ts build --config demo/data-analyst-e2b/agent-bundle.yaml",
+    "demo:web-e2b": "./demo/data-analyst-e2b/setup.sh",
     "build:demo:financial-plugin": "pnpm exec tsx src/cli/index.ts build --config demo/financial-plugin/agent-bundle.yaml",
     "demo:financial-plugin": "./demo/financial-plugin/setup.sh",
-    "build:demo:tui-ollama": "pnpm exec tsx src/cli/index.ts build --config demo/tui/ollama/agent-bundle.yaml",
-    "demo:tui-ollama": "./demo/tui/ollama/setup.sh"
+    "build:demo:tui-ollama": "pnpm exec tsx src/cli/index.ts build --config demo/coding-assistant-ollama/agent-bundle.yaml",
+    "demo:tui-ollama": "./demo/coding-assistant-ollama/setup.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

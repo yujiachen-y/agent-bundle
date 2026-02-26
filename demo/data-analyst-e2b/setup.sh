@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------
-# E2B server demo — one-command setup + start
+# E2B web demo (data-analyst) — one-command setup + start
 #
 # Usage (from repo root):
-#   E2B_API_KEY=... OPENAI_API_KEY=sk-... ./demo/server/e2b/setup.sh
+#   E2B_API_KEY=... OPENROUTER_API_KEY=... ./demo/data-analyst-e2b/setup.sh
 #
 # What it does:
 #   1. Validates API keys and prerequisites
 #   2. Verifies E2B API access
 #   3. Builds the E2B demo bundle and template
-#   4. Builds the TypeScript project and starts the HTTP server
+#   4. Builds the TypeScript project and starts `agent-bundle serve`
 # ------------------------------------------------------------------
 set -euo pipefail
 
@@ -27,8 +27,8 @@ if [ -z "${E2B_API_KEY:-}" ]; then
   fail "E2B_API_KEY is required."
 fi
 
-if [ -z "${OPENAI_API_KEY:-}" ]; then
-  fail "OPENAI_API_KEY is required."
+if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+  fail "OPENROUTER_API_KEY is required."
 fi
 
 info "Checking prerequisites"
@@ -39,7 +39,7 @@ ok "All prerequisites found"
 
 # ── 2. verify E2B API access ─────────────────────────────────────
 info "Checking E2B API access with SDK"
-if pnpm exec tsx -e "import { Template } from 'e2b'; void (async () => { await Template.exists('code-formatter-e2b-demo'); })();" >/dev/null 2>&1; then
+if pnpm exec tsx -e "import { Template } from 'e2b'; void (async () => { await Template.exists('data-analyst-demo'); })();" >/dev/null 2>&1; then
   ok "E2B API access works"
 else
   fail "Unable to access E2B API with current credentials. Verify E2B_API_KEY and network connectivity."
@@ -47,13 +47,14 @@ fi
 
 # ── 3. build E2B demo bundle and template ─────────────────────────
 info "Building E2B demo bundle and template"
-pnpm build:demo:e2b-server
+pnpm build:demo:web-e2b
 ok "E2B demo bundle built"
 
-# ── 4. build project + start server ──────────────────────────────
+# ── 4. build project + start serve ────────────────────────────────
 info "Building TypeScript project"
 pnpm build
 ok "Build complete"
 
-info "Starting server (port auto-detected, see output below)"
-exec pnpm exec tsx demo/server/e2b/main.ts
+info "Starting agent-bundle serve (port auto-detected, see output below)"
+exec pnpm exec tsx src/cli/index.ts serve \
+  --config demo/data-analyst-e2b/agent-bundle.yaml ${PORT:+--port "$PORT"}

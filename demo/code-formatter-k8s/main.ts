@@ -17,14 +17,14 @@ async function shutdownAndExit(exitCode: number, context: string, error?: unknow
 
   isShuttingDown = true;
   if (error !== undefined) {
-    console.error(`[demo/server/k8s] ${context}`);
+    console.error(`[demo/code-formatter-k8s] ${context}`);
     console.error(error);
   }
 
   try {
     await instance.shutdown();
   } catch (shutdownError) {
-    console.error("[demo/server/k8s] Failed to shutdown agent instance cleanly.");
+    console.error("[demo/code-formatter-k8s] Failed to shutdown agent instance cleanly.");
     console.error(shutdownError);
   }
 

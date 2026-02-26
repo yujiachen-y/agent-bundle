@@ -173,7 +173,7 @@
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (data.name) {
-          var titleEl = welcomeState.querySelector(".welcome-subtitle");
+          var titleEl = document.getElementById("welcome-agent-name");
           if (titleEl) titleEl.textContent = data.name;
         }
         if (data.skills && data.skills.length > 0) {
@@ -232,6 +232,29 @@
     });
   }
 
+  function addCopyButtons(container) {
+    container.querySelectorAll('pre code').forEach(function(block) {
+      var pre = block.parentElement;
+      if (pre.querySelector('.code-copy-btn')) return;
+      var btn = document.createElement('button');
+      btn.className = 'code-copy-btn';
+      btn.setAttribute('aria-label', 'Copy code');
+      btn.innerHTML = '\u2398';
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        navigator.clipboard.writeText(block.textContent).then(function() {
+          btn.classList.add('code-copy-btn--copied');
+          btn.innerHTML = '\u2713';
+          setTimeout(function() {
+            btn.classList.remove('code-copy-btn--copied');
+            btn.innerHTML = '\u2398';
+          }, 2000);
+        });
+      });
+      pre.appendChild(btn);
+    });
+  }
+
   function addUserMessage(text) {
     hideWelcome();
     var msg = document.createElement("div");
@@ -257,6 +280,7 @@
     if (!currentAgentEl) return;
     currentAgentEl.innerHTML = marked.parse(currentAgentText);
     highlightCodeBlocks(currentAgentEl);
+    addCopyButtons(currentAgentEl);
     makeImagesClickable(currentAgentEl);
     detectAndInsertImages(currentAgentEl, currentAgentText);
     if (final) {
@@ -303,6 +327,9 @@
 
     var headerEl = document.createElement("div");
     headerEl.className = "tool-header";
+    headerEl.setAttribute('role', 'button');
+    headerEl.setAttribute('tabindex', '0');
+    headerEl.setAttribute('aria-expanded', 'false');
     headerEl.innerHTML =
       '<span class="tool-icon">&#9881;</span>' +
       '<span class="tool-name">' + escapeHtml(toolName) + "</span>" +
@@ -320,6 +347,14 @@
       } else {
         body.classList.add("tool-body--open");
         chevron.classList.add("tool-chevron--open");
+      }
+      headerEl.setAttribute('aria-expanded', body.classList.contains('tool-body--open') ? 'true' : 'false');
+    });
+
+    headerEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        headerEl.click();
       }
     });
 
@@ -842,6 +877,21 @@
 
     ws.onerror = function () { /* onclose fires after */ };
   }
+
+  // --  Keyboard Shortcuts
+  document.addEventListener('keydown', function(e) {
+    // Escape closes file preview
+    if (e.key === 'Escape' && activeFilePath && activeTab === 'preview') {
+      closeFilePreview();
+      return;
+    }
+    // Cmd/Ctrl + K focuses chat input
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      chatInput.focus();
+      return;
+    }
+  });
 
   // --  Init
   window.addEventListener("files-changed", refreshFileTree);

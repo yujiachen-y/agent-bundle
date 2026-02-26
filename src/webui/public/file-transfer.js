@@ -25,6 +25,7 @@
   uploadBtn.type = "button";
   uploadBtn.className = "ft-upload-btn";
   uploadBtn.setAttribute("aria-label", "Upload files");
+  uploadBtn.setAttribute("title", "Upload files");
   uploadBtn.innerHTML =
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
@@ -88,6 +89,7 @@
   downloadBtn.type = "button";
   downloadBtn.className = "ft-download-btn";
   downloadBtn.setAttribute("aria-label", "Download file");
+  downloadBtn.setAttribute("title", "Download workspace");
   downloadBtn.innerHTML =
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +

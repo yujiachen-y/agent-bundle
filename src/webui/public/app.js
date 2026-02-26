@@ -602,6 +602,7 @@
 
   function openFilePreview(filePath, fileName) {
     activeFilePath = filePath;
+    filePreview.setAttribute("data-file-path", filePath);
     previewFilename.textContent = fileName;
     previewContent.innerHTML = '<div style="color:var(--text-muted);padding:12px;">Loading...</div>';
 
@@ -843,6 +844,7 @@
   }
 
   // --  Init
+  window.addEventListener("files-changed", refreshFileTree);
   fetchAgentInfo();
   startFilePolling();
   connectWebSocket();

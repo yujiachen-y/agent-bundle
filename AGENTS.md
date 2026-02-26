@@ -30,6 +30,7 @@ suffix (last 3 digits): stable service identity
   001 = demo/server/e2b
   002 = demo/server/k8s
   003 = demo/financial-plugin
+  004 = demo/tui/ollama
   … new demos increment
 
 prefix: worktree isolation
@@ -45,7 +46,7 @@ prefix: worktree isolation
 
 ### For Agents: Adding a New Demo
 
-1. Pick the next available suffix (currently **4**).
+1. Pick the next available suffix (currently **5**).
 2. Call `resolveServicePort(<suffix>)` in your `main.ts`.
 3. Update the suffix table above.
 4. **Never hardcode a port number** in new server code.

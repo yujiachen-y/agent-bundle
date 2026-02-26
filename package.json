@@ -38,7 +38,9 @@
     "build:demo:web-e2b": "pnpm exec tsx src/cli/index.ts build --config demo/web/e2b/agent-bundle.yaml",
     "demo:web-e2b": "./demo/web/e2b/setup.sh",
     "build:demo:financial-plugin": "pnpm exec tsx src/cli/index.ts build --config demo/financial-plugin/agent-bundle.yaml",
-    "demo:financial-plugin": "./demo/financial-plugin/setup.sh"
+    "demo:financial-plugin": "./demo/financial-plugin/setup.sh",
+    "build:demo:tui-ollama": "pnpm exec tsx src/cli/index.ts build --config demo/tui/ollama/agent-bundle.yaml",
+    "demo:tui-ollama": "./demo/tui/ollama/setup.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

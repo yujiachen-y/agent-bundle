@@ -1262,3 +1262,95 @@ html, body {
   .image-modal img { max-width: 95vw; max-height: 85vh; border-radius: var(--radius); }
   .image-modal-close, .modal-close { top: 12px; right: 12px; width: 32px; height: 32px; }
 }
+
+/* ==========================================================================
+   File Transfer (upload / download / toast)
+   ========================================================================== */
+
+/* Upload button in file-panel header */
+.ft-upload-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.ft-upload-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+
+/* Download button in preview header */
+.ft-download-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-right: 6px;
+}
+
+.ft-download-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+
+/* Drag-over visual on file tree */
+.ft-drag-over {
+  background: var(--violet-soft) !important;
+  outline: 2px dashed var(--violet);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Toast notifications */
+.ft-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 20px;
+  border-radius: var(--radius);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: var(--green);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  animation: toastIn 0.25s ease-out, toastOut 0.3s ease-in 2.7s forwards;
+  pointer-events: none;
+}
+
+.ft-toast--error {
+  background: var(--red);
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}

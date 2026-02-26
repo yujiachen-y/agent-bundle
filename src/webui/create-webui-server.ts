@@ -166,6 +166,10 @@ export function createWebUIServer(options: WebUIServerOptions): {
     }
   });
 
+  // ─── File upload / download APIs ───
+  app.post("/api/file-upload", (c) => handleFileUpload(c, sandbox));
+  app.get("/api/file-download", (c) => handleFileDownload(c, sandbox));
+
   // ─── Static file serving ───
   app.get("/assets/:filename", (c): Response | Promise<Response> => {
     const filename = c.req.param("filename");
@@ -295,6 +299,53 @@ async function streamAgentResponse(
       error: error instanceof Error ? error.message : String(error),
     };
     eventBus.emit({ type: "agent_event", event: errorEvent });
+  }
+}
+
+async function handleFileUpload(c: Context, sandbox: Sandbox): Promise<Response> {
+  try {
+    const body = await c.req.parseBody();
+    const file = body.file;
+    if (!(file instanceof File)) return c.json({ error: "No file provided" }, 400);
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_SIZE) return c.json({ error: "File exceeds 10 MB limit" }, 413);
+    const safeName = path.basename(file.name);
+    const targetDir = typeof body.dir === "string" ? body.dir : WORKSPACE_ROOT;
+    const resolved = path.normalize(path.join(targetDir, safeName));
+    if (!resolved.startsWith(WORKSPACE_ROOT)) return c.json({ error: "Forbidden" }, 403);
+    // Binary-safe write via base64
+    const buf = Buffer.from(await file.arrayBuffer());
+    const tmpPath = resolved + ".__upload_tmp";
+    await sandbox.file.write(tmpPath, buf.toString("base64"));
+    const res = await sandbox.exec(`base64 -d "${tmpPath}" > "${resolved}" && rm "${tmpPath}"`);
+    if (res.exitCode !== 0) return c.json({ error: "Write failed" }, 500);
+    return c.json({ ok: true, path: resolved });
+  } catch {
+    return c.json({ error: "Upload failed" }, 500);
+  }
+}
+
+async function handleFileDownload(c: Context, sandbox: Sandbox): Promise<Response> {
+  const filePath = c.req.query("path") ?? "";
+  if (!filePath) return c.json({ error: "Missing path" }, 400);
+  const resolved = path.normalize(
+    filePath.startsWith(WORKSPACE_ROOT) ? filePath : path.join(WORKSPACE_ROOT, filePath),
+  );
+  if (!resolved.startsWith(WORKSPACE_ROOT)) return c.json({ error: "Forbidden" }, 403);
+  try {
+    const ext = path.extname(resolved).toLowerCase();
+    const fileName = path.basename(resolved);
+    const result = await sandbox.exec(`base64 < "${resolved}"`);
+    if (result.exitCode !== 0) return c.json({ error: "Not found" }, 404);
+    const buf = Buffer.from(result.stdout.replace(/\s/g, ""), "base64");
+    return new Response(buf, {
+      headers: {
+        "content-type": toContentType(ext),
+        "content-disposition": `attachment; filename="${fileName}"`,
+      },
+    });
+  } catch {
+    return c.json({ error: "Download failed" }, 500);
   }
 }
 

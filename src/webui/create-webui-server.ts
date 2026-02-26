@@ -86,7 +86,11 @@ async function buildFileTree(sandbox: Sandbox, dirPath: string): Promise<FileTre
     };
 
     if (entry.type === "directory") {
-      node.children = await buildFileTree(sandbox, entry.path);
+      try {
+        node.children = await buildFileTree(sandbox, entry.path);
+      } catch {
+        node.children = [];
+      }
     }
 
     nodes.push(node);
@@ -108,10 +112,23 @@ export function createWebUIServer(options: WebUIServerOptions): {
   // Start with the existing API server (health + /v1/responses + optional /commands)
   const app = createServer(agent, commands ? { commands } : undefined);
 
+  // ─── Agent info API ───
+  app.get("/api/info", (c): Response => {
+    return c.json({
+      name: agent.name,
+      status: agent.status,
+      skills: [{ name: "data-analysis", description: "Analyze data using Python" }],
+    });
+  });
+
   // ─── File tree API ───
   app.get("/api/files", async (c): Promise<Response> => {
-    const entries = await buildFileTree(sandbox, WORKSPACE_ROOT);
-    return c.json({ entries });
+    try {
+      const entries = await buildFileTree(sandbox, WORKSPACE_ROOT);
+      return c.json({ entries });
+    } catch {
+      return c.json({ entries: [] });
+    }
   });
 
   // ─── File content API (for preview panel) ───
@@ -124,20 +141,21 @@ export function createWebUIServer(options: WebUIServerOptions): {
       return c.json({ error: "Forbidden" }, 403);
     }
 
-    try {
-      const content = await sandbox.file.read(resolved);
-      const ext = path.extname(resolved).toLowerCase();
-      const isImage = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"].includes(ext);
+    const ext = path.extname(resolved).toLowerCase();
+    const isImage = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"].includes(ext);
 
+    try {
       if (isImage) {
-        // Return base64-encoded image
-        const base64 = typeof content === "string"
-          ? Buffer.from(content).toString("base64")
-          : Buffer.from(content as ArrayBuffer).toString("base64");
+        // Binary files: read via base64 to avoid text encoding corruption
+        const result = await sandbox.exec(`base64 < "${resolved}"`);
+        if (result.exitCode !== 0) {
+          return c.json({ error: "Not found" }, 404);
+        }
+        const base64 = result.stdout.replace(/\s/g, "");
         return c.json({ type: "image", ext, base64 });
       }
 
-      // Return text content
+      const content = await sandbox.file.read(resolved);
       const text = typeof content === "string" ? content : new TextDecoder().decode(content as ArrayBuffer);
       return c.json({ type: "text", ext, content: text });
     } catch {

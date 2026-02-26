@@ -4,93 +4,116 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>agent-bundle</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpolygon points='16,2 28,9 28,23 16,30 4,23 4,9' fill='none' stroke='%237aa2f7' stroke-width='2'/%3E%3Ccircle cx='16' cy='10' r='2' fill='%237aa2f7'/%3E%3Ccircle cx='10' cy='22' r='2' fill='%237aa2f7'/%3E%3Ccircle cx='22' cy='22' r='2' fill='%237aa2f7'/%3E%3Cline x1='16' y1='10' x2='10' y2='22' stroke='%237aa2f7' stroke-width='1.5'/%3E%3Cline x1='16' y1='10' x2='22' y2='22' stroke='%237aa2f7' stroke-width='1.5'/%3E%3Cline x1='10' y1='22' x2='22' y2='22' stroke='%237aa2f7' stroke-width='1.5'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/styles.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/tokyo-night-dark.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
 </head>
 <body>
+  <!-- Background effects (matching site/index.html) -->
+  <div class="mesh-bg"></div>
+  <div class="noise"></div>
+
   <div id="app">
+    <!-- Header -->
     <header id="header">
-      <span class="logo">
-        <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="none" stroke="currentColor" stroke-width="2"/>
-          <circle cx="16" cy="10" r="2" fill="currentColor"/>
-          <circle cx="10" cy="22" r="2" fill="currentColor"/>
-          <circle cx="22" cy="22" r="2" fill="currentColor"/>
-          <line x1="16" y1="10" x2="10" y2="22" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="16" y1="10" x2="22" y2="22" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="10" y1="22" x2="22" y2="22" stroke="currentColor" stroke-width="1.5"/>
-        </svg>
-        agent-bundle
-      </span>
+      <span class="logo">agent<span class="logo-dot">&middot;</span>bundle</span>
       <span id="status-badge" class="badge badge--idle">idle</span>
     </header>
 
-    <div id="activity-bar" class="activity-bar hidden">
-      <span class="activity-spinner"></span>
-      <span id="activity-text"></span>
-    </div>
-
-    <!-- Mobile tab bar (shown below 720px) -->
-    <div id="mobile-tabs" class="mobile-tabs">
-      <button class="mobile-tab mobile-tab--active" data-tab="terminal">Terminal</button>
-      <button class="mobile-tab" data-tab="files">Files</button>
-      <button class="mobile-tab" data-tab="preview">Preview</button>
-    </div>
-
     <div id="panels">
-      <aside id="file-panel" data-panel="files">
-        <div class="panel-header">Files <span class="subtle">/workspace</span></div>
-        <div id="file-tree" class="file-tree"></div>
-        <div id="command-panel" style="display:none">
-          <div class="panel-header">Commands</div>
-          <div id="command-list" class="command-list"></div>
+      <!-- Left: File Panel -->
+      <aside id="file-panel">
+        <div class="panel-header">
+          <span class="panel-title">Files</span>
+          <span class="subtle">/workspace</span>
         </div>
+        <div id="file-tree" class="file-tree"></div>
       </aside>
 
-      <main id="main-panel" data-panel="terminal">
-        <div id="welcome-card" class="welcome-card">
-          <div class="welcome-content">
-            <h1 class="welcome-title">Data Analysis Agent</h1>
-            <p class="welcome-subtitle">Powered by E2B sandbox with pandas, matplotlib, numpy</p>
-            <div class="welcome-prompts">
-              <button class="prompt-chip" data-prompt="Generate sample sales data and show monthly revenue trends">
-                Generate sample sales data and show monthly revenue trends
-              </button>
-              <button class="prompt-chip" data-prompt="Create a dataset of 100 students with random grades, then show the grade distribution">
-                Create a dataset of 100 students with random grades, then show the grade distribution
-              </button>
-              <button class="prompt-chip" data-prompt="Analyze the correlation between temperature and ice cream sales">
-                Analyze the correlation between temperature and ice cream sales
-              </button>
-            </div>
+      <!-- Center: Main Content -->
+      <main id="main-panel">
+        <!-- Welcome State (shown when no messages) -->
+        <div id="welcome-state" class="welcome-state">
+          <div class="welcome-icon">&#9889;</div>
+          <h2 class="welcome-title">agent-bundle</h2>
+          <p class="welcome-subtitle">Data Analysis Agent</p>
+          <div id="skill-badges" class="skill-badges">
+            <!-- Filled by JS -->
+          </div>
+          <div class="welcome-heading">Try an example</div>
+          <div id="prompt-chips" class="prompt-chips">
+            <button class="prompt-chip" data-prompt="Generate sample sales data for 12 months and show monthly revenue trends">
+              &#128202; Monthly revenue trends
+            </button>
+            <button class="prompt-chip" data-prompt="Create a dataset of 100 students with random grades, then show the grade distribution histogram">
+              &#128200; Grade distribution analysis
+            </button>
+            <button class="prompt-chip" data-prompt="Analyze the correlation between temperature and ice cream sales with sample data">
+              &#128279; Correlation analysis
+            </button>
           </div>
         </div>
-        <div id="terminal-container"></div>
-        <div id="completion-card" class="completion-card hidden"></div>
-        <form id="chat-form">
-          <textarea id="chat-input" rows="1" placeholder="Send a message..." autocomplete="off" autofocus></textarea>
-          <button type="submit" id="send-btn">Send</button>
+
+        <!-- Chat Messages Area (hidden initially, shown after first message) -->
+        <div id="chat-messages" class="chat-messages" style="display:none;">
+          <!-- Messages injected by JS -->
+        </div>
+
+        <!-- Terminal Section (collapsible) -->
+        <div id="terminal-section" class="terminal-section collapsed">
+          <button id="terminal-toggle" class="terminal-toggle" type="button" aria-expanded="false" aria-controls="terminal-container">
+            <span class="terminal-toggle-icon">&#9656;</span>
+            <span class="terminal-toggle-label">Terminal</span>
+          </button>
+          <div id="terminal-container" class="terminal-container"></div>
+        </div>
+
+        <!-- Chat Input -->
+        <form id="chat-form" class="chat-form">
+          <div class="input-wrapper">
+            <textarea
+              id="chat-input"
+              class="chat-input"
+              placeholder="Send a message..."
+              rows="1"
+              autocomplete="off"
+              autofocus
+            ></textarea>
+            <button type="submit" id="send-btn" class="send-btn" aria-label="Send message">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </div>
+          <div class="input-hint">Enter to send &middot; Shift+Enter for newline</div>
         </form>
       </main>
 
-      <aside id="preview-panel" class="preview-panel hidden" data-panel="preview">
-        <div class="panel-header preview-header">
-          <span id="preview-filename" class="preview-filename">Preview</span>
-          <button id="preview-close" class="preview-close" title="Close preview">&times;</button>
+      <!-- Right: File Preview (shown when clicking a file) -->
+      <aside id="file-preview" class="file-preview" style="display:none;">
+        <div class="panel-header">
+          <span id="preview-filename" class="panel-title">filename</span>
+          <button id="preview-close" class="preview-close" type="button" aria-label="Close preview">&times;</button>
         </div>
-        <div id="preview-content" class="preview-content">
-          <div class="preview-empty">Click a file to preview</div>
-        </div>
+        <div id="preview-content" class="preview-content"></div>
       </aside>
     </div>
   </div>
 
+  <!-- Image Modal -->
+  <div id="image-modal" class="image-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="Image preview">
+    <img id="modal-image" src="" alt="Preview">
+    <button id="modal-close" class="modal-close" type="button" aria-label="Close image preview">&times;</button>
+  </div>
+
+  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
   <script src="/assets/app.js"></script>
 </body>
 </html>

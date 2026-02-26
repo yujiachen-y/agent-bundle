@@ -1,4 +1,4 @@
-/* global Terminal, FitAddon, marked, hljs */
+/* global marked, hljs */
 
 (function () {
   "use strict";
@@ -14,8 +14,6 @@
   var previewContent = document.getElementById("preview-content");
   var previewFilename = document.getElementById("preview-filename");
   var previewClose = document.getElementById("preview-close");
-  var terminalArea = document.getElementById("terminal-area");
-  var terminalContainer = document.getElementById("terminal-container");
   var imageModal = document.getElementById("image-modal");
   var modalImage = document.getElementById("modal-image");
   var modalClose = document.getElementById("modal-close");
@@ -25,39 +23,8 @@
   var statusBadge = document.getElementById("status-badge");
   var menuToggle = document.getElementById("menu-toggle");
   var panelOverlay = document.querySelector(".panel-overlay");
-  var workspaceTabs = document.querySelectorAll(".workspace-tab");
-
   // --  Markdown Configuration
   marked.setOptions({ breaks: true, gfm: true });
-
-  // --  xterm.js Setup
-  var fitAddon = new FitAddon.FitAddon();
-  var term = new Terminal({
-    theme: {
-      background: "#111114",
-      foreground: "#fafafa",
-      cursor: "#fafafa",
-      selectionBackground: "rgba(139,92,246,0.25)",
-    },
-    fontFamily: '"Fira Code", "SF Mono", "Cascadia Code", monospace',
-    fontSize: 13,
-    lineHeight: 1.4,
-    scrollback: 10000,
-    cursorBlink: false,
-    disableStdin: true,
-    convertEol: true,
-  });
-
-  term.loadAddon(fitAddon);
-  term.open(terminalContainer);
-
-  function fitTerminalIfVisible() {
-    if (activeTab === "terminal" && terminalArea.style.display !== "none") {
-      try { fitAddon.fit(); } catch (_) { /* ignore */ }
-    }
-  }
-
-  window.addEventListener("resize", fitTerminalIfVisible);
 
   // --  State
   var isStreaming = false;
@@ -82,51 +49,19 @@
   // Track active file for preview highlighting
   var activeFilePath = null;
 
-  // Workspace tab state
-  var activeTab = "preview";
-  var terminalAutoSwitched = false;
-
   // Welcome state
   var welcomeVisible = true;
 
-  // --  Workspace Tab Switching
-  function switchTab(tabName) {
-    activeTab = tabName;
-
-    workspaceTabs.forEach(function (btn) {
-      if (btn.getAttribute("data-tab") === tabName) {
-        btn.classList.add("workspace-tab--active");
-      } else {
-        btn.classList.remove("workspace-tab--active");
-      }
-    });
-
-    if (tabName === "preview") {
-      terminalArea.style.display = "none";
-      // Show preview or welcome depending on state
-      if (activeFilePath) {
-        previewArea.style.display = "";
-        welcomeState.style.display = "none";
-      } else if (welcomeVisible) {
-        previewArea.style.display = "none";
-        welcomeState.style.display = "";
-      } else {
-        previewArea.style.display = "none";
-        welcomeState.style.display = "none";
-      }
-    } else if (tabName === "terminal") {
-      welcomeState.style.display = "none";
-      previewArea.style.display = "none";
-      terminalArea.style.display = "";
-      setTimeout(function () { fitAddon.fit(); }, 50);
-    }
+  // --  Workspace View Helpers
+  function showPreview() {
+    previewArea.style.display = "";
+    welcomeState.style.display = "none";
   }
 
-  workspaceTabs.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      switchTab(btn.getAttribute("data-tab"));
-    });
-  });
+  function showWelcomeOrHide() {
+    previewArea.style.display = "none";
+    welcomeState.style.display = welcomeVisible ? "" : "none";
+  }
 
   // --  Hamburger Menu (Mobile File Tree Toggle)
   function openFilePanel() {
@@ -637,14 +572,11 @@
 
   function openFilePreview(filePath, fileName) {
     activeFilePath = filePath;
-    filePreview.setAttribute("data-file-path", filePath);
+    previewArea.setAttribute("data-file-path", filePath);
     previewFilename.textContent = fileName;
     previewContent.innerHTML = '<div style="color:var(--text-muted);padding:12px;">Loading...</div>';
 
-    // Switch to preview tab and show preview area
-    switchTab("preview");
-    previewArea.style.display = "";
-    welcomeState.style.display = "none";
+    showPreview();
 
     var relative = filePath.replace(/^\/workspace\//, "");
     var ext = getExtension(fileName);
@@ -685,11 +617,8 @@
   }
 
   function closeFilePreview() {
-    previewArea.style.display = "none";
     activeFilePath = null;
-    if (activeTab === "preview" && welcomeVisible) {
-      welcomeState.style.display = "";
-    }
+    showWelcomeOrHide();
     refreshFileTree();
   }
 
@@ -800,17 +729,6 @@
         currentToolEl = null;
         break;
 
-      case "tool_execution_update":
-        if (event.chunk) {
-          term.write(event.chunk);
-          // Auto-switch to terminal tab on first execution update
-          if (!terminalAutoSwitched) {
-            terminalAutoSwitched = true;
-            switchTab("terminal");
-          }
-        }
-        break;
-
       case "response.completed":
         removeThinkingIndicator();
         if (currentAgentEl) {
@@ -881,7 +799,7 @@
   // --  Keyboard Shortcuts
   document.addEventListener('keydown', function(e) {
     // Escape closes file preview
-    if (e.key === 'Escape' && activeFilePath && activeTab === 'preview') {
+    if (e.key === 'Escape' && activeFilePath) {
       closeFilePreview();
       return;
     }

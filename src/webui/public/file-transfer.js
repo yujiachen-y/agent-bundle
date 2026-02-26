@@ -82,7 +82,7 @@
   }
 
   // ── Download button in preview header ──
-  var previewHeader = document.querySelector("#file-preview .panel-header");
+  var previewHeader = document.querySelector("#preview-area .preview-header");
   if (!previewHeader) return;
 
   var downloadBtn = document.createElement("button");
@@ -101,7 +101,7 @@
   previewHeader.insertBefore(downloadBtn, closeBtn);
 
   downloadBtn.addEventListener("click", function () {
-    var filePreview = document.getElementById("file-preview");
+    var filePreview = document.getElementById("preview-area");
     var filePath = filePreview ? filePreview.getAttribute("data-file-path") : null;
     if (!filePath) return;
     var a = document.createElement("a");

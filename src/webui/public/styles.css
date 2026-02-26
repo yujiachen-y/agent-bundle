@@ -384,51 +384,6 @@ html, body {
   background: rgba(255, 255, 255, 0.015);
 }
 
-/* Workspace Tab Bar */
-.workspace-tabs {
-  height: 40px;
-  display: flex;
-  align-items: stretch;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel-header-bg);
-  flex-shrink: 0;
-  padding-left: 16px;
-}
-
-.workspace-tab {
-  padding: 0 20px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  height: 40px;
-  display: flex;
-  align-items: center;
-}
-
-.workspace-tab:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.workspace-tab--active {
-  color: var(--text);
-  border-bottom-color: var(--violet);
-  background: rgba(139, 92, 246, 0.06);
-}
-
-.workspace-tab:focus-visible {
-  outline: 2px solid var(--violet);
-  outline-offset: -2px;
-}
-
 /* Workspace Content */
 .workspace-content {
   flex: 1;
@@ -511,23 +466,6 @@ html, body {
 
 .preview-content pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
 .preview-content img { max-width: 100%; border-radius: var(--radius); margin: 4px 0; }
-
-/* Terminal Area (inside workspace) */
-.terminal-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.terminal-area .terminal-container {
-  flex: 1;
-  min-height: 0;
-  padding: 8px;
-  background: var(--bg);
-}
-
-.terminal-area .terminal-container .xterm { height: 100%; }
 
 /* ==========================================================================
    Chat Sidebar (Right)

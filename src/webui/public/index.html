@@ -7,7 +7,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/styles.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
 </head>
 <body>
@@ -40,11 +39,6 @@
 
       <!-- Center: Workspace (hero) -->
       <main id="workspace-panel">
-        <!-- Tab bar -->
-        <div class="workspace-tabs">
-          <button class="workspace-tab workspace-tab--active" data-tab="preview" type="button">Preview</button>
-          <button class="workspace-tab" data-tab="terminal" type="button">Terminal</button>
-        </div>
 
         <!-- Workspace content area -->
         <div id="workspace-content" class="workspace-content">
@@ -78,10 +72,6 @@
             <div id="preview-content" class="preview-content"></div>
           </div>
 
-          <!-- Terminal area (shown when terminal tab active) -->
-          <div id="terminal-area" class="terminal-area" style="display:none;">
-            <div id="terminal-container" class="terminal-container"></div>
-          </div>
         </div>
       </main>
 
@@ -131,8 +121,6 @@
   </div>
 
   <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
   <script src="/assets/app.js"></script>

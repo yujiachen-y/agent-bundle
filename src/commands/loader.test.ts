@@ -216,3 +216,47 @@ describe("loadCommand basePath requirement", () => {
     ).rejects.toThrowError(/basePath is required/);
   });
 });
+
+describe("loadAllCommands partial failure", () => {
+  it("returns successful commands when some entries fail to load", async () => {
+    const basePath = await createTempDirectory();
+    const commandPath = join(basePath, "good.md");
+    await mkdir(dirname(commandPath), { recursive: true });
+    await writeFile(commandPath, COMMAND_MARKDOWN, "utf8");
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const commands = await loadAllCommands(
+      [
+        { path: "./good" },
+        { path: "./missing-file" },
+      ],
+      basePath,
+    );
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0].name).toBe("Quick Analysis");
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain("[commands] Failed to load command");
+
+    warnSpy.mockRestore();
+  });
+
+  it("returns empty array when all entries fail", async () => {
+    const basePath = await createTempDirectory();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const commands = await loadAllCommands(
+      [
+        { path: "./missing-a" },
+        { path: "./missing-b" },
+      ],
+      basePath,
+    );
+
+    expect(commands).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+
+    warnSpy.mockRestore();
+  });
+});

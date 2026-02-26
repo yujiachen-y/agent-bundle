@@ -2,6 +2,7 @@ import * as readline from "node:readline";
 
 import type { ResponseEvent, ResponseInput } from "../agent-loop/types.js";
 import type { Agent } from "../agent/types.js";
+import { findCommand } from "../commands/find.js";
 import type { Command } from "../commands/types.js";
 import { substituteArguments } from "../service/command-routes.js";
 
@@ -56,15 +57,6 @@ export function parseSlashCommand(input: string): ParsedSlashCommand | null {
   return { commandName, args };
 }
 
-function findCommandByName(
-  commands: readonly Command[],
-  name: string,
-): Command | undefined {
-  return commands.find(
-    (cmd) => cmd.name === name || cmd.name.toLowerCase() === name.toLowerCase(),
-  );
-}
-
 export function resolveSlashInput(
   trimmed: string,
   commands: readonly Command[],
@@ -73,7 +65,7 @@ export function resolveSlashInput(
   const parsed = parseSlashCommand(trimmed);
   if (!parsed) return trimmed;
 
-  const command = findCommandByName(commands, parsed.commandName);
+  const command = findCommand(commands, parsed.commandName);
   if (!command) {
     write(renderCommandNotFound(parsed.commandName));
     return null;

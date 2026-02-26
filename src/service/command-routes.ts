@@ -2,13 +2,8 @@ import { Hono } from "hono";
 
 import type { ResponseInput } from "../agent-loop/types.js";
 import type { Agent } from "../agent/types.js";
+import { findCommand, toCommandSummary } from "../commands/find.js";
 import type { Command } from "../commands/types.js";
-
-export type CommandSummary = {
-  name: string;
-  description: string;
-  argumentHint?: string;
-};
 
 export type CommandRegistry = {
   commands: readonly Command[];
@@ -20,31 +15,17 @@ export function substituteArguments(content: string, args: string): string {
   return content.replace(ARGUMENTS_PLACEHOLDER, args);
 }
 
-function toSummary(command: Command): CommandSummary {
-  return {
-    name: command.name,
-    description: command.description,
-    ...(command.argumentHint ? { argumentHint: command.argumentHint } : {}),
-  };
-}
-
-function findCommand(registry: CommandRegistry, name: string): Command | undefined {
-  return registry.commands.find(
-    (cmd) => cmd.name === name || cmd.name.toLowerCase() === name.toLowerCase(),
-  );
-}
-
 export function createCommandRoutes(agent: Agent, registry: CommandRegistry): Hono {
   const routes = new Hono();
 
   routes.get("/commands", (c): Response => {
-    const summaries = registry.commands.map(toSummary);
+    const summaries = registry.commands.map(toCommandSummary);
     return c.json(summaries);
   });
 
   routes.post("/commands/:name", async (c): Promise<Response> => {
     const name = c.req.param("name");
-    const command = findCommand(registry, name);
+    const command = findCommand(registry.commands, name);
     if (!command) {
       return c.json({ error: { message: `Command not found: ${name}` } }, 404);
     }

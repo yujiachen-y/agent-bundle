@@ -9,6 +9,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 
 import type { ResponseEvent, ResponseInput } from "../agent-loop/types.js";
 import type { Agent } from "../agent/types.js";
+import { findCommand, toCommandSummary } from "../commands/find.js";
 import type { Command } from "../commands/types.js";
 import type { Sandbox, FileEntry } from "../sandbox/types.js";
 import { createServer } from "../service/create-server.js";
@@ -205,11 +206,7 @@ function setupWsConnections(
     clients.add(client);
 
     if (commands && commands.length > 0) {
-      const summaries = commands.map((cmd) => ({
-        name: cmd.name,
-        description: cmd.description,
-        ...(cmd.argumentHint ? { argumentHint: cmd.argumentHint } : {}),
-      }));
+      const summaries = commands.map(toCommandSummary);
       ws.send(JSON.stringify({ type: "commands", commands: summaries }));
     }
 
@@ -243,9 +240,7 @@ function handleWsMessage(
   if (parsed.type === "command") {
     const name = typeof parsed.name === "string" ? parsed.name : "";
     const args = typeof parsed.args === "string" ? parsed.args : "";
-    const command = commands.find(
-      (cmd) => cmd.name === name || cmd.name.toLowerCase() === name.toLowerCase(),
-    );
+    const command = findCommand(commands, name);
     if (!command) {
       ws.send(JSON.stringify({ type: "command_error", name, error: "Command not found" }));
       return;

@@ -219,9 +219,17 @@ export async function loadAllCommands(
   basePath: string,
   options: LoadAllCommandsOptions = {},
 ): Promise<Command[]> {
-  return await Promise.all(
-    entries.map(async (entry) => {
-      return await loadCommand(entry, { ...options, basePath });
-    }),
+  const results = await Promise.allSettled(
+    entries.map((entry) => loadCommand(entry, { ...options, basePath })),
   );
+
+  const commands: Command[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      commands.push(result.value);
+    } else {
+      console.warn(`[commands] Failed to load command: ${result.reason}`);
+    }
+  }
+  return commands;
 }

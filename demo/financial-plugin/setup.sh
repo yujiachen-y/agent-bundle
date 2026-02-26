@@ -8,7 +8,7 @@
 # What it does:
 #   1. Validates API keys and prerequisites
 #   2. Verifies E2B API access
-#   3. Builds the E2B demo bundle and template
+#   3. Builds the E2B demo bundle and template, generates agent code
 #   4. Builds the TypeScript project and starts the HTTP server
 # ------------------------------------------------------------------
 set -euo pipefail
@@ -45,10 +45,10 @@ else
   fail "Unable to access E2B API with current credentials. Verify E2B_API_KEY and network connectivity."
 fi
 
-# ── 3. build E2B demo bundle and template ─────────────────────────
-info "Building E2B demo bundle and template"
+# ── 3. build E2B demo bundle, template, and generate agent code ───
+info "Building E2B demo bundle and template, generating agent code"
 pnpm build:demo:financial-plugin
-ok "E2B demo bundle built"
+ok "E2B demo bundle built and agent code generated"
 
 # ── 4. build project + start server ──────────────────────────────
 info "Building TypeScript project"

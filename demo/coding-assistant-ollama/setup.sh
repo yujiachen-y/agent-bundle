@@ -7,7 +7,7 @@
 #
 # What it does:
 #   1. Validates prerequisites (Ollama running, E2B API key)
-#   2. Builds the demo bundle and E2B template
+#   2. Builds the demo bundle, E2B template, and generates agent code
 #   3. Builds the TypeScript project and starts the TUI
 # ------------------------------------------------------------------
 set -euo pipefail
@@ -48,10 +48,10 @@ else
   fail "Unable to access E2B API with current credentials. Verify E2B_API_KEY and network connectivity."
 fi
 
-# ── 4. build demo bundle and template ──────────────────────────
-info "Building Ollama TUI demo bundle and template"
+# ── 4. build demo bundle, template, and generate agent code ────
+info "Building Ollama TUI demo bundle, template, and generating agent code"
 pnpm build:demo:tui-ollama
-ok "Demo bundle built"
+ok "Demo bundle built and agent code generated"
 
 # ── 5. build project + start TUI ───────────────────────────────
 info "Building TypeScript project"

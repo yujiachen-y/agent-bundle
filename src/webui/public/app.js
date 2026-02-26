@@ -52,55 +52,50 @@
   // Welcome state
   var welcomeVisible = true;
 
+  // Workspace state machine: "welcome" | "empty-no-files" | "empty-with-files" | "preview"
+  var workspaceState = "welcome";
+
   // --  Workspace View Helpers
+  var emptyNoFiles = document.getElementById("empty-no-files");
+  var emptyWithFiles = document.getElementById("empty-with-files");
+  var fileCardGrid = document.getElementById("file-card-grid");
+
+  function setWorkspaceState(newState) {
+    workspaceState = newState;
+    var map = { "welcome": welcomeState, "empty-no-files": emptyNoFiles, "empty-with-files": emptyWithFiles, "preview": previewArea };
+    [welcomeState, emptyNoFiles, emptyWithFiles, previewArea].forEach(function(el) { el.style.display = "none"; });
+    if (map[newState]) map[newState].style.display = "";
+    if (newState === "empty-with-files") renderFileCards();
+  }
+
   function showPreview() {
-    previewArea.style.display = "";
-    welcomeState.style.display = "none";
+    setWorkspaceState("preview");
   }
 
   function showWelcomeOrHide() {
-    previewArea.style.display = "none";
-    welcomeState.style.display = welcomeVisible ? "" : "none";
+    if (previousFilePaths.size > 0) setWorkspaceState("empty-with-files");
+    else if (workspaceState === "preview") setWorkspaceState("empty-no-files");
+    else setWorkspaceState(workspaceState === "welcome" ? "welcome" : "empty-no-files");
   }
 
   // --  Hamburger Menu (Mobile File Tree Toggle)
-  function openFilePanel() {
-    filePanel.classList.add("panel--open");
-    panelOverlay.classList.add("panel-overlay--visible");
-  }
-
-  function closeFilePanel() {
-    filePanel.classList.remove("panel--open");
-    panelOverlay.classList.remove("panel-overlay--visible");
-  }
+  function openFilePanel() { filePanel.classList.add("panel--open"); panelOverlay.classList.add("panel-overlay--visible"); }
+  function closeFilePanel() { filePanel.classList.remove("panel--open"); panelOverlay.classList.remove("panel-overlay--visible"); }
 
   menuToggle.addEventListener("click", function () {
-    if (filePanel.classList.contains("panel--open")) {
-      closeFilePanel();
-    } else {
-      openFilePanel();
-    }
+    filePanel.classList.contains("panel--open") ? closeFilePanel() : openFilePanel();
   });
 
   panelOverlay.addEventListener("click", closeFilePanel);
 
   // --  Status Badge
-  function setStatus(status) {
-    statusBadge.textContent = status;
-    statusBadge.className = "badge badge--" + status;
-  }
-
-  function setInputEnabled(enabled) {
-    chatInput.disabled = !enabled;
-    sendBtn.disabled = !enabled;
-    if (enabled) chatInput.focus();
-  }
+  function setStatus(s) { statusBadge.textContent = s; statusBadge.className = "badge badge--" + s; }
+  function setInputEnabled(en) { chatInput.disabled = !en; sendBtn.disabled = !en; if (en) chatInput.focus(); }
 
   // --  Welcome State
   function hideWelcome() {
-    if (!welcomeVisible) return;
+    if (workspaceState === "welcome") setWorkspaceState("empty-no-files");
     welcomeVisible = false;
-    welcomeState.style.display = "none";
   }
 
   function fetchAgentInfo() {
@@ -136,6 +131,16 @@
     }
   });
 
+  // Empty state suggestion clicks
+  if (emptyNoFiles) {
+    emptyNoFiles.addEventListener("click", function(e) {
+      var suggestion = e.target.closest(".workspace-empty-suggestion");
+      if (!suggestion) return;
+      var prompt = suggestion.getAttribute("data-prompt");
+      if (prompt) { chatInput.value = prompt; sendMessage(prompt); chatInput.value = ""; }
+    });
+  }
+
   // --  Chat Message Rendering
   function scrollToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -148,22 +153,14 @@
   }
 
   function highlightCodeBlocks(container) {
-    var blocks = container.querySelectorAll("pre code");
-    blocks.forEach(function (block) {
-      hljs.highlightElement(block);
-    });
+    container.querySelectorAll("pre code").forEach(function (block) { hljs.highlightElement(block); });
   }
 
   function makeImagesClickable(container) {
-    var images = container.querySelectorAll("img");
-    images.forEach(function (img) {
-      if (!img.classList.contains("chat-image")) {
-        img.classList.add("chat-image");
-      }
+    container.querySelectorAll("img").forEach(function (img) {
+      if (!img.classList.contains("chat-image")) img.classList.add("chat-image");
       img.style.cursor = "pointer";
-      img.addEventListener("click", function () {
-        openImageModal(img.src);
-      });
+      img.addEventListener("click", function () { openImageModal(img.src); });
     });
   }
 
@@ -172,18 +169,12 @@
       var pre = block.parentElement;
       if (pre.querySelector('.code-copy-btn')) return;
       var btn = document.createElement('button');
-      btn.className = 'code-copy-btn';
-      btn.setAttribute('aria-label', 'Copy code');
-      btn.innerHTML = '\u2398';
+      btn.className = 'code-copy-btn'; btn.setAttribute('aria-label', 'Copy code'); btn.innerHTML = '\u2398';
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
         navigator.clipboard.writeText(block.textContent).then(function() {
-          btn.classList.add('code-copy-btn--copied');
-          btn.innerHTML = '\u2713';
-          setTimeout(function() {
-            btn.classList.remove('code-copy-btn--copied');
-            btn.innerHTML = '\u2398';
-          }, 2000);
+          btn.classList.add('code-copy-btn--copied'); btn.innerHTML = '\u2713';
+          setTimeout(function() { btn.classList.remove('code-copy-btn--copied'); btn.innerHTML = '\u2398'; }, 2000);
         });
       });
       pre.appendChild(btn);
@@ -214,43 +205,26 @@
   function renderAgentText(final) {
     if (!currentAgentEl) return;
     currentAgentEl.innerHTML = marked.parse(currentAgentText);
-    highlightCodeBlocks(currentAgentEl);
-    addCopyButtons(currentAgentEl);
-    makeImagesClickable(currentAgentEl);
-    detectAndInsertImages(currentAgentEl, currentAgentText);
-    if (final) {
-      currentAgentEl.classList.remove("streaming-cursor");
-    }
+    highlightCodeBlocks(currentAgentEl); addCopyButtons(currentAgentEl);
+    makeImagesClickable(currentAgentEl); detectAndInsertImages(currentAgentEl, currentAgentText);
+    if (final) currentAgentEl.classList.remove("streaming-cursor");
     scrollToBottom();
   }
 
   function scheduleRender() {
     if (renderTimer) return;
-    renderTimer = setTimeout(function () {
-      renderTimer = null;
-      renderAgentText(false);
-    }, RENDER_DEBOUNCE_MS);
+    renderTimer = setTimeout(function () { renderTimer = null; renderAgentText(false); }, RENDER_DEBOUNCE_MS);
   }
 
   function showThinkingIndicator() {
-    hideWelcome();
-    removeThinkingIndicator();
+    hideWelcome(); removeThinkingIndicator();
     var el = document.createElement("div");
-    el.id = "thinking-msg";
-    el.className = "thinking-indicator";
-    el.innerHTML =
-      '<span class="dot"></span>' +
-      '<span class="dot"></span>' +
-      '<span class="dot"></span>' +
-      '<span class="thinking-label">Thinking...</span>';
-    chatMessages.appendChild(el);
-    scrollToBottom();
+    el.id = "thinking-msg"; el.className = "thinking-indicator";
+    el.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="thinking-label">Thinking...</span>';
+    chatMessages.appendChild(el); scrollToBottom();
   }
 
-  function removeThinkingIndicator() {
-    var el = document.getElementById("thinking-msg");
-    if (el) el.remove();
-  }
+  function removeThinkingIndicator() { var el = document.getElementById("thinking-msg"); if (el) el.remove(); }
 
   function addToolCallMessage(toolName) {
     hideWelcome();
@@ -307,22 +281,15 @@
     if (!currentToolEl) return;
     var statusEl = currentToolEl.querySelector(".tool-status");
     if (!statusEl) return;
-    if (isError) {
-      statusEl.textContent = "error";
-      statusEl.className = "tool-status tool-status--error";
-    } else {
-      statusEl.textContent = "done";
-      statusEl.className = "tool-status tool-status--success";
-    }
+    statusEl.textContent = isError ? "error" : "done";
+    statusEl.className = "tool-status tool-status--" + (isError ? "error" : "success");
   }
 
   function addErrorMessage(text) {
     hideWelcome();
-    var msg = document.createElement("div");
-    msg.className = "message message--error";
+    var msg = document.createElement("div"); msg.className = "message message--error";
     msg.innerHTML = '<div class="message-content">Error: ' + escapeHtml(text) + "</div>";
-    chatMessages.appendChild(msg);
-    scrollToBottom();
+    chatMessages.appendChild(msg); scrollToBottom();
   }
 
   // --  Inline Image Detection
@@ -368,25 +335,11 @@
   }
 
   // --  Image Modal
-  function openImageModal(src) {
-    modalImage.src = src;
-    imageModal.style.display = "flex";
-    imageModal.classList.add("image-modal--open");
-  }
-
-  function closeImageModal() {
-    imageModal.classList.remove("image-modal--open");
-    imageModal.style.display = "none";
-    modalImage.src = "";
-  }
-
+  function openImageModal(src) { modalImage.src = src; imageModal.style.display = "flex"; imageModal.classList.add("image-modal--open"); }
+  function closeImageModal() { imageModal.classList.remove("image-modal--open"); imageModal.style.display = "none"; modalImage.src = ""; }
   modalClose.addEventListener("click", closeImageModal);
-  imageModal.addEventListener("click", function (e) {
-    if (e.target === imageModal) closeImageModal();
-  });
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") closeImageModal();
-  });
+  imageModal.addEventListener("click", function (e) { if (e.target === imageModal) closeImageModal(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeImageModal(); });
 
   // --  File Tree
   var FILE_ICON_MAP = {
@@ -512,6 +465,34 @@
     }
   }
 
+  // -- File Cards (workspace empty-with-files state)
+  function renderFileCards() {
+    if (!fileCardGrid || !lastFileEntries) return;
+    fileCardGrid.innerHTML = "";
+    var files = [];
+    (function collect(entries) {
+      entries.forEach(function(e) { if (e.type === "file") files.push(e); else if (e.children) collect(e.children); });
+    })(lastFileEntries);
+    files.reverse().slice(0, 8).forEach(function(file, index) {
+      var card = document.createElement("div");
+      card.className = "file-card";
+      if (lastNewPaths.has(file.path)) card.classList.add("file-card--new");
+      card.style.animationDelay = (index * 50) + "ms";
+      var nameEl = document.createElement("div");
+      nameEl.className = "file-card-name";
+      nameEl.textContent = file.name;
+      card.appendChild(nameEl);
+      var ext = getExtension(file.name);
+      var pEl = document.createElement("div");
+      pEl.className = "file-card-preview";
+      if (IMAGE_EXT_SET.has(ext)) { pEl.innerHTML = '<span style="color:var(--pink);">Image file</span>'; }
+      else { var fi = getFileIcon(file.name, false); pEl.innerHTML = '<span>' + fi.icon + ' ' + escapeHtml(ext || 'file') + '</span>'; }
+      card.appendChild(pEl);
+      card.addEventListener("click", function() { openFilePreview(file.path, file.name); });
+      fileCardGrid.appendChild(card);
+    });
+  }
+
   function refreshFileTree() {
     fetch("/api/files")
       .then(function (res) { return res.json(); })
@@ -538,6 +519,13 @@
         lastFileEntries = data.entries;
         lastNewPaths = newPaths;
         refreshFileTreeUI();
+
+        // Transition from empty-no-files to empty-with-files when files appear
+        if (workspaceState === "empty-no-files" && currentPaths.size > 0) {
+          setWorkspaceState("empty-with-files");
+        } else if (workspaceState === "empty-with-files") {
+          renderFileCards();
+        }
       })
       .catch(function () { /* silent retry */ });
   }
@@ -574,6 +562,31 @@
     activeFilePath = filePath;
     previewArea.setAttribute("data-file-path", filePath);
     previewFilename.textContent = fileName;
+
+    // Render breadcrumb path
+    var breadcrumb = document.getElementById("preview-breadcrumb");
+    if (breadcrumb) {
+      breadcrumb.innerHTML = "";
+      var parts = filePath.replace(/^\/workspace\//, "").split("/");
+      parts.forEach(function(part, i) {
+        var span = document.createElement("span");
+        if (i < parts.length - 1) {
+          span.className = "preview-breadcrumb-segment";
+          span.textContent = part;
+          breadcrumb.appendChild(span);
+          var sep = document.createElement("span");
+          sep.className = "preview-breadcrumb-separator";
+          sep.textContent = "\u203A";
+          breadcrumb.appendChild(sep);
+        } else {
+          span.className = "preview-breadcrumb-current";
+          span.id = "preview-filename";
+          span.textContent = part;
+          breadcrumb.appendChild(span);
+        }
+      });
+    }
+
     previewContent.innerHTML = '<div style="color:var(--text-muted);padding:12px;">Loading...</div>';
 
     showPreview();
@@ -741,6 +754,21 @@
         setInputEnabled(true);
         isStreaming = false;
         refreshFileTree();
+
+        // Auto-open highest priority new file
+        var newFiles = [];
+        if (previousFilePaths.size > 0) {
+          var nowPaths = new Set();
+          collectPaths(lastFileEntries || [], nowPaths);
+          nowPaths.forEach(function(p) { if (!previousFilePaths.has(p)) newFiles.push(p); });
+        }
+        if (newFiles.length > 0) {
+          newFiles.sort(function(a, b) {
+            var ea = getExtension(a), eb = getExtension(b);
+            return (IMAGE_EXT_SET.has(ea) ? 0 : ea === ".md" ? 1 : 2) - (IMAGE_EXT_SET.has(eb) ? 0 : eb === ".md" ? 1 : 2);
+          });
+          openFilePreview(newFiles[0], newFiles[0].split("/").pop());
+        }
         break;
 
       case "response.error":

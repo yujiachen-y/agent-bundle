@@ -44,7 +44,14 @@
         <div id="workspace-content" class="workspace-content">
           <!-- Welcome State (shown when no file selected and no messages) -->
           <div id="welcome-state" class="welcome-state">
-            <div class="welcome-icon">&#128202;</div>
+            <div class="welcome-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+                <rect x="1" y="1" width="22" height="22" rx="3" ry="3" stroke="#8b5cf6" stroke-width="1.5" fill="none" opacity="0.3"></rect>
+              </svg>
+            </div>
             <h2 class="welcome-title" id="welcome-agent-name">Data Analysis Agent</h2>
             <p class="welcome-powered">powered by agent<span class="dot">&middot;</span>bundle</p>
             <p class="welcome-subtitle">Drop a CSV, ask questions in plain English, get charts and reports</p>
@@ -63,10 +70,40 @@
             </div>
           </div>
 
+          <!-- Empty state: no files yet -->
+          <div id="empty-no-files" class="workspace-empty" style="display:none;">
+            <div class="workspace-empty-card">
+              <div class="workspace-empty-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+              </div>
+              <div class="workspace-empty-text">Files will appear here as the agent works.</div>
+              <div class="workspace-empty-suggestions">
+                <button class="workspace-empty-suggestion" data-prompt="Analyze the data and show trends">Analyze the data and show trends</button>
+                <button class="workspace-empty-suggestion" data-prompt="Generate a chart from the dataset">Generate a chart from the dataset</button>
+                <button class="workspace-empty-suggestion" data-prompt="Create a summary report">Create a summary report</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty state: files exist, none selected -->
+          <div id="empty-with-files" class="workspace-empty" style="display:none;align-items:stretch;justify-content:flex-start;">
+            <div class="workspace-empty-header">Recently Generated</div>
+            <div id="file-card-grid" class="file-card-grid">
+              <!-- Cards injected by JS -->
+            </div>
+          </div>
+
           <!-- Preview content (shown when a file is selected) -->
           <div id="preview-area" class="preview-area" style="display:none;">
             <div class="preview-header">
-              <span id="preview-filename" class="preview-filename">filename</span>
+              <div id="preview-breadcrumb" class="preview-breadcrumb">
+                <span id="preview-filename" class="preview-breadcrumb-current">filename</span>
+              </div>
               <button id="preview-close" class="preview-close" type="button" aria-label="Close preview">&times;</button>
             </div>
             <div id="preview-content" class="preview-content"></div>

@@ -248,12 +248,16 @@ export async function startMemoryServer(port: number = MEMORY_SERVER_PORT): Prom
           },
         });
 
+        let closing = false;
         transport.onclose = () => {
           const closedSessionId = transport?.sessionId;
           if (closedSessionId) {
             sessions.delete(closedSessionId);
           }
-          void sessionServer.close();
+          if (!closing) {
+            closing = true;
+            void sessionServer.close();
+          }
         };
 
         await sessionServer.connect(transport);

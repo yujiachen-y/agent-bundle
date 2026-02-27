@@ -7,10 +7,11 @@
 #
 # What it does:
 #   1. Validates API keys and prerequisites
-#   2. Builds bundle artifacts
-#   3. Generates bundle code
-#   4. Builds TypeScript project
-#   5. Starts custom demo server + MCP servers
+#   2. Bundles memory STDIO server with esbuild
+#   3. Builds bundle artifacts (E2B template)
+#   4. Generates bundle code
+#   5. Builds TypeScript project
+#   6. Starts custom demo server + product MCP server
 # ------------------------------------------------------------------
 set -euo pipefail
 
@@ -35,6 +36,15 @@ for cmd in pnpm node; do
   check_cmd "$cmd"
 done
 ok "All prerequisites found"
+
+info "Bundling memory STDIO server"
+mkdir -p demo/personalized-recommend/tools/mcp
+pnpm exec esbuild \
+  demo/personalized-recommend/mcp/memory-server-stdio.ts \
+  --bundle --platform=node --target=node20 --format=esm \
+  --outfile=demo/personalized-recommend/tools/mcp/memory-server.mjs \
+  '--external:node:*'
+ok "STDIO server bundled"
 
 info "Building personalized-recommend bundle"
 pnpm exec tsx src/cli/index.ts build --config demo/personalized-recommend/agent-bundle.yaml

@@ -47,7 +47,7 @@
     "demo:web-e2b": "./demo/data-analyst-e2b/setup.sh",
     "build:demo:financial-plugin": "pnpm exec tsx src/cli/index.ts build --config demo/financial-plugin/agent-bundle.yaml",
     "demo:financial-plugin": "./demo/financial-plugin/setup.sh",
-    "build:demo:personalized-recommend": "pnpm exec tsx src/cli/index.ts build --config demo/personalized-recommend/agent-bundle.yaml && pnpm exec tsx src/cli/index.ts generate --config demo/personalized-recommend/agent-bundle.yaml",
+    "build:demo:personalized-recommend": "mkdir -p demo/personalized-recommend/tools/mcp && pnpm exec esbuild demo/personalized-recommend/mcp/memory-server-stdio.ts --bundle --platform=node --target=node20 --format=esm --outfile=demo/personalized-recommend/tools/mcp/memory-server.mjs \"--external:node:*\" && pnpm exec tsx src/cli/index.ts build --config demo/personalized-recommend/agent-bundle.yaml && pnpm exec tsx src/cli/index.ts generate --config demo/personalized-recommend/agent-bundle.yaml",
     "demo:personalized-recommend": "./demo/personalized-recommend/setup.sh"
   },
   "devDependencies": {

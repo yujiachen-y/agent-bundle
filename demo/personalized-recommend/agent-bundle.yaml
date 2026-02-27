@@ -22,9 +22,12 @@ sandbox:
 mcp:
   servers:
     - name: memory
-      url: http://127.0.0.1:3101/mcp
-      auth: bearer
+      transport: stdio
+      command: node
+      args:
+        - /mcp/memory-server.mjs
     - name: products
+      transport: http
       url: http://127.0.0.1:3102/mcp
       auth: bearer
 skills:

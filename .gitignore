@@ -18,3 +18,6 @@ yarn-debug.log*
 pnpm-debug.log*
 .DS_Store
 .claude/
+
+# Demo build artifacts
+demo/personalized-recommend/tools/

@@ -235,12 +235,16 @@ export async function startProductServer(port: number = PRODUCT_SERVER_PORT): Pr
           },
         });
 
+        let closing = false;
         transport.onclose = () => {
           const closedSessionId = transport?.sessionId;
           if (closedSessionId) {
             sessions.delete(closedSessionId);
           }
-          void sessionServer.close();
+          if (!closing) {
+            closing = true;
+            void sessionServer.close();
+          }
         };
 
         await sessionServer.connect(transport);

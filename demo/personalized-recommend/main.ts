@@ -5,7 +5,6 @@ import { PersonalizedRecommend as factory } from "@agent-bundle/personalized-rec
 import { createServer as createAgentServer } from "agent-bundle/service";
 import { resolveServicePort } from "agent-bundle/worktree-port";
 
-import { startMemoryServer } from "./mcp/memory-server.js";
 import { startProductServer } from "./mcp/product-server.js";
 
 type EventRequest = {
@@ -49,13 +48,11 @@ async function closeServer(server: unknown): Promise<void> {
   });
 }
 
-const memoryServer = await startMemoryServer();
 const productServer = await startProductServer();
 
 const agent = await factory.init({
   variables: {} as Record<never, string>,
   mcpTokens: {
-    memory: "demo",
     products: "demo",
   },
 });
@@ -66,7 +63,7 @@ app.get("/health", (c) => {
   return c.json({
     status: "ok",
     mcp: {
-      memory: memoryServer.port,
+      memory: "stdio (in-sandbox)",
       products: productServer.port,
     },
   });
@@ -166,7 +163,6 @@ async function shutdownAndExit(code: number, reason: string, error?: unknown): P
   const closeResults = await Promise.allSettled([
     closeServer(server),
     agent.shutdown(),
-    memoryServer.close(),
     productServer.close(),
   ]);
 

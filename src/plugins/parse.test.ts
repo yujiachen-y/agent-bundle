@@ -223,3 +223,79 @@ describe("parseMcpJson", () => {
       .toThrowError(/expected a JSON object/);
   });
 });
+
+describe("parseMcpJson edge cases", () => {
+  it("drops invalid stdio args while keeping command", () => {
+    const json = JSON.stringify({
+      mcpServers: {
+        "local-tool": {
+          type: "stdio",
+          command: "node",
+          args: ["server.js", 42],
+        },
+      },
+    });
+
+    expect(parseMcpJson(json, "https://example.com/.mcp.json")).toEqual([
+      {
+        transport: "stdio",
+        name: "local-tool",
+        command: "node",
+      },
+    ]);
+  });
+
+  it("drops invalid stdio env while keeping command", () => {
+    const json = JSON.stringify({
+      mcpServers: {
+        "local-tool": {
+          type: "stdio",
+          command: "node",
+          env: { GOOD: "yes", BAD: 1 },
+        },
+      },
+    });
+
+    expect(parseMcpJson(json, "https://example.com/.mcp.json")).toEqual([
+      {
+        transport: "stdio",
+        name: "local-tool",
+        command: "node",
+      },
+    ]);
+  });
+
+  it("keeps valid stdio env records", () => {
+    const json = JSON.stringify({
+      mcpServers: {
+        "local-tool": {
+          type: "stdio",
+          command: "node",
+          env: { A: "1", B: "2" },
+        },
+      },
+    });
+
+    expect(parseMcpJson(json, "https://example.com/.mcp.json")).toEqual([
+      {
+        transport: "stdio",
+        name: "local-tool",
+        command: "node",
+        env: { A: "1", B: "2" },
+      },
+    ]);
+  });
+
+  it("skips unknown MCP server transport types", () => {
+    const json = JSON.stringify({
+      mcpServers: {
+        "unsupported-server": {
+          type: "grpc",
+          url: "https://grpc.example.com/mcp",
+        },
+      },
+    });
+
+    expect(parseMcpJson(json, "https://example.com/.mcp.json")).toEqual([]);
+  });
+});

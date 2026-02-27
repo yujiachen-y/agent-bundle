@@ -9,7 +9,7 @@
 #   1. Validates API keys and prerequisites
 #   2. Verifies E2B API access
 #   3. Builds the E2B demo bundle and template
-#   4. Builds the TypeScript project and starts `agent-bundle serve`
+#   4. Builds the TypeScript project and starts `agent-bundle dev`
 # ------------------------------------------------------------------
 set -euo pipefail
 
@@ -50,11 +50,11 @@ info "Building E2B demo bundle and template"
 pnpm build:demo:web-e2b
 ok "E2B demo bundle built"
 
-# ── 4. build project + start serve ────────────────────────────────
+# ── 4. build project + start dev ──────────────────────────────────
 info "Building TypeScript project"
 pnpm build
 ok "Build complete"
 
-info "Starting agent-bundle serve (port auto-detected, see output below)"
-exec pnpm exec tsx src/cli/index.ts serve \
+info "Starting agent-bundle dev (port auto-detected, see output below)"
+exec pnpm exec tsx src/cli/index.ts dev \
   --config demo/data-analyst-e2b/agent-bundle.yaml ${PORT:+--port "$PORT"}

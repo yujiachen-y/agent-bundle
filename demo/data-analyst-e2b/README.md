@@ -1,6 +1,6 @@
 # E2B Web Demo — Data Analysis Agent
 
-Interactive WebUI demo: browser -> `agent-bundle serve` -> Agent -> E2B sandbox -> pandas/matplotlib analysis -> results + charts.
+Interactive WebUI demo: browser -> `agent-bundle dev` -> Agent -> E2B sandbox -> pandas/matplotlib analysis -> results + charts.
 
 The agent analyzes data in a cloud sandbox using pandas, matplotlib, and numpy. It writes Python scripts, executes them, and returns statistical summaries and charts.
 
@@ -25,9 +25,7 @@ The script is idempotent: on repeat runs, already-built templates are reused aut
 
 Once running, open your browser:
 
-```text
-http://localhost:3002
-```
+`http://localhost:3000` (or the auto-detected worktree port)
 
 ### LLM provider
 
@@ -73,7 +71,7 @@ Try these in the WebUI chat:
 
 ## Success criteria
 
-1. WebUI loads at `http://localhost:3002`
+1. WebUI loads at the printed local URL (`http://localhost:3000` by default)
 2. Agent generates and executes Python analysis scripts
 3. Output includes statistical summaries and chart file references
 4. File tree panel shows generated files under `/workspace`

@@ -103,7 +103,7 @@ async function resolveSkillNames(entry: PluginEntry, options: LoadPluginOptions)
 }
 
 async function resolveCommandNames(entry: PluginEntry, options: LoadPluginOptions): Promise<string[]> {
-  if (entry.commands && entry.commands.length > 0) {
+  if (entry.commands) {
     return entry.commands;
   }
 

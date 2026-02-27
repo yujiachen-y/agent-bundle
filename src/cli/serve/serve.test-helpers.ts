@@ -12,6 +12,8 @@ type ServeHarnessOptions = {
   callPostMountHook?: boolean;
 };
 
+type SignalListener = (...args: unknown[]) => void;
+
 export type ServeHarness = {
   agent: Agent;
   env: NodeJS.ProcessEnv;
@@ -23,6 +25,7 @@ export type ServeHarness = {
   loadSkillsMock: ReturnType<typeof vi.fn>;
   generateSystemPromptMock: ReturnType<typeof vi.fn>;
   defineAgentMock: ReturnType<typeof vi.fn>;
+  createServerMock: ReturnType<typeof vi.fn>;
   createWebUIServerMock: ReturnType<typeof vi.fn>;
   startHttpServerMock: ReturnType<typeof vi.fn>;
   closeServerMock: ReturnType<typeof vi.fn>;
@@ -31,6 +34,33 @@ export type ServeHarness = {
 };
 
 export const DEFAULT_CONFIG_PATH = "/tmp/agent-bundle-workspace/agent-bundle.yaml";
+
+export function createSignalMock() {
+  const listeners = new Map<string, Set<SignalListener>>();
+  const signalProcess = {
+    on: (signal: string, listener: SignalListener) => {
+      if (!listeners.has(signal)) listeners.set(signal, new Set());
+      listeners.get(signal)!.add(listener);
+      return signalProcess;
+    },
+    off: (signal: string, listener: SignalListener) => {
+      const set = listeners.get(signal);
+      if (set) {
+        set.delete(listener);
+        if (set.size === 0) listeners.delete(signal);
+      }
+      return signalProcess;
+    },
+  } as unknown as Pick<NodeJS.Process, "on" | "off">;
+
+  const fire = (signal: string) => {
+    for (const listener of [...(listeners.get(signal) ?? [])]) {
+      listener(signal);
+    }
+  };
+
+  return { signalProcess, fire, listeners };
+}
 
 export function createBaseConfig(): BundleConfig {
   return {
@@ -107,6 +137,55 @@ function createSkills(): Skill[] {
   ];
 }
 
+function createApiServerMock(): ReturnType<typeof vi.fn> {
+  return vi.fn(() => {
+    return {
+      fetch: async (request: Request) => {
+        void request;
+        return new Response("ok");
+      },
+    };
+  });
+}
+
+function createWebUIServerMockFactory(
+  webUIShutdownMock: ReturnType<typeof vi.fn>,
+): ReturnType<typeof vi.fn> {
+  return vi.fn((input: unknown) => {
+    void input;
+    return {
+      app: {
+        fetch: async (request: Request) => {
+          void request;
+          return new Response("ok");
+        },
+      },
+      eventBus: {
+        subscribe: () => () => undefined,
+        emit: () => undefined,
+        listenerCount: () => 0,
+        dispose: () => undefined,
+      },
+      handleUpgrade: () => undefined,
+      shutdown: webUIShutdownMock,
+    };
+  });
+}
+
+function createHttpServerStarterMock(
+  closeServerMock: ReturnType<typeof vi.fn>,
+): ReturnType<typeof vi.fn> {
+  return vi.fn(
+    async (input: StartHttpServerInput): Promise<StartedHttpServer> => {
+      void input;
+      return {
+        port: 4310,
+        close: closeServerMock,
+      };
+    },
+  );
+}
+
 export function createServeHarness(options: ServeHarnessOptions = {}): ServeHarness {
   const config = options.config ?? createBaseConfig();
   const env = options.env ?? {};
@@ -154,37 +233,12 @@ export function createServeHarness(options: ServeHarnessOptions = {}): ServeHarn
     };
   });
 
+  const createServerMock = createApiServerMock();
   const webUIShutdownMock = vi.fn();
-  const createWebUIServerMock = vi.fn((input: unknown) => {
-    void input;
-    return {
-      app: {
-        fetch: async (request: Request) => {
-          void request;
-          return new Response("ok");
-        },
-      },
-      eventBus: {
-        subscribe: () => () => undefined,
-        emit: () => undefined,
-        listenerCount: () => 0,
-        dispose: () => undefined,
-      },
-      handleUpgrade: () => undefined,
-      shutdown: webUIShutdownMock,
-    };
-  });
+  const createWebUIServerMock = createWebUIServerMockFactory(webUIShutdownMock);
 
   const closeServerMock = vi.fn(async () => undefined);
-  const startHttpServerMock = vi.fn(
-    async (input: StartHttpServerInput): Promise<StartedHttpServer> => {
-      void input;
-      return {
-        port: 4310,
-        close: closeServerMock,
-      };
-    },
-  );
+  const startHttpServerMock = createHttpServerStarterMock(closeServerMock);
 
   return {
     agent,
@@ -194,6 +248,7 @@ export function createServeHarness(options: ServeHarnessOptions = {}): ServeHarn
     loadSkillsMock,
     generateSystemPromptMock,
     defineAgentMock,
+    createServerMock,
     createWebUIServerMock,
     startHttpServerMock,
     closeServerMock,

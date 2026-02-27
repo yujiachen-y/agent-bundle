@@ -6,39 +6,11 @@ import { runServeCommand } from "./serve.js";
 import {
   createBaseConfig,
   createServeHarness,
+  createSignalMock,
   DEFAULT_CONFIG_PATH,
 } from "./serve.test-helpers.js";
 
-type SignalListener = (...args: unknown[]) => void;
-
-function createSignalMock() {
-  const listeners = new Map<string, Set<SignalListener>>();
-  const signalProcess = {
-    on: (signal: string, listener: SignalListener) => {
-      if (!listeners.has(signal)) listeners.set(signal, new Set());
-      listeners.get(signal)!.add(listener);
-      return signalProcess;
-    },
-    off: (signal: string, listener: SignalListener) => {
-      const set = listeners.get(signal);
-      if (set) {
-        set.delete(listener);
-        if (set.size === 0) listeners.delete(signal);
-      }
-      return signalProcess;
-    },
-  } as unknown as Pick<NodeJS.Process, "on" | "off">;
-
-  const fire = (signal: string) => {
-    for (const listener of [...(listeners.get(signal) ?? [])]) {
-      listener(signal);
-    }
-  };
-
-  return { signalProcess, fire, listeners };
-}
-
-it("wires config, system prompt, agent init, http/webui flow", async () => {
+it("wires config, system prompt, agent init, and API server flow", async () => {
   const harness = createServeHarness();
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -62,7 +34,7 @@ it("wires config, system prompt, agent init, http/webui flow", async () => {
       loadSkills: harness.loadSkillsMock,
       generateSystemPrompt: harness.generateSystemPromptMock,
       defineAgentImpl: harness.defineAgentMock,
-      createWebUIServerImpl: harness.createWebUIServerMock,
+      createServerImpl: harness.createServerMock,
       startHttpServerImpl: harness.startHttpServerMock,
       signalProcess,
       exit: vi.fn(),
@@ -77,14 +49,17 @@ it("wires config, system prompt, agent init, http/webui flow", async () => {
   expect(harness.generateSystemPromptMock).toHaveBeenCalledTimes(1);
   expect(harness.captured.agentConfig?.systemPrompt).toBe("generated-system-prompt");
   expect(harness.defineAgentMock).toHaveBeenCalledTimes(1);
-  expect(harness.startHttpServerMock).toHaveBeenCalledWith(
-    expect.objectContaining({ port: 4400 }),
-  );
-  expect(harness.createWebUIServerMock).toHaveBeenCalledWith(
+  expect(harness.createServerMock).toHaveBeenCalledWith(
+    harness.agent,
     expect.objectContaining({ commands: [] }),
   );
+  expect(harness.createWebUIServerMock).not.toHaveBeenCalled();
+  expect(harness.startHttpServerMock).toHaveBeenCalledWith(
+    expect.objectContaining({ port: 4400, appFetch: expect.any(Function) }),
+  );
+  expect(harness.startHttpServerMock.mock.calls[0]?.[0]?.handleUpgrade).toBeUndefined();
   expect(harness.closeServerMock).toHaveBeenCalledTimes(1);
-  expect(harness.webUIShutdownMock).toHaveBeenCalledTimes(1);
+  expect(harness.webUIShutdownMock).not.toHaveBeenCalled();
   expect(harness.agentShutdownMock).toHaveBeenCalledTimes(1);
 });
 
@@ -122,7 +97,7 @@ it("applies sandbox.serve.provider override when building serve-time agent confi
       loadSkills: harness.loadSkillsMock,
       generateSystemPrompt: harness.generateSystemPromptMock,
       defineAgentImpl: harness.defineAgentMock,
-      createWebUIServerImpl: harness.createWebUIServerMock,
+      createServerImpl: harness.createServerMock,
       startHttpServerImpl: harness.startHttpServerMock,
       signalProcess,
       exit: vi.fn(),
@@ -163,7 +138,7 @@ it("resolves init variables from env and lets --var override env values", async 
       loadSkills: harness.loadSkillsMock,
       generateSystemPrompt: harness.generateSystemPromptMock,
       defineAgentImpl: harness.defineAgentMock,
-      createWebUIServerImpl: harness.createWebUIServerMock,
+      createServerImpl: harness.createServerMock,
       startHttpServerImpl: harness.startHttpServerMock,
       signalProcess,
       exit: vi.fn(),
@@ -212,7 +187,7 @@ it("passes mcpTokens from --mcp-token and env fallbacks", async () => {
       loadSkills: harness.loadSkillsMock,
       generateSystemPrompt: harness.generateSystemPromptMock,
       defineAgentImpl: harness.defineAgentMock,
-      createWebUIServerImpl: harness.createWebUIServerMock,
+      createServerImpl: harness.createServerMock,
       startHttpServerImpl: harness.startHttpServerMock,
       signalProcess,
       exit: vi.fn(),
@@ -241,7 +216,7 @@ it("throws actionable error when required prompt variables are missing", async (
         loadSkills: harness.loadSkillsMock,
         generateSystemPrompt: harness.generateSystemPromptMock,
         defineAgentImpl: harness.defineAgentMock,
-        createWebUIServerImpl: harness.createWebUIServerMock,
+        createServerImpl: harness.createServerMock,
         startHttpServerImpl: harness.startHttpServerMock,
         env: harness.env,
       },
@@ -259,9 +234,6 @@ it("handles SIGINT with graceful shutdown and exits after cleanup", async () => 
   harness.closeServerMock.mockImplementation(async () => {
     shutdownOrder.push("http.close");
   });
-  harness.webUIShutdownMock.mockImplementation(() => {
-    shutdownOrder.push("webui.shutdown");
-  });
   harness.agentShutdownMock.mockImplementation(async () => {
     shutdownOrder.push("agent.shutdown");
   });
@@ -278,7 +250,7 @@ it("handles SIGINT with graceful shutdown and exits after cleanup", async () => 
       loadSkills: harness.loadSkillsMock,
       generateSystemPrompt: harness.generateSystemPromptMock,
       defineAgentImpl: harness.defineAgentMock,
-      createWebUIServerImpl: harness.createWebUIServerMock,
+      createServerImpl: harness.createServerMock,
       startHttpServerImpl: harness.startHttpServerMock,
       signalProcess,
       exit: exitMock,
@@ -288,10 +260,11 @@ it("handles SIGINT with graceful shutdown and exits after cleanup", async () => 
 
   expect(shutdownOrder).toEqual([
     "http.close",
-    "webui.shutdown",
     "agent.shutdown",
   ]);
   expect(exitMock).toHaveBeenCalledTimes(1);
   expect(exitMock).toHaveBeenCalledWith(0);
+  expect(harness.createWebUIServerMock).not.toHaveBeenCalled();
+  expect(harness.webUIShutdownMock).not.toHaveBeenCalled();
   expect(listeners.size).toBe(0);
 });

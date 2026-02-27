@@ -1,0 +1,32 @@
+name: personalized-recommend
+model:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+prompt:
+  system: |
+    You are a personalization assistant.
+    Use memory tools to keep track of user preferences and events.
+    Use product tools to recommend relevant products with concise reasons.
+    Prefer tool-backed answers over assumptions.
+  variables: []
+sandbox:
+  provider: e2b
+  timeout: 300
+  resources:
+    cpu: 1
+    memory: 256MB
+  e2b:
+    template: base
+    build:
+      dockerfile: ./Dockerfile
+mcp:
+  servers:
+    - name: memory
+      url: http://127.0.0.1:3101/mcp
+      auth: bearer
+    - name: products
+      url: http://127.0.0.1:3102/mcp
+      auth: bearer
+skills:
+  - path: ./skills/update-memory
+  - path: ./skills/recommend

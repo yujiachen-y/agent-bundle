@@ -27,10 +27,11 @@ Port = prefix × 1000 + suffix
 
 suffix (last 3 digits): stable service identity
   000 = serve (CLI main service)
-  001 = demo/code-formatter-e2b
-  002 = demo/code-formatter-k8s
+  001 = demo/code-formatter/e2b
+  002 = demo/code-formatter/k8s
   003 = demo/financial-plugin
-  004 = demo/coding-assistant-ollama
+  004 = (retired) demo/coding-assistant-ollama
+  005 = demo/personalized-recommend
   … new demos increment
 
 prefix: worktree isolation
@@ -46,7 +47,7 @@ prefix: worktree isolation
 
 ### For Agents: Adding a New Demo
 
-1. Pick the next available suffix (currently **5**).
+1. Pick the next available suffix (currently **6**).
 2. Call `resolveServicePort(<suffix>)` in your `main.ts`.
 3. Update the suffix table above.
 4. **Never hardcode a port number** in new server code.
@@ -56,9 +57,16 @@ prefix: worktree isolation
 | File | Role |
 |------|------|
 | `src/cli/serve/worktree-port.ts` | Core: `resolveServicePort()`, worktree detection, FNV-1a hash |
-| `src/cli/serve/serve.ts` | `DEFAULT_SERVE_PORT` (3000), used by CLI `serve` command |
+| `src/cli/serve/init.ts` | Shared serve/dev init + `DEFAULT_SERVE_PORT` |
+| `src/cli/serve/serve.ts` | API-only `serve` command implementation |
+| `src/cli/serve/dev.ts` | WebUI-enabled `dev` command implementation |
 | `src/cli/index.ts` | CLI entry, `--port` flag parsing |
 | `scripts/setup-worktree-hooks.sh` | Optional post-checkout hook installer |
+
+## Serve vs Dev
+
+- `agent-bundle serve` starts the production API server only (`/health`, `/v1/responses`, optional `/commands`).
+- `agent-bundle dev` starts the development server (API + WebUI + WebSocket + file browser).
 
 ## Architecture Boundaries
 

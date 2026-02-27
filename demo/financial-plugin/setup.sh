@@ -8,7 +8,7 @@
 # What it does:
 #   1. Validates API keys and prerequisites
 #   2. Verifies E2B API access
-#   3. Builds the E2B demo bundle and template, generates agent code
+#   3. Builds the E2B demo bundle and template
 #   4. Builds the TypeScript project and starts the HTTP server
 # ------------------------------------------------------------------
 set -euo pipefail
@@ -45,10 +45,10 @@ else
   fail "Unable to access E2B API with current credentials. Verify E2B_API_KEY and network connectivity."
 fi
 
-# ── 3. build E2B demo bundle, template, and generate agent code ───
-info "Building E2B demo bundle and template, generating agent code"
+# ── 3. build E2B demo bundle and template ─────────────────────────
+info "Building E2B demo bundle and template"
 pnpm build:demo:financial-plugin
-ok "E2B demo bundle built and agent code generated"
+ok "E2B demo bundle built"
 
 # ── 4. build project + start server ──────────────────────────────
 info "Building TypeScript project"
@@ -56,4 +56,5 @@ pnpm build
 ok "Build complete"
 
 info "Starting server (port auto-detected, see output below)"
-exec pnpm exec tsx demo/financial-plugin/main.ts
+exec pnpm exec tsx src/cli/index.ts dev \
+  --config demo/financial-plugin/agent-bundle.yaml ${PORT:+--port "$PORT"}

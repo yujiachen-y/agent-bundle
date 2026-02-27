@@ -12,7 +12,7 @@ type RequestInitWithDuplex = RequestInit & {
 
 export type StartHttpServerInput = {
   appFetch: (request: Request) => Response | Promise<Response>;
-  handleUpgrade: (request: IncomingMessage, socket: unknown, head: Buffer) => void;
+  handleUpgrade?: (request: IncomingMessage, socket: unknown, head: Buffer) => void;
   port: number;
   stderr: NodeJS.WritableStream;
 };
@@ -121,7 +121,9 @@ export async function startHttpServer(input: StartHttpServerInput): Promise<Star
       });
   });
 
-  server.on("upgrade", input.handleUpgrade);
+  if (input.handleUpgrade) {
+    server.on("upgrade", input.handleUpgrade);
+  }
 
   await new Promise<void>((resolveListen, rejectListen) => {
     const onError = (error: Error): void => {

@@ -239,6 +239,32 @@ describe("loadPlugin with explicit commands", () => {
     expect(result.commands[0].name).toBe("Journal Entry");
     expect(result.commands[0].argumentHint).toBe("<period>");
   });
+
+  it("skips plugin command discovery when commands is explicitly empty", async () => {
+    const entry = {
+      marketplace: "anthropics/knowledge-work-plugins",
+      name: "finance",
+      ref: "main",
+      skills: ["variance-analysis"],
+      commands: [],
+    };
+
+    const fetchMock = createPluginFetchMock({
+      "https://raw.githubusercontent.com/anthropics/knowledge-work-plugins/main/finance/.claude-plugin/plugin.json":
+        MANIFEST_JSON,
+      "https://raw.githubusercontent.com/anthropics/knowledge-work-plugins/main/finance/skills/variance-analysis/SKILL.md":
+        SKILL_MARKDOWN,
+      "https://raw.githubusercontent.com/anthropics/knowledge-work-plugins/main/finance/.mcp.json":
+        MCP_JSON,
+    });
+
+    const result = await loadPlugin(entry, { cache: false, fetchImpl: fetchMock });
+
+    expect(result.commands).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "https://api.github.com/repos/anthropics/knowledge-work-plugins/contents/finance/commands?ref=main",
+    );
+  });
 });
 
 describe("loadPlugin with auto-discovered commands", () => {

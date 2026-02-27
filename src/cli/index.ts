@@ -4,7 +4,8 @@ import { defineCommand, runMain } from "citty";
 
 import { DEFAULT_OUTPUT_DIR, runBuildCommand } from "./build/build.js";
 import { runGenerateCommand } from "./generate/generate.js";
-import { DEFAULT_SERVE_PORT, runServeCommand } from "./serve/serve.js";
+import { runDevCommand } from "./serve/dev.js";
+import { runServeCommand } from "./serve/serve.js";
 
 const DEFAULT_CONFIG_PATH = "./agent-bundle.yaml";
 
@@ -16,13 +17,13 @@ function resolveConfigPath(configArg: string | boolean | undefined): string {
   return DEFAULT_CONFIG_PATH;
 }
 
-function resolvePort(portArg: string | boolean | undefined): number {
+function resolvePort(portArg: string | boolean | undefined): number | undefined {
   if (typeof portArg === "boolean") {
     throw new Error("--port requires a numeric value.");
   }
 
   if (typeof portArg !== "string" || portArg.trim().length === 0) {
-    return DEFAULT_SERVE_PORT;
+    return undefined;
   }
 
   const port = Number.parseInt(portArg, 10);
@@ -47,8 +48,7 @@ const outputArg = {
 
 const portArg = {
   type: "string",
-  description: "Port for the local HTTP + WebUI server.",
-  default: String(DEFAULT_SERVE_PORT),
+  description: "Port for the local HTTP server (auto-detected when omitted).",
 } as const;
 
 const keyValueArg = {
@@ -59,7 +59,7 @@ const keyValueArg = {
 const serveCommand = defineCommand({
   meta: {
     name: "serve",
-    description: "Run local development server with WebUI.",
+    description: "Run production API server (no WebUI).",
   },
   args: {
     config: configArg,
@@ -69,6 +69,27 @@ const serveCommand = defineCommand({
   },
   run: async ({ args }): Promise<void> => {
     await runServeCommand({
+      configPath: resolveConfigPath(args.config),
+      port: resolvePort(args.port),
+      variableEntries: args.var,
+      mcpTokenEntries: args.mcpToken,
+    });
+  },
+});
+
+const devCommand = defineCommand({
+  meta: {
+    name: "dev",
+    description: "Run local development server with WebUI.",
+  },
+  args: {
+    config: configArg,
+    port: portArg,
+    var: keyValueArg,
+    mcpToken: keyValueArg,
+  },
+  run: async ({ args }): Promise<void> => {
+    await runDevCommand({
       configPath: resolveConfigPath(args.config),
       port: resolvePort(args.port),
       variableEntries: args.var,
@@ -121,6 +142,7 @@ const mainCommand = defineCommand({
   },
   subCommands: {
     serve: serveCommand,
+    dev: devCommand,
     generate: generateCommand,
     build: buildCommand,
   },

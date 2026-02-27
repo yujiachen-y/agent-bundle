@@ -27,7 +27,5 @@ plugins:
     name: finance
     skills:
       - variance-analysis
-      - month-end-close
-    commands:
-      - journal-entry
-      - reconciliation
+      - close-management
+    commands: []

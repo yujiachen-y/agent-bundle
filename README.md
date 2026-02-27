@@ -18,7 +18,7 @@ Agent skills work great inside local coding agents. Deploying them to production
 
 |  | Without agent-bundle | With agent-bundle |
 |--|---------------------|-------------------|
-| **Develop** | Skills run in local coding agents only | `agent-bundle serve` — WebUI with live sandbox view |
+| **Develop** | Skills run in local coding agents only | `agent-bundle dev` — WebUI with live sandbox view |
 | **Ship** | Rewrite skill logic into a service from scratch | `agent-bundle build` — typed TypeScript factory + Docker image |
 | **Behave** | Dev and prod diverge silently | Same sandbox runtime in both modes |
 
@@ -63,7 +63,7 @@ See [Agent Skills](https://github.com/agent-skills/spec) for the skill format an
 ### 3. Run locally
 
 ```bash
-agent-bundle serve
+agent-bundle dev
 ```
 
 Opens a WebUI at `http://localhost:3000` where you can chat with the agent and watch its file tree and terminal output in real time — see exactly what it's doing inside the sandbox.
@@ -76,7 +76,7 @@ Ready to deploy? See [Build & Embed](#build--embed) below.
 
 - **Live sandbox view** — WebUI at localhost:3000 shows the agent's file tree and terminal in real time. No more black boxes.
 - **Type-safe codegen** — Prisma-style `generate`. Variable names are checked at compile time — miss one and it won't build.
-- **Dev-prod parity** — `serve` and `build` share the same sandbox abstraction. What passes locally ships as-is.
+- **Dev-prod parity** — `dev`, `serve`, and `build` share the same sandbox abstraction. What passes locally ships as-is.
 - **No vendor lock-in** — Swap model providers or sandbox backends with one line of YAML.
 - **Session recovery** — Agent crashes mid-run? Resume from its last conversation state.
 - **Token-scoped MCP** — Connect to internal services via MCP servers. Even under prompt injection, the agent cannot exceed what the MCP server permits for that token.
@@ -125,7 +125,7 @@ Variable names are checked at compile time. Lifecycle hooks, file I/O, and sessi
 
 ![Architecture](.github/architecture.png)
 
-The agent orchestrator routes between the LLM provider, sandbox, and MCP servers. All three interfaces share the same abstraction in both `serve` and `build` modes.
+The agent orchestrator routes between the LLM provider, sandbox, and MCP servers. All three interfaces share the same abstraction across `dev`, `serve`, and `build` modes.
 
 ---
 

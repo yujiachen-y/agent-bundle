@@ -1,4 +1,4 @@
-import { createServer } from "../../service/create-server.js";
+import { createWebUIServer } from "../../webui/create-webui-server.js";
 import type { Agent } from "../../agent/types.js";
 import { startHttpServer, type StartedHttpServer } from "./http.js";
 import {
@@ -11,22 +11,29 @@ import {
 } from "./init.js";
 import { resolveServicePort } from "./worktree-port.js";
 
-export { DEFAULT_SERVE_PORT } from "./init.js";
+type CreateWebUIServerResult = ReturnType<typeof createWebUIServer>;
 
-export type ServeDependencies = SharedServeDependencies & {
-  createServerImpl?: typeof createServer;
+export type DevDependencies = SharedServeDependencies & {
+  createWebUIServerImpl?: typeof createWebUIServer;
 };
 
 type ShutdownResources = {
   agent: Agent;
+  webUI: CreateWebUIServerResult | null;
   httpServer: StartedHttpServer | null;
 };
 
-async function shutdownServeResources(resources: ShutdownResources): Promise<void> {
+async function shutdownDevResources(resources: ShutdownResources): Promise<void> {
   const errors: unknown[] = [];
 
   try {
     await resources.httpServer?.close();
+  } catch (error) {
+    errors.push(error);
+  }
+
+  try {
+    resources.webUI?.shutdown();
   } catch (error) {
     errors.push(error);
   }
@@ -42,11 +49,11 @@ async function shutdownServeResources(resources: ShutdownResources): Promise<voi
   }
 }
 
-export async function runServeCommand(
+export async function runDevCommand(
   options: RunServeOptions,
-  dependencies: ServeDependencies = {},
+  dependencies: DevDependencies = {},
 ): Promise<RunServeResult> {
-  const createServerImpl = dependencies.createServerImpl ?? createServer;
+  const createWebUIServerImpl = dependencies.createWebUIServerImpl ?? createWebUIServer;
   const startHttpServerImpl = dependencies.startHttpServerImpl ?? startHttpServer;
   const signalProcess = dependencies.signalProcess ?? process;
   const exit = dependencies.exit ?? ((code: number) => process.exit(code));
@@ -59,32 +66,36 @@ export async function runServeCommand(
   const context = await initializeServeContext(options, dependencies);
   stdout.write(`Starting bundle "${context.config.name}" from ${context.configPath}\n`);
 
+  let webUI: CreateWebUIServerResult | null = null;
   let httpServer: StartedHttpServer | null = null;
   let shutdownPromise: Promise<void> | null = null;
   const shutdown = async (): Promise<void> => {
     if (!shutdownPromise) {
-      shutdownPromise = shutdownServeResources({ agent: context.agent, httpServer });
+      shutdownPromise = shutdownDevResources({ agent: context.agent, webUI, httpServer });
     }
     return await shutdownPromise;
   };
 
   try {
-    const app = createServerImpl(context.agent, {
+    webUI = createWebUIServerImpl({
+      agent: context.agent,
+      sandbox: context.webUISandbox,
       commands: context.commands,
     });
     httpServer = await startHttpServerImpl({
-      appFetch: app.fetch.bind(app),
+      appFetch: webUI.app.fetch.bind(webUI.app),
+      handleUpgrade: webUI.handleUpgrade,
       port,
       stderr,
     });
-    stdout.write(`Serve ready at http://localhost:${httpServer.port}\n`);
+    stdout.write(`Dev server ready at http://localhost:${httpServer.port}\n`);
     await wireSignalShutdown(signalProcess, shutdown, exit, stderr);
   } finally {
     await shutdown();
   }
 
   if (!httpServer) {
-    throw new Error("Serve HTTP server did not start.");
+    throw new Error("Dev HTTP server did not start.");
   }
 
   return { port: httpServer.port };

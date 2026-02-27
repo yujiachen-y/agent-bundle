@@ -3,13 +3,13 @@
 # K8s server demo — one-command setup + start
 #
 # Usage (from repo root):
-#   ANTHROPIC_API_KEY=sk-... ./demo/code-formatter-k8s/setup.sh
-#   ANTHROPIC_OAUTH_TOKEN=... ./demo/code-formatter-k8s/setup.sh
+#   ANTHROPIC_API_KEY=sk-... ./demo/code-formatter/k8s/setup.sh
+#   ANTHROPIC_OAUTH_TOKEN=... ./demo/code-formatter/k8s/setup.sh
 #
 # What it does:
 #   1. Validates API key and prerequisites
 #   2. Creates a k3d cluster (agent-sandbox) if it doesn't exist
-#   3. Builds the sandbox Docker images + generates agent code
+#   3. Builds the sandbox Docker images
 #   4. Imports the sandbox image into k3d
 #   5. Fixes kubeconfig for macOS / Docker Desktop connectivity
 #   6. Verifies the cluster is reachable
@@ -54,10 +54,10 @@ else
   ok "Cluster created"
 fi
 
-# ── 3. build sandbox images + generate agent code ─────────────────
-info "Building sandbox images (execd base + demo image) and generating agent code"
+# ── 3. build sandbox images ───────────────────────────────────────
+info "Building sandbox images (execd base + demo image)"
 pnpm build:demo:k8s-server
-ok "Images built and agent code generated"
+ok "Images built"
 
 # ── 4. import image into k3d ────────────────────────────────────
 info "Importing ${IMAGE_NAME} into k3d cluster"
@@ -88,4 +88,5 @@ pnpm build
 ok "Build complete"
 
 info "Starting server (port auto-detected, see output below)"
-exec pnpm exec tsx demo/code-formatter-k8s/main.ts
+exec pnpm exec tsx src/cli/index.ts dev \
+  --config demo/code-formatter/k8s/agent-bundle.yaml ${PORT:+--port "$PORT"}

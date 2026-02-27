@@ -6,6 +6,12 @@ import {
   type ToolCall,
   type ToolResult,
 } from "../agent-loop/index.js";
+import {
+  createAgentHooks,
+  createMcpCallInstrumenter,
+  createToolCallInstrumenter,
+  type AgentObservabilityHooks,
+} from "../observability/hooks.js";
 import type { Sandbox } from "../sandbox/index.js";
 import {
   createDefaultDependencies,
@@ -22,6 +28,7 @@ import {
   extractRequiredString,
   formatExecResult,
   isMcpTool,
+  parseMcpToolName,
   readFieldError,
   readFieldTypeError,
   toConversationInput,
@@ -40,6 +47,9 @@ export class AgentImpl<V extends string> implements Agent {
   private loop: AgentLoop | null = null;
   private mcpClientManager: McpClientManager | null = null;
   private conversationHistory: ResponseInput = [];
+  private readonly otelHooks: AgentObservabilityHooks | null;
+  private readonly instrumentToolCall: ReturnType<typeof createToolCallInstrumenter> | null;
+  private readonly instrumentMcpCall: ReturnType<typeof createMcpCallInstrumenter> | null;
 
   public constructor(
     private readonly config: AgentConfig<V>,
@@ -47,6 +57,10 @@ export class AgentImpl<V extends string> implements Agent {
     private readonly dependencies: AgentDependencies = createDefaultDependencies(),
   ) {
     this.name = config.name;
+    const otel = dependencies.observability ?? null;
+    this.otelHooks = otel ? createAgentHooks(otel, config.name) : null;
+    this.instrumentToolCall = otel ? createToolCallInstrumenter(otel) : null;
+    this.instrumentMcpCall = otel ? createMcpCallInstrumenter(otel) : null;
   }
 
   public get status(): AgentStatus {
@@ -119,9 +133,10 @@ export class AgentImpl<V extends string> implements Agent {
     const signal = options?.signal;
     const runInput = toConversationInput(this.conversationHistory, input);
     this.statusValue = "running";
+    const startMs = this.otelHooks?.onRespondStart();
 
     let completedOutput: ResponseOutput | null = null;
-    let sawError = false;
+    let respondError: unknown;
 
     try {
       for await (const event of loop.run(runInput, { signal })) {
@@ -129,21 +144,30 @@ export class AgentImpl<V extends string> implements Agent {
 
         if (event.type === "response.completed") {
           completedOutput = event.output;
+          if (event.output.usage && this.otelHooks) {
+            this.otelHooks.onTokenUsage(event.output.usage);
+          }
         }
 
         if (event.type === "response.error") {
-          sawError = true;
+          respondError = new Error(event.error);
         }
 
         yield event;
       }
+    } catch (error) {
+      respondError = error;
+      throw error;
     } finally {
       if (!this.isStopped()) {
         this.statusValue = "ready";
       }
+      if (startMs !== undefined && this.otelHooks) {
+        this.otelHooks.onRespondEnd(startMs, respondError);
+      }
     }
 
-    if (!sawError && completedOutput) {
+    if (!respondError && completedOutput) {
       this.conversationHistory = toNextConversationHistory(runInput, completedOutput);
     }
   }
@@ -179,6 +203,14 @@ export class AgentImpl<V extends string> implements Agent {
   }
 
   private async handleToolCall(call: ToolCall): Promise<ToolResult> {
+    if (this.instrumentToolCall) {
+      return this.instrumentToolCall(call, (c) => this.executeToolCall(c));
+    }
+
+    return this.executeToolCall(call);
+  }
+
+  private async executeToolCall(call: ToolCall): Promise<ToolResult> {
     const sandbox = this.sandbox;
     if (!sandbox) {
       return toToolError(call.id, "Sandbox is not available.");
@@ -267,6 +299,13 @@ export class AgentImpl<V extends string> implements Agent {
     const mcpClientManager = this.mcpClientManager;
     if (!mcpClientManager) {
       return toToolError(call.id, `MCP tool \"${call.name}\" is not available.`);
+    }
+
+    if (this.instrumentMcpCall) {
+      const parsed = parseMcpToolName(call.name);
+      const serverName = parsed?.serverName ?? "unknown";
+      const toolName = parsed?.toolName ?? call.name;
+      return this.instrumentMcpCall(serverName, toolName, () => mcpClientManager.callTool(call));
     }
 
     return await mcpClientManager.callTool(call);

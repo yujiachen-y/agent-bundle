@@ -1,5 +1,6 @@
 import { PiMonoAgentLoop, type AgentLoop } from "../agent-loop/index.js";
 import { createMcpClientManager, type McpClientManager } from "../mcp/index.js";
+import type { ObservabilityProvider } from "../observability/types.js";
 import { createSandbox, type CreateSandbox } from "../sandbox/index.js";
 import type { SandboxIO } from "../sandbox/types.js";
 import type { McpServerConfig } from "./types.js";
@@ -16,6 +17,7 @@ export type AgentDependencies = {
   createSandbox: CreateSandbox;
   createLoop: () => AgentLoop;
   createMcpClientManager: CreateMcpClientManager;
+  observability?: ObservabilityProvider;
 };
 
 function defaultCreateMcpClientManager(

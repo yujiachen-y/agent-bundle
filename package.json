@@ -52,6 +52,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@opentelemetry/resources": "^2.5.1",
+    "@opentelemetry/sdk-metrics": "^2.5.1",
+    "@opentelemetry/sdk-node": "^0.212.0",
+    "@opentelemetry/sdk-trace-base": "^2.5.1",
     "@types/node": "^25.3.0",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^3.2.4",

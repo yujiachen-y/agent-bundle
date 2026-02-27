@@ -6,6 +6,8 @@ import { z } from "zod";
 import type { ResponseInput } from "../agent-loop/types.js";
 import type { Agent } from "../agent/types.js";
 import type { Command } from "../commands/types.js";
+import { observabilityMiddleware } from "../observability/middleware.js";
+import type { ObservabilityProvider } from "../observability/types.js";
 import { createCommandRoutes, type CommandRegistry } from "./command-routes.js";
 
 type ErrorResponse = {
@@ -96,10 +98,15 @@ function createEventStreamResponse(c: Context, agent: Agent, input: ResponseInpu
 
 export type CreateServerOptions = {
   commands?: readonly Command[];
+  observability?: ObservabilityProvider;
 };
 
 export function createServer(agent: Agent, options?: CreateServerOptions): Hono {
   const app = new Hono();
+
+  if (options?.observability) {
+    app.use("*", observabilityMiddleware(options.observability));
+  }
 
   if (options?.commands && options.commands.length > 0) {
     const registry: CommandRegistry = { commands: options.commands };

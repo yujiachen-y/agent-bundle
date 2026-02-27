@@ -196,6 +196,21 @@ export function isMcpTool(name: string): boolean {
   return name.startsWith(MCP_TOOL_PREFIX);
 }
 
+/**
+ * Parse an MCP tool name (e.g. `mcp__server__tool`) into server and tool parts.
+ * Returns null if the name does not match the expected format.
+ */
+export function parseMcpToolName(name: string): { serverName: string; toolName: string } | null {
+  if (!name.startsWith(MCP_TOOL_PREFIX)) return null;
+  const rest = name.slice(MCP_TOOL_PREFIX.length);
+  const separatorIndex = rest.indexOf("__");
+  if (separatorIndex < 1) return null;
+  return {
+    serverName: rest.slice(0, separatorIndex),
+    toolName: rest.slice(separatorIndex + 2),
+  };
+}
+
 const MODEL_PROVIDER_CREDENTIAL_ENVS: Partial<Record<ModelProvider, readonly string[]>> = {
   anthropic: ["ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"],
   openai: ["OPENAI_API_KEY"],

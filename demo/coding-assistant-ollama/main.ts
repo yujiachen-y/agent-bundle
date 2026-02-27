@@ -1,6 +1,10 @@
 import { CodingAssistantOllama as factory } from "@agent-bundle/coding-assistant-ollama";
-import { serveTUI } from "agent-bundle/tui";
 
 const instance = await factory.init({ variables: {} as Record<never, string> });
 
-await serveTUI(instance);
+console.log(`Agent "${instance.name}" is running. Press Ctrl+C to stop.`);
+await new Promise<void>((resolve) => {
+  process.on("SIGINT", () => resolve());
+  process.on("SIGTERM", () => resolve());
+});
+await instance.shutdown();

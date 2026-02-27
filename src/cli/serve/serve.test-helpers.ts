@@ -25,7 +25,6 @@ export type ServeHarness = {
   defineAgentMock: ReturnType<typeof vi.fn>;
   createWebUIServerMock: ReturnType<typeof vi.fn>;
   startHttpServerMock: ReturnType<typeof vi.fn>;
-  serveTUIMock: ReturnType<typeof vi.fn>;
   closeServerMock: ReturnType<typeof vi.fn>;
   webUIShutdownMock: ReturnType<typeof vi.fn>;
   agentShutdownMock: ReturnType<typeof vi.fn>;
@@ -169,8 +168,6 @@ export function createServeHarness(options: ServeHarnessOptions = {}): ServeHarn
     },
   );
 
-  const serveTUIMock = vi.fn(async () => undefined);
-
   return {
     agent,
     env,
@@ -181,7 +178,6 @@ export function createServeHarness(options: ServeHarnessOptions = {}): ServeHarn
     defineAgentMock,
     createWebUIServerMock,
     startHttpServerMock,
-    serveTUIMock,
     closeServerMock,
     webUIShutdownMock,
     agentShutdownMock,

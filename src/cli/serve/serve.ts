@@ -3,7 +3,6 @@ import type { Agent, AgentConfig, AgentFactory, InitOptions } from "../../agent/
 import type { Command } from "../../commands/types.js";
 import type { BundleConfig } from "../../schema/bundle.js";
 import type { Sandbox, SandboxIO } from "../../sandbox/types.js";
-import { serveTUI } from "../../tui/tui.js";
 import { createWebUIServer } from "../../webui/create-webui-server.js";
 import { toErrorMessage } from "../error.js";
 import {
@@ -27,7 +26,6 @@ type ServeDependencies = {
   defineAgentImpl?: DefineAgentForServe;
   createWebUIServerImpl?: typeof createWebUIServer;
   startHttpServerImpl?: (input: StartHttpServerInput) => Promise<StartedHttpServer>;
-  serveTUIImpl?: typeof serveTUI;
   signalProcess?: Pick<NodeJS.Process, "on" | "off">;
   env?: NodeJS.ProcessEnv;
   exit?: (code: number) => void;
@@ -180,13 +178,11 @@ export async function runServeCommand(
 ): Promise<RunServeResult> {
   const createWebUIServerImpl = dependencies.createWebUIServerImpl ?? createWebUIServer;
   const startHttpServerImpl = dependencies.startHttpServerImpl ?? startHttpServer;
-  const serveTUIImpl = dependencies.serveTUIImpl ?? serveTUI;
   const signalProcess = dependencies.signalProcess ?? process;
   const exit = dependencies.exit ?? ((code: number) => process.exit(code));
 
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
-  const stdin = options.stdin ?? process.stdin;
   const port = options.port ?? await resolveServicePort(0);
   validatePort(port);
 
@@ -228,10 +224,14 @@ export async function runServeCommand(
       stderr,
     });
     stdout.write(`Serve ready at http://localhost:${httpServer.port}\n`);
-    await serveTUIImpl(context.agent, {
-      input: stdin,
-      output: stdout,
-      commands: context.commands,
+    await new Promise<void>((resolve) => {
+      const onShutdownSignal = () => {
+        signalProcess.off("SIGINT", onShutdownSignal);
+        signalProcess.off("SIGTERM", onShutdownSignal);
+        resolve();
+      };
+      signalProcess.on("SIGINT", onShutdownSignal);
+      signalProcess.on("SIGTERM", onShutdownSignal);
     });
   } finally {
     signalProcess.off("SIGINT", onSignal);

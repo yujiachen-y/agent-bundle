@@ -18,7 +18,7 @@ Agent skills work great inside local coding agents. Deploying them to production
 
 |  | Without agent-bundle | With agent-bundle |
 |--|---------------------|-------------------|
-| **Develop** | Skills run in local coding agents only | `agent-bundle serve` — TUI + WebUI with live sandbox view |
+| **Develop** | Skills run in local coding agents only | `agent-bundle serve` — WebUI with live sandbox view |
 | **Ship** | Rewrite skill logic into a service from scratch | `agent-bundle build` — typed TypeScript factory + Docker image |
 | **Behave** | Dev and prod diverge silently | Same sandbox runtime in both modes |
 
@@ -66,7 +66,7 @@ See [Agent Skills](https://github.com/agent-skills/spec) for the skill format an
 agent-bundle serve
 ```
 
-Starts a TUI for interactive testing. A WebUI at `http://localhost:3000` lets you watch the agent's file tree and terminal output in real time — see exactly what it's doing inside the sandbox.
+Opens a WebUI at `http://localhost:3000` where you can chat with the agent and watch its file tree and terminal output in real time — see exactly what it's doing inside the sandbox.
 
 Ready to deploy? See [Build & Embed](#build--embed) below.
 

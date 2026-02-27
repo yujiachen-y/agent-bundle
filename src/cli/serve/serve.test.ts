@@ -9,18 +9,51 @@ import {
   DEFAULT_CONFIG_PATH,
 } from "./serve.test-helpers.js";
 
-it("wires config, system prompt, agent init, http/webui, and tui flow", async () => {
+type SignalListener = (...args: unknown[]) => void;
+
+function createSignalMock() {
+  const listeners = new Map<string, Set<SignalListener>>();
+  const signalProcess = {
+    on: (signal: string, listener: SignalListener) => {
+      if (!listeners.has(signal)) listeners.set(signal, new Set());
+      listeners.get(signal)!.add(listener);
+      return signalProcess;
+    },
+    off: (signal: string, listener: SignalListener) => {
+      const set = listeners.get(signal);
+      if (set) {
+        set.delete(listener);
+        if (set.size === 0) listeners.delete(signal);
+      }
+      return signalProcess;
+    },
+  } as unknown as Pick<NodeJS.Process, "on" | "off">;
+
+  const fire = (signal: string) => {
+    for (const listener of [...(listeners.get(signal) ?? [])]) {
+      listener(signal);
+    }
+  };
+
+  return { signalProcess, fire, listeners };
+}
+
+it("wires config, system prompt, agent init, http/webui flow", async () => {
   const harness = createServeHarness();
   const stdout = new PassThrough();
   const stderr = new PassThrough();
-  const stdin = new PassThrough();
   const config = createBaseConfig();
+  const { signalProcess, fire } = createSignalMock();
+
+  harness.startHttpServerMock.mockImplementation(async () => {
+    setTimeout(() => fire("SIGINT"), 0);
+    return { port: 4310, close: harness.closeServerMock };
+  });
 
   const result = await runServeCommand(
     {
       configPath: DEFAULT_CONFIG_PATH,
       port: 4400,
-      stdin,
       stdout,
       stderr,
     },
@@ -31,7 +64,8 @@ it("wires config, system prompt, agent init, http/webui, and tui flow", async ()
       defineAgentImpl: harness.defineAgentMock,
       createWebUIServerImpl: harness.createWebUIServerMock,
       startHttpServerImpl: harness.startHttpServerMock,
-      serveTUIImpl: harness.serveTUIMock,
+      signalProcess,
+      exit: vi.fn(),
       env: harness.env,
     },
   );
@@ -48,10 +82,6 @@ it("wires config, system prompt, agent init, http/webui, and tui flow", async ()
   );
   expect(harness.createWebUIServerMock).toHaveBeenCalledWith(
     expect.objectContaining({ commands: [] }),
-  );
-  expect(harness.serveTUIMock).toHaveBeenCalledWith(
-    harness.agent,
-    expect.objectContaining({ input: stdin, output: stdout, commands: [] }),
   );
   expect(harness.closeServerMock).toHaveBeenCalledTimes(1);
   expect(harness.webUIShutdownMock).toHaveBeenCalledTimes(1);
@@ -78,6 +108,12 @@ it("applies sandbox.serve.provider override when building serve-time agent confi
     },
   };
   const harness = createServeHarness({ config });
+  const { signalProcess, fire } = createSignalMock();
+
+  harness.startHttpServerMock.mockImplementation(async () => {
+    setTimeout(() => fire("SIGINT"), 0);
+    return { port: 4310, close: harness.closeServerMock };
+  });
 
   await runServeCommand(
     { configPath: DEFAULT_CONFIG_PATH },
@@ -88,7 +124,8 @@ it("applies sandbox.serve.provider override when building serve-time agent confi
       defineAgentImpl: harness.defineAgentMock,
       createWebUIServerImpl: harness.createWebUIServerMock,
       startHttpServerImpl: harness.startHttpServerMock,
-      serveTUIImpl: harness.serveTUIMock,
+      signalProcess,
+      exit: vi.fn(),
       env: harness.env,
     },
   );
@@ -109,6 +146,12 @@ it("resolves init variables from env and lets --var override env values", async 
       AGENT_BUNDLE_VAR_REGION: "us",
     },
   });
+  const { signalProcess, fire } = createSignalMock();
+
+  harness.startHttpServerMock.mockImplementation(async () => {
+    setTimeout(() => fire("SIGINT"), 0);
+    return { port: 4310, close: harness.closeServerMock };
+  });
 
   await runServeCommand(
     {
@@ -122,7 +165,8 @@ it("resolves init variables from env and lets --var override env values", async 
       defineAgentImpl: harness.defineAgentMock,
       createWebUIServerImpl: harness.createWebUIServerMock,
       startHttpServerImpl: harness.startHttpServerMock,
-      serveTUIImpl: harness.serveTUIMock,
+      signalProcess,
+      exit: vi.fn(),
       env: harness.env,
     },
   );
@@ -150,6 +194,12 @@ it("passes mcpTokens from --mcp-token and env fallbacks", async () => {
       AGENT_BUNDLE_MCP_TOKEN_REFUND_SERVICE: "env-token",
     },
   });
+  const { signalProcess, fire } = createSignalMock();
+
+  harness.startHttpServerMock.mockImplementation(async () => {
+    setTimeout(() => fire("SIGINT"), 0);
+    return { port: 4310, close: harness.closeServerMock };
+  });
 
   await runServeCommand(
     {
@@ -163,7 +213,8 @@ it("passes mcpTokens from --mcp-token and env fallbacks", async () => {
       defineAgentImpl: harness.defineAgentMock,
       createWebUIServerImpl: harness.createWebUIServerMock,
       startHttpServerImpl: harness.startHttpServerMock,
-      serveTUIImpl: harness.serveTUIMock,
+      signalProcess,
+      exit: vi.fn(),
       env: harness.env,
     },
   );
@@ -191,7 +242,6 @@ it("throws actionable error when required prompt variables are missing", async (
         defineAgentImpl: harness.defineAgentMock,
         createWebUIServerImpl: harness.createWebUIServerMock,
         startHttpServerImpl: harness.startHttpServerMock,
-        serveTUIImpl: harness.serveTUIMock,
         env: harness.env,
       },
     ),
@@ -202,21 +252,7 @@ it("throws actionable error when required prompt variables are missing", async (
 it("handles SIGINT with graceful shutdown and exits after cleanup", async () => {
   const harness = createServeHarness();
   const exitMock = vi.fn();
-  const listeners = new Map<"SIGINT" | "SIGTERM", (signal: NodeJS.Signals) => void>();
-  const signalProcess = {
-    on: (signal: NodeJS.Signals, listener: (value: NodeJS.Signals) => void) => {
-      if (signal === "SIGINT" || signal === "SIGTERM") {
-        listeners.set(signal, listener);
-      }
-      return signalProcess;
-    },
-    off: (signal: NodeJS.Signals, listener: (value: NodeJS.Signals) => void) => {
-      if ((signal === "SIGINT" || signal === "SIGTERM") && listeners.get(signal) === listener) {
-        listeners.delete(signal);
-      }
-      return signalProcess;
-    },
-  } as unknown as Pick<NodeJS.Process, "on" | "off">;
+  const { signalProcess, fire, listeners } = createSignalMock();
 
   const shutdownOrder: string[] = [];
   harness.closeServerMock.mockImplementation(async () => {
@@ -228,14 +264,10 @@ it("handles SIGINT with graceful shutdown and exits after cleanup", async () => 
   harness.agentShutdownMock.mockImplementation(async () => {
     shutdownOrder.push("agent.shutdown");
   });
-  harness.serveTUIMock.mockImplementation(async () => {
-    const sigintListener = listeners.get("SIGINT");
-    if (!sigintListener) {
-      throw new Error("SIGINT listener was not registered.");
-    }
 
-    sigintListener("SIGINT");
-    await Promise.resolve();
+  harness.startHttpServerMock.mockImplementation(async () => {
+    setTimeout(() => fire("SIGINT"), 0);
+    return { port: 4310, close: harness.closeServerMock };
   });
 
   await runServeCommand(
@@ -247,14 +279,12 @@ it("handles SIGINT with graceful shutdown and exits after cleanup", async () => 
       defineAgentImpl: harness.defineAgentMock,
       createWebUIServerImpl: harness.createWebUIServerMock,
       startHttpServerImpl: harness.startHttpServerMock,
-      serveTUIImpl: harness.serveTUIMock,
       signalProcess,
       exit: exitMock,
       env: harness.env,
     },
   );
 
-  await Promise.resolve();
   expect(shutdownOrder).toEqual([
     "http.close",
     "webui.shutdown",

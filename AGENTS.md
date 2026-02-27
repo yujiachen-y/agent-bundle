@@ -5,7 +5,7 @@ CLAUDE.md is a symlink to this file.
 
 ## Project Overview
 
-TypeScript/Node.js CLI tool and framework for defining, developing, and shipping AI agent skills. Uses pnpm, targets ES2022/NodeNext. Includes TUI, WebUI, and HTTP service interfaces.
+TypeScript/Node.js CLI tool and framework for defining, developing, and shipping AI agent skills. Uses pnpm, targets ES2022/NodeNext. Includes WebUI and HTTP service interfaces.
 
 ## Key Commands
 
@@ -66,7 +66,6 @@ prefix: worktree isolation
 - `src/agent/` — Agent interface and lifecycle.
 - `src/sandbox/` — Sandbox abstraction (E2B, Kubernetes, Docker providers).
 - `src/webui/` — WebUI (Hono + static assets + WebSocket). Frontend uses relative URLs — no hardcoded ports.
-- `src/tui/` — Terminal UI.
 - `demo/` — Standalone demo servers; not part of the main package.
 
 ## Quality Gates

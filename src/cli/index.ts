@@ -59,7 +59,7 @@ const keyValueArg = {
 const serveCommand = defineCommand({
   meta: {
     name: "serve",
-    description: "Run local development server with TUI + WebUI.",
+    description: "Run local development server with WebUI.",
   },
   args: {
     config: configArg,

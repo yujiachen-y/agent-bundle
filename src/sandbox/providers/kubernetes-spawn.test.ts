@@ -163,3 +163,73 @@ it("encodes env as env command args and forwards kill signals", async () => {
   expect(serverMessages).toContainEqual({ type: "kill", signal: "SIGKILL" });
   expect(exitCode).toBe(1);
 });
+
+it("rejects when websocket closes before pid is received", async () => {
+  const server = new WebSocketServer({ port: 0 });
+  openServers.push(server);
+
+  server.on("connection", (socket) => {
+    socket.close();
+  });
+
+  await waitForListening(server);
+  await expect(
+    spawnKubernetesProcess(toBaseUrl(server), "python3", ["echo.py"]),
+  ).rejects.toThrow(/closed before process exit/i);
+});
+
+it("rejects exited promise when server emits error event", async () => {
+  const server = new WebSocketServer({ port: 0 });
+  openServers.push(server);
+
+  server.on("connection", (socket) => {
+    socket.send(JSON.stringify({ type: "spawn", pid: 123 }));
+    socket.send(JSON.stringify({ type: "error", message: "process failed" }));
+  });
+
+  await waitForListening(server);
+  const process = await spawnKubernetesProcess(toBaseUrl(server), "python3");
+
+  await expect(process.exited).rejects.toThrow("process failed");
+});
+
+it("rejects exited promise on malformed server message", async () => {
+  const server = new WebSocketServer({ port: 0 });
+  openServers.push(server);
+
+  server.on("connection", (socket) => {
+    socket.send(JSON.stringify({ type: "spawn", pid: 456 }));
+    socket.send("not-valid-json");
+  });
+
+  await waitForListening(server);
+  const process = await spawnKubernetesProcess(toBaseUrl(server), "python3");
+
+  await expect(process.exited).rejects.toThrow(/unexpected|invalid|json/i);
+});
+
+it("rejects exited and closes streams on abrupt socket failure", async () => {
+  const server = new WebSocketServer({ port: 0 });
+  openServers.push(server);
+
+  server.on("connection", (socket) => {
+    socket.send(JSON.stringify({ type: "spawn", pid: 789 }));
+    setTimeout(() => {
+      const rawSocket = socket as import("ws").WebSocket & {
+        _socket?: import("node:net").Socket;
+      };
+      rawSocket._socket?.destroy(new Error("forced socket failure"));
+    }, 10);
+  });
+
+  await waitForListening(server);
+  const process = await spawnKubernetesProcess(toBaseUrl(server), "python3");
+
+  await expect(process.exited).rejects.toThrow();
+  const [stdout, stderr] = await Promise.all([
+    readStreamText(process.stdout),
+    readStreamText(process.stderr),
+  ]);
+  expect(stdout).toBe("");
+  expect(stderr).toBe("");
+});

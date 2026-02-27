@@ -21,6 +21,8 @@ export async function spawnKubernetesProcess(
   const socket = new WebSocket(toWebSocketUrl(baseUrl, command, args, opts));
   const pidDeferred = createDeferred<number>();
   const exitedDeferred = createDeferred<number>();
+  // Keep deferred rejection observed even if spawn fails before returning a process.
+  void exitedDeferred.promise.catch(() => undefined);
   const streams = createProcessStreams();
 
   bindSocketEvents({

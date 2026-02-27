@@ -174,19 +174,42 @@ describe("parseGitHubFileListing", () => {
 });
 
 describe("parseMcpJson", () => {
-  it("extracts HTTP servers and skips stdio servers", () => {
+  it("extracts HTTP, stdio, and SSE servers", () => {
     const json = JSON.stringify({
       mcpServers: {
         "finance-api": { type: "http", url: "https://api.example.com/mcp" },
-        "local-tool": { type: "stdio", command: "node server.js" },
+        "local-tool": { type: "stdio", command: "node", args: ["server.js"] },
         "analytics": { type: "http", url: "https://analytics.example.com/mcp" },
+        "events-api": { type: "sse", url: "https://events.example.com/mcp" },
       },
     });
 
     const result = parseMcpJson(json, "https://example.com/.mcp.json");
     expect(result).toEqual([
-      { name: "finance-api", url: "https://api.example.com/mcp", auth: "bearer" },
-      { name: "analytics", url: "https://analytics.example.com/mcp", auth: "bearer" },
+      {
+        transport: "http",
+        name: "finance-api",
+        url: "https://api.example.com/mcp",
+        auth: "bearer",
+      },
+      {
+        transport: "stdio",
+        name: "local-tool",
+        command: "node",
+        args: ["server.js"],
+      },
+      {
+        transport: "http",
+        name: "analytics",
+        url: "https://analytics.example.com/mcp",
+        auth: "bearer",
+      },
+      {
+        transport: "sse",
+        name: "events-api",
+        url: "https://events.example.com/mcp",
+        auth: "bearer",
+      },
     ]);
   });
 
@@ -200,4 +223,3 @@ describe("parseMcpJson", () => {
       .toThrowError(/expected a JSON object/);
   });
 });
-

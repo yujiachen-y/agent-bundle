@@ -21,6 +21,18 @@ function getStringField(obj: Record<string, unknown>, field: string): string {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : "";
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value).every((entry) => typeof entry === "string");
+}
+
 export function parsePluginManifest(json: string, sourceUrl: string): PluginManifest {
   const parsed: unknown = JSON.parse(json);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
@@ -123,7 +135,37 @@ export function parseMcpJson(json: string, sourceUrl: string): McpServerConfig[]
     return [];
   }
 
-  return Object.entries(servers)
-    .filter(([, config]) => config.type === "http" && typeof config.url === "string")
-    .map(([name, config]) => ({ name, url: config.url!, auth: "bearer" as const }));
+  return Object.entries(servers).reduce<McpServerConfig[]>((acc, [name, config]) => {
+    if (config.type === "http" && typeof config.url === "string") {
+      acc.push({
+        transport: "http",
+        name,
+        url: config.url,
+        auth: "bearer",
+      });
+      return acc;
+    }
+
+    if (config.type === "stdio" && typeof config.command === "string") {
+      acc.push({
+        transport: "stdio",
+        name,
+        command: config.command,
+        ...(isStringArray(config.args) ? { args: config.args } : {}),
+        ...(isStringRecord(config.env) ? { env: config.env } : {}),
+      });
+      return acc;
+    }
+
+    if (config.type === "sse" && typeof config.url === "string") {
+      acc.push({
+        transport: "sse",
+        name,
+        url: config.url,
+        auth: "bearer",
+      });
+    }
+
+    return acc;
+  }, []);
 }

@@ -5,9 +5,19 @@ import { createMcpClientManager } from "./client-manager.js";
 
 function createServer(name: string): McpServerConfig {
   return {
+    transport: "http",
     name,
     url: `https://example.com/${name}/mcp`,
     auth: "bearer",
+  };
+}
+
+function createStdioServer(name: string): McpServerConfig {
+  return {
+    transport: "stdio",
+    name,
+    command: "node",
+    args: ["server.js"],
   };
 }
 
@@ -201,4 +211,50 @@ it("aggregates dispose failures across MCP connections", async () => {
       throw error;
     }
   }).rejects.toThrow(/Failed to close MCP connections/);
+});
+
+it("passes sandbox option through to connectServer", async () => {
+  const sandbox = {
+    exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
+    spawn: async () => {
+      throw new Error("not used");
+    },
+    file: {
+      read: async () => "",
+      write: async () => undefined,
+      list: async () => [],
+      delete: async () => undefined,
+    },
+  };
+  const connectServer = vi.fn(async (_server, _token, receivedSandbox) => {
+    expect(receivedSandbox).toBe(sandbox);
+    return {
+      serverName: "refund",
+      tools: [],
+      callTool: async () => ({ output: "ok" }),
+      close: async () => undefined,
+    };
+  });
+
+  await createMcpClientManager(
+    [createServer("refund")],
+    {},
+    { connectServer, sandbox },
+  );
+
+  expect(connectServer).toHaveBeenCalledTimes(1);
+});
+
+it("warns when stdio server is configured without sandbox", async () => {
+  const logger = { warn: vi.fn() };
+  const manager = await createMcpClientManager(
+    [createStdioServer("local")],
+    {},
+    { logger },
+  );
+
+  expect(manager).not.toBeNull();
+  expect(manager?.tools).toEqual([]);
+  expect(logger.warn).toHaveBeenCalledTimes(1);
+  expect(logger.warn.mock.calls[0]?.[0]).toContain("requires a sandbox");
 });

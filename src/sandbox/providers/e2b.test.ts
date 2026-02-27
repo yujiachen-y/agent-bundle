@@ -20,6 +20,7 @@ type MockRuntime = {
   kill: ReturnType<typeof vi.fn>;
   commands: {
     run: ReturnType<typeof vi.fn>;
+    sendStdin: ReturnType<typeof vi.fn>;
   };
   files: {
     read: ReturnType<typeof vi.fn>;
@@ -49,6 +50,7 @@ function makeRuntime(overrides?: Partial<MockRuntime>): MockRuntime {
         stderr: "stderr",
         exitCode: 0,
       })),
+      sendStdin: vi.fn(async () => undefined),
     },
     files: {
       read: vi.fn(async () => "content"),
@@ -194,6 +196,83 @@ describe("E2BSandbox exec and files", () => {
       stderr: "boom",
       exitCode: 23,
     });
+  });
+});
+
+describe("E2BSandbox spawn", () => {
+  it("starts background command with stdio streams and forwards stdin", async () => {
+    const handle = {
+      pid: 42,
+      wait: vi.fn(async () => ({
+        stdout: "",
+        stderr: "",
+        exitCode: 0,
+      })),
+      kill: vi.fn(async () => true),
+    };
+    const runtime = makeRuntime({
+      commands: {
+        run: vi.fn(async (_command: string, options?: {
+          background?: boolean;
+          stdin?: boolean;
+          onStdout?: (data: string) => Promise<void>;
+          onStderr?: (data: string) => Promise<void>;
+          cwd?: string;
+          envs?: Record<string, string>;
+        }) => {
+          if (options?.background) {
+            await options.onStdout?.("spawn-out");
+            await options.onStderr?.("spawn-err");
+            return handle;
+          }
+
+          return {
+            stdout: "stdout",
+            stderr: "stderr",
+            exitCode: 0,
+          };
+        }),
+        sendStdin: vi.fn(async () => undefined),
+      },
+    });
+    createSandboxMock.mockResolvedValueOnce(runtime);
+    const sandbox = new E2BSandbox(makeSandboxConfig());
+    await sandbox.start();
+
+    const process = await sandbox.spawn("node", ["server.js"], {
+      cwd: "/workspace",
+      env: { NODE_ENV: "test" },
+    });
+
+    const stdoutReader = process.stdout.getReader();
+    const stderrReader = process.stderr.getReader();
+    const stdoutChunk = await stdoutReader.read();
+    const stderrChunk = await stderrReader.read();
+    stdoutReader.releaseLock();
+    stderrReader.releaseLock();
+
+    const writer = process.stdin.getWriter();
+    await writer.write(new TextEncoder().encode("hello"));
+    await writer.close();
+    writer.releaseLock();
+
+    await process.kill();
+    const exitCode = await process.exited;
+
+    expect(runtime.commands.run).toHaveBeenCalledWith(
+      "'node' 'server.js'",
+      expect.objectContaining({
+        background: true,
+        stdin: true,
+        cwd: "/workspace",
+        envs: { NODE_ENV: "test" },
+      }),
+    );
+    expect(runtime.commands.sendStdin).toHaveBeenCalledWith(42, "hello");
+    expect(new TextDecoder().decode(stdoutChunk.value)).toBe("spawn-out");
+    expect(new TextDecoder().decode(stderrChunk.value)).toBe("spawn-err");
+    expect(handle.kill).toHaveBeenCalledTimes(1);
+    expect(exitCode).toBe(0);
   });
 });
 

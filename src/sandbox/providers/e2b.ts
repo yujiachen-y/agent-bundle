@@ -8,6 +8,8 @@ import type {
   Sandbox,
   SandboxConfig,
   SandboxHooks,
+  SpawnOptions,
+  SpawnedProcess,
   SandboxStatus,
 } from "../types.js";
 import { quoteShellArg } from "../utils.js";
@@ -38,6 +40,41 @@ function commandResultFromUnknown(error: unknown): CommandResult | null {
 
 function toCreateTimeoutMs(config: SandboxConfig): number {
   return Math.max(1, Math.trunc(config.timeout * 1000));
+}
+
+function toBytes(text: string): Uint8Array {
+  return new TextEncoder().encode(text);
+}
+
+function toExitCode(error: unknown): number | null {
+  if (typeof error !== "object" || error === null) {
+    return null;
+  }
+
+  const exitCode = Reflect.get(error, "exitCode");
+  if (typeof exitCode !== "number") {
+    return null;
+  }
+
+  if (exitCode < 0) {
+    return 1;
+  }
+
+  return exitCode;
+}
+
+function closeStreamController(
+  controller: ReadableStreamDefaultController<Uint8Array> | null,
+): void {
+  if (controller === null) {
+    return;
+  }
+
+  try {
+    controller.close();
+  } catch {
+    // Stream may already be closed; ignore.
+  }
 }
 
 export class E2BSandbox implements Sandbox {
@@ -141,6 +178,100 @@ export class E2BSandbox implements Sandbox {
         stderr: commandResult.stderr,
         exitCode: commandResult.exitCode,
       };
+    }
+  }
+
+  public async spawn(
+    command: string,
+    args: string[] = [],
+    opts?: SpawnOptions,
+  ): Promise<SpawnedProcess> {
+    const runtime = this.getRuntime();
+    const commandText = [command, ...args].map((part) => quoteShellArg(part)).join(" ");
+
+    let stdoutController: ReadableStreamDefaultController<Uint8Array> | null = null;
+    let stderrController: ReadableStreamDefaultController<Uint8Array> | null = null;
+    const closeStreams = (): void => {
+      closeStreamController(stdoutController);
+      closeStreamController(stderrController);
+      stdoutController = null;
+      stderrController = null;
+    };
+
+    const stdout = new ReadableStream<Uint8Array>({
+      start(controller) {
+        stdoutController = controller;
+      },
+    });
+    const stderr = new ReadableStream<Uint8Array>({
+      start(controller) {
+        stderrController = controller;
+      },
+    });
+
+    try {
+      const handle = await runtime.commands.run(commandText, {
+        background: true,
+        stdin: true,
+        cwd: opts?.cwd,
+        envs: opts?.env,
+        onStdout: async (data) => {
+          stdoutController?.enqueue(toBytes(data));
+        },
+        onStderr: async (data) => {
+          stderrController?.enqueue(toBytes(data));
+        },
+      });
+
+      const stdinDecoder = new TextDecoder();
+      const stdin = new WritableStream<Uint8Array>({
+        write: async (chunk) => {
+          const text = stdinDecoder.decode(chunk, { stream: true });
+          if (text.length > 0) {
+            await runtime.commands.sendStdin(handle.pid, text);
+          }
+        },
+        close: async () => {
+          const trailing = stdinDecoder.decode();
+          if (trailing.length > 0) {
+            await runtime.commands.sendStdin(handle.pid, trailing);
+          }
+        },
+      });
+
+      const exited = handle
+        .wait()
+        .then((result) => {
+          if (result.exitCode < 0) {
+            return 1;
+          }
+          return result.exitCode;
+        })
+        .catch((error) => {
+          const exitCode = toExitCode(error);
+          if (exitCode !== null) {
+            return exitCode;
+          }
+
+          throw error;
+        })
+        .finally(() => {
+          closeStreams();
+        });
+
+      return {
+        pid: handle.pid,
+        stdin,
+        stdout,
+        stderr,
+        exited,
+        kill: async () => {
+          await handle.kill();
+        },
+      };
+    } catch (error) {
+      closeStreams();
+      throw error;
     }
   }
 

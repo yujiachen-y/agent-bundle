@@ -7,11 +7,32 @@ import type {
 import type { SandboxConfig, SandboxHooks } from "../sandbox/types.js";
 import type { SessionState } from "./session.js";
 
-export type McpServerConfig = {
+export type McpServerHttpConfig = {
+  transport: "http";
   name: string;
   url: string;
   auth: "bearer";
 };
+
+export type McpServerStdioConfig = {
+  transport: "stdio";
+  name: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+};
+
+export type McpServerSseConfig = {
+  transport: "sse";
+  name: string;
+  url: string;
+  auth?: "bearer";
+};
+
+export type McpServerConfig =
+  | McpServerHttpConfig
+  | McpServerStdioConfig
+  | McpServerSseConfig;
 
 export type AgentStatus = "ready" | "running" | "stopped";
 

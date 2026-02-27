@@ -33,6 +33,7 @@ function createBaseConfig() {
     mcp: {
       servers: [
         {
+          transport: "http",
           name: "refund-service",
           url: "https://internal.example.com/mcp/refund",
           auth: "bearer",

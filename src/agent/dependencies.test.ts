@@ -22,7 +22,7 @@ it("creates PiMono loop and delegates empty MCP config", async () => {
   const mcpManager = await dependencies.createMcpClientManager([], {});
 
   expect(loop).toBeInstanceOf(PiMonoAgentLoop);
-  expect(createMcpClientManagerMock).toHaveBeenCalledWith([], {});
+  expect(createMcpClientManagerMock).toHaveBeenCalledWith([], {}, { sandbox: null });
   expect(mcpManager).toBeNull();
 });
 
@@ -36,7 +36,12 @@ it("delegates MCP manager creation when servers exist", async () => {
 
   const dependencies = createDefaultDependencies();
   const servers = [
-    { name: "refund", url: "https://example.com/mcp", auth: "bearer" as const },
+    {
+      transport: "http" as const,
+      name: "refund",
+      url: "https://example.com/mcp",
+      auth: "bearer" as const,
+    },
   ];
   const tokens = { refund: "token-1" };
   const mcpManager = await dependencies.createMcpClientManager(
@@ -44,6 +49,6 @@ it("delegates MCP manager creation when servers exist", async () => {
     tokens,
   );
 
-  expect(createMcpClientManagerMock).toHaveBeenCalledWith(servers, tokens);
+  expect(createMcpClientManagerMock).toHaveBeenCalledWith(servers, tokens, { sandbox: null });
   expect(mcpManager).toBe(fakeManager);
 });

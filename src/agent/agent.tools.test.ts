@@ -32,7 +32,12 @@ it("routes Read Write Bash and MCP calls through toolHandler", async () => {
 
   const harness = createHarness({
     configOverrides: {
-      mcp: [{ name: "refund", url: "https://example.com/mcp", auth: "bearer" }],
+      mcp: [{
+        transport: "http",
+        name: "refund",
+        url: "https://example.com/mcp",
+        auth: "bearer",
+      }],
     },
     initOverrides: {
       mcpTokens: {
@@ -62,10 +67,7 @@ it("routes Read Write Bash and MCP calls through toolHandler", async () => {
     stderr: "failed",
     exitCode: 1,
   };
-  const onChunk = (chunk: string) => {
-    void chunk;
-    return undefined;
-  };
+  const onChunk = () => undefined;
   const bashResult = await toolHandler({
     id: "tool-bash",
     name: "Bash",

@@ -44,15 +44,30 @@ describe("mergePluginComponents", () => {
 
   it("deduplicates MCP servers by name, keeping existing ones", () => {
     const existingServers = [
-      { name: "shared-api", url: "https://original.example.com/mcp", auth: "bearer" as const },
+      {
+        transport: "http" as const,
+        name: "shared-api",
+        url: "https://original.example.com/mcp",
+        auth: "bearer" as const,
+      },
     ];
     const plugins: PluginComponents[] = [
       {
         skills: [],
         commands: [],
         mcpServers: [
-          { name: "shared-api", url: "https://duplicate.example.com/mcp", auth: "bearer" as const },
-          { name: "new-api", url: "https://new.example.com/mcp", auth: "bearer" as const },
+          {
+            transport: "http" as const,
+            name: "shared-api",
+            url: "https://duplicate.example.com/mcp",
+            auth: "bearer" as const,
+          },
+          {
+            transport: "http" as const,
+            name: "new-api",
+            url: "https://new.example.com/mcp",
+            auth: "bearer" as const,
+          },
         ],
         metadata: { name: "test-plugin" },
       },
@@ -78,13 +93,23 @@ describe("mergePluginComponents", () => {
       {
         skills: [createSkill("a")],
         commands: [createCommand("cmd-a")],
-        mcpServers: [{ name: "api-a", url: "https://a.example.com/mcp", auth: "bearer" as const }],
+        mcpServers: [{
+          transport: "http" as const,
+          name: "api-a",
+          url: "https://a.example.com/mcp",
+          auth: "bearer" as const,
+        }],
         metadata: { name: "plugin-a" },
       },
       {
         skills: [createSkill("b")],
         commands: [createCommand("cmd-b")],
-        mcpServers: [{ name: "api-b", url: "https://b.example.com/mcp", auth: "bearer" as const }],
+        mcpServers: [{
+          transport: "http" as const,
+          name: "api-b",
+          url: "https://b.example.com/mcp",
+          auth: "bearer" as const,
+        }],
         metadata: { name: "plugin-b" },
       },
     ];

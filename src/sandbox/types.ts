@@ -20,8 +20,23 @@ export type ExecOptions = {
   onChunk?: (chunk: string) => void;
 };
 
+export type SpawnOptions = {
+  cwd?: string;
+  env?: Record<string, string>;
+};
+
+export type SpawnedProcess = {
+  readonly pid: number;
+  readonly stdin: WritableStream<Uint8Array>;
+  readonly stdout: ReadableStream<Uint8Array>;
+  readonly stderr: ReadableStream<Uint8Array>;
+  readonly exited: Promise<number>;
+  kill(signal?: string): Promise<void>;
+};
+
 export interface SandboxIO {
   exec(command: string, opts?: ExecOptions): Promise<ExecResult>;
+  spawn(command: string, args?: string[], opts?: SpawnOptions): Promise<SpawnedProcess>;
   file: {
     read(path: string): Promise<string>;
     write(path: string, content: string | Buffer): Promise<void>;

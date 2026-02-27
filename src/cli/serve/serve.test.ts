@@ -182,6 +182,7 @@ it("passes mcpTokens from --mcp-token and env fallbacks", async () => {
   config.mcp = {
     servers: [
       {
+        transport: "http",
         name: "refund-service",
         url: "https://example.com/mcp/refund",
         auth: "bearer",

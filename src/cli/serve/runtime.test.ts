@@ -91,8 +91,18 @@ it("resolveInitVariables errors on missing required variables", () => {
 it("resolveMcpTokens prefers cli entries then env prefixes", () => {
   const tokens = resolveMcpTokens(
     [
-      { name: "refund-service", url: "https://example.com/refund", auth: "bearer" },
-      { name: "ops", url: "https://example.com/ops", auth: "bearer" },
+      {
+        transport: "http",
+        name: "refund-service",
+        url: "https://example.com/refund",
+        auth: "bearer",
+      },
+      {
+        transport: "http",
+        name: "ops",
+        url: "https://example.com/ops",
+        auth: "bearer",
+      },
     ],
     { "refund-service": "cli-token" },
     {
@@ -110,7 +120,7 @@ it("resolveMcpTokens prefers cli entries then env prefixes", () => {
 it("resolveMcpTokens rejects unknown cli server names", () => {
   expect(() =>
     resolveMcpTokens(
-      [{ name: "known", url: "https://example.com/mcp", auth: "bearer" }],
+      [{ transport: "http", name: "known", url: "https://example.com/mcp", auth: "bearer" }],
       { unknown: "x" },
       {},
     ),

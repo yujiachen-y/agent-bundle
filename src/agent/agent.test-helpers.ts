@@ -10,8 +10,11 @@ import type {
   ExecResult,
   FileEntry,
   Sandbox,
+  SandboxIO,
   SandboxConfig,
   SandboxHooks,
+  SpawnOptions,
+  SpawnedProcess,
   SandboxStatus,
 } from "../sandbox/index.js";
 import { AgentImpl } from "./agent.js";
@@ -64,6 +67,11 @@ export class FakeSandbox implements Sandbox {
   public status: SandboxStatus = "idle";
 
   public readonly execCalls: Array<{ command: string; options?: ExecOptions }> = [];
+  public readonly spawnCalls: Array<{
+    command: string;
+    args: string[];
+    options?: SpawnOptions;
+  }> = [];
   public readonly readCalls: string[] = [];
   public readonly writeCalls: Array<{ path: string; content: string | Buffer }> = [];
 
@@ -76,6 +84,7 @@ export class FakeSandbox implements Sandbox {
     stderr: "",
     exitCode: 0,
   };
+  public nextSpawnedProcess: SpawnedProcess = createSpawnedProcessStub();
 
   public async start(): Promise<void> {
     this.startCount += 1;
@@ -90,6 +99,15 @@ export class FakeSandbox implements Sandbox {
   public async exec(command: string, options?: ExecOptions): Promise<ExecResult> {
     this.execCalls.push({ command, options });
     return this.nextExecResult;
+  }
+
+  public async spawn(
+    command: string,
+    args: string[] = [],
+    options?: SpawnOptions,
+  ): Promise<SpawnedProcess> {
+    this.spawnCalls.push({ command, args, options });
+    return this.nextSpawnedProcess;
   }
 
   public readonly file = {
@@ -175,9 +193,11 @@ export function createHarness(options: {
     createMcpClientManager: async (
       servers: readonly McpServerConfig[],
       tokens: Record<string, string>,
+      mcpSandbox?: SandboxIO | null,
     ) => {
       void servers;
       void tokens;
+      void mcpSandbox;
       options.order?.push("createMcpClientManager");
       return options.mcpClientManager ?? null;
     },
@@ -204,4 +224,25 @@ export async function collectEvents(iterable: AsyncIterable<ResponseEvent>): Pro
   }
 
   return events;
+}
+
+function createSpawnedProcessStub(): SpawnedProcess {
+  return {
+    pid: 1,
+    stdin: new WritableStream<Uint8Array>({
+      write: async () => undefined,
+    }),
+    stdout: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    }),
+    stderr: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    }),
+    exited: Promise.resolve(0),
+    kill: async () => undefined,
+  };
 }

@@ -80,7 +80,17 @@ describe("loadPlugin with explicit skills", () => {
     expect(result.skills).toHaveLength(1);
     expect(result.skills[0].name).toBe("Variance Analysis");
     expect(result.mcpServers).toEqual([
-      { name: "finance-api", url: "https://api.example.com/mcp", auth: "bearer" },
+      {
+        transport: "http",
+        name: "finance-api",
+        url: "https://api.example.com/mcp",
+        auth: "bearer",
+      },
+      {
+        transport: "stdio",
+        name: "local-tool",
+        command: "node server.js",
+      },
     ]);
     // manifest + skill + commands-api-404 + mcp = 4 fetches
     expect(fetchMock).toHaveBeenCalledTimes(4);

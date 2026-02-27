@@ -87,6 +87,9 @@ function toWebUISandboxAdapter(sandboxIO: SandboxIO): Sandbox {
     exec: async (command, options) => {
       return await sandboxIO.exec(command, options);
     },
+    spawn: async (command, args, options) => {
+      return await sandboxIO.spawn(command, args, options);
+    },
     file: sandboxIO.file,
   };
 }

@@ -69,6 +69,24 @@ function createSandboxIO(): SandboxIO {
       stderr: "",
       exitCode: 0,
     }),
+    spawn: async () => ({
+      pid: 1,
+      stdin: new WritableStream<Uint8Array>({
+        write: async () => undefined,
+      }),
+      stdout: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      }),
+      stderr: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      }),
+      exited: Promise.resolve(0),
+      kill: async () => undefined,
+    }),
     file: {
       read: async () => "",
       write: async () => undefined,

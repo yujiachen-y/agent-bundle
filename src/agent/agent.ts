@@ -171,7 +171,11 @@ export class AgentImpl<V extends string> implements Agent {
     }
 
     const mcpTokens = this.options.mcpTokens ?? {};
-    return await this.dependencies.createMcpClientManager(this.config.mcp, mcpTokens);
+    return await this.dependencies.createMcpClientManager(
+      this.config.mcp,
+      mcpTokens,
+      this.sandbox,
+    );
   }
 
   private async handleToolCall(call: ToolCall): Promise<ToolResult> {

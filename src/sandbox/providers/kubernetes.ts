@@ -10,11 +10,14 @@ import type {
   Sandbox,
   SandboxConfig,
   SandboxHooks,
+  SpawnOptions,
+  SpawnedProcess,
   SandboxStatus,
 } from "../types.js";
 import { quoteShellArg } from "../utils.js";
 import { requestCommandRun } from "./kubernetes-command-run.js";
 import { createCoreApi } from "./kubernetes-kubeconfig.js";
+import { spawnKubernetesProcess } from "./kubernetes-spawn.js";
 import {
   DIRECT_POD_HEALTH_TIMEOUT_MS,
   DEFAULT_HEALTH_TIMEOUT_MS,
@@ -150,6 +153,14 @@ export class K8sSandbox implements Sandbox {
       },
       opts?.onChunk,
     );
+  }
+
+  public async spawn(
+    command: string,
+    args: string[] = [],
+    opts?: SpawnOptions,
+  ): Promise<SpawnedProcess> {
+    return await spawnKubernetesProcess(this.getExecdBaseUrl(), command, args, opts);
   }
 
   public async shutdown(): Promise<void> {

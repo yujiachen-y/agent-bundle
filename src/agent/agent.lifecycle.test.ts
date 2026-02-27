@@ -135,7 +135,12 @@ it("shuts down in order loop then mcp then sandbox and is idempotent", async () 
   const order: string[] = [];
   const harness = createHarness({
     configOverrides: {
-      mcp: [{ name: "refund", url: "https://example.com/mcp", auth: "bearer" }],
+      mcp: [{
+        transport: "http",
+        name: "refund",
+        url: "https://example.com/mcp",
+        auth: "bearer",
+      }],
     },
     mcpClientManager: {
       tools: [],

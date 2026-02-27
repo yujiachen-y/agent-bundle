@@ -129,13 +129,39 @@ const urlCommandSchema = z
 
 const commandEntrySchema = z.union([localCommandSchema, githubCommandSchema, urlCommandSchema]);
 
-const mcpServerSchema = z
+const mcpServerHttpSchema = z
   .object({
+    transport: z.literal("http"),
     name: z.string().min(1),
     url: z.string().url(),
     auth: z.enum(["bearer"]),
   })
   .strict();
+
+const mcpServerStdioSchema = z
+  .object({
+    transport: z.literal("stdio"),
+    name: z.string().min(1),
+    command: z.string().min(1),
+    args: z.array(z.string()).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+  })
+  .strict();
+
+const mcpServerSseSchema = z
+  .object({
+    transport: z.literal("sse"),
+    name: z.string().min(1),
+    url: z.string().url(),
+    auth: z.enum(["bearer"]).optional(),
+  })
+  .strict();
+
+const mcpServerSchema = z.discriminatedUnion("transport", [
+  mcpServerHttpSchema,
+  mcpServerStdioSchema,
+  mcpServerSseSchema,
+]);
 
 const mcpSchema = z
   .object({

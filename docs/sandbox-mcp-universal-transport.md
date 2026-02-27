@@ -4,7 +4,7 @@ doc_sync_id: "40c542a5-1d89-4942-9b69-f6834a36cc0e"
 
 # Sandbox Universal MCP Transport Support
 
-## Status: Design — ready for implementation
+## Status: Implemented
 
 ## Goal
 
@@ -222,7 +222,15 @@ async shutdown() {
 
 ---
 
-## Open questions for implementer
+## Implementation Notes
+
+1. E2B `spawn()` is implemented through `sandbox.commands.run(..., { background: true, stdin: true })` with `sendStdin` for writable stdin and callback-backed stdout/stderr streams.
+2. Kubernetes `spawn()` uses execd `/process/spawn` over WebSocket with JSON message framing (`stdin`, `stdin-close`, `kill`, `stdout`, `stderr`, `exit`, `error`).
+3. MCP stdio transport is implemented via a sandbox-native transport adapter that reads/writes newline-delimited JSON-RPC over `SpawnedProcess` streams.
+4. MCP server config now supports discriminated transport types (`http`, `stdio`, `sse`) in schema, plugin parsing, and runtime connection management.
+5. Client manager now branches transport by server type and requires a sandbox for stdio servers.
+
+## Open questions
 
 1. **E2B SDK**: Does `sandbox.pty.create()` or `sandbox.commands.run({ background: true })` give us writable stdin? Need to verify API surface.
 2. **K8s execd**: Should we extend the execd sidecar with a WebSocket `/spawn` endpoint, or use the K8s API `exec` directly with stdin?

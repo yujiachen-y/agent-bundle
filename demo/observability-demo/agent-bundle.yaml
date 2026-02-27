@@ -1,0 +1,20 @@
+name: observability-demo
+model:
+  provider: openai
+  model: gpt-5.3-codex
+prompt:
+  system: |
+    You are a helpful assistant. Answer questions concisely.
+  variables: []
+sandbox:
+  provider: e2b
+  timeout: 300
+  resources:
+    cpu: 1
+    memory: 256MB
+  e2b:
+    template: base
+    build:
+      dockerfile: ./Dockerfile
+skills:
+  - path: ./skills/answer

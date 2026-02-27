@@ -6,6 +6,7 @@ export default defineConfig({
       "spikes/**/*.test.{ts,js,mjs}",
       "spikes/**/__tests__/**/*.{ts,js,mjs}",
       "src/**/*.test.ts",
+      "demo/**/*.e2e.test.ts",
     ],
     passWithNoTests: false,
     coverage: {

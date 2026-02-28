@@ -9,7 +9,7 @@ The agent analyzes data in a cloud sandbox using pandas, matplotlib, and numpy. 
 - Node.js >= 20 and pnpm
 - API secrets:
   - `E2B_API_KEY` (for E2B sandbox + template build)
-  - `OPENROUTER_API_KEY` (for OpenRouter model)
+  - `OPENAI_API_KEY` (for OpenAI model; default config uses `provider: openai`)
 
 Run all commands from repository root.
 
@@ -18,7 +18,7 @@ Run all commands from repository root.
 One command handles everything — E2B API validation, bundle build, template build, and WebUI startup:
 
 ```bash
-E2B_API_KEY=... OPENROUTER_API_KEY=... pnpm demo:web-e2b
+E2B_API_KEY=... OPENAI_API_KEY=... pnpm demo:web-e2b
 ```
 
 The script is idempotent: on repeat runs, already-built templates are reused automatically.
@@ -29,7 +29,7 @@ Once running, open your browser:
 
 ### LLM provider
 
-The demo ships with `provider: openrouter` / `model: google/gemini-2.5-flash` in `agent-bundle.yaml`. Set the matching API key as an environment variable:
+The demo ships with `provider: openai` / `model: gpt-5.3-codex` in `agent-bundle.yaml`. Set the matching API key as an environment variable:
 
 | Provider | Environment variable | Notes |
 |---|---|---|

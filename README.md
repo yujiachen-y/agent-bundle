@@ -8,7 +8,7 @@
 
 > Define skills in YAML. Develop with a live sandbox UI. Ship as a typed TypeScript package.
 
-**Anthropic · OpenAI · Gemini · Ollama · OpenRouter** — **E2B · Kubernetes sandboxes**
+**Anthropic · OpenAI · Gemini · Ollama · OpenRouter** — **E2B · Kubernetes sandboxes** — **AWS ECS Fargate deploy** _(beta)_
 
 ---
 
@@ -29,7 +29,7 @@ Agent skills work great inside local coding agents. Deploying them to production
 ### 1. Install
 
 ```bash
-pnpm add -g agent-bundle
+pnpm install && pnpm build
 ```
 
 ### 2. Define your bundle
@@ -102,6 +102,14 @@ dist/my-agent/
 If `sandbox.kubernetes.build` is configured, `agent-bundle build` runs a local `docker build` for that image tag. Image push/import is still an explicit user step.
 If `sandbox.provider` is `e2b`, `agent-bundle build` generates a temporary E2B context (`/skills`, `/tools`, `e2b.Dockerfile`) and bakes the resolved template ref into `bundle.json`. See [Configuration Guide](./docs/configuration.md#sandbox) for SDK/CLI fallback and auth details.
 
+### Deploy to AWS _(beta)_
+
+```bash
+agent-bundle deploy --target aws --secret API_KEY
+```
+
+Pushes the built Docker image to ECR and deploys to ECS Fargate — no Terraform or CloudFormation required. See [Deploy](./docs/configuration.md#deploy-beta) for details.
+
 Integrate into any Node.js service:
 
 ```typescript
@@ -135,6 +143,8 @@ If agent-bundle is useful to you, consider giving it a ⭐. It helps others disc
 
 ## Roadmap
 
+- [ ] `deploy --target aws` GA — currently beta, stability not guaranteed
+- [ ] GCP Cloud Run deploy target
 - [ ] Pluggable agent loop engines — Claude Code, Codex via process bridge
 - [ ] Fine-grained Docker sandbox isolation
 

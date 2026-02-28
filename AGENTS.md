@@ -42,8 +42,8 @@ prefix: worktree isolation
 
 ### Port Priority
 
-1. `PORT` environment variable → used directly.
-2. `--port` CLI flag → used directly.
+1. `--port` CLI flag → used directly.
+2. `PORT` environment variable → used directly (checked inside `resolveServicePort`).
 3. Auto-computed `prefix × 1000 + suffix`; collision rotates prefix (never suffix).
 
 ### For Agents: Adding a New Demo
@@ -71,7 +71,7 @@ prefix: worktree isolation
 
 ## Architecture Boundaries
 
-- `src/cli/` — CLI commands (build / generate / serve / config).
+- `src/cli/` — CLI commands (build / generate / serve / dev).
 - `src/agent/` — Agent interface and lifecycle.
 - `src/sandbox/` — Sandbox abstraction (E2B, Kubernetes, Docker providers).
 - `src/webui/` — WebUI (Hono + static assets + WebSocket). Frontend uses relative URLs — no hardcoded ports.

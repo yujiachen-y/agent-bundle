@@ -1,3 +1,7 @@
+---
+doc_sync_id: "3a6b6892-c3e2-4d71-82a5-dc71db090ec5"
+---
+
 # Observability Integration Guide
 
 agent-bundle ships a vendor-neutral observability layer built on the
@@ -231,7 +235,7 @@ Provides the provider to agent lifecycle hooks, tool-call instrumentation,
 and MCP instrumentation. Defined in `src/agent/dependencies.ts`:
 
 ```ts
-import type { AgentDependencies } from "agent-bundle/runtime";
+import type { AgentDependencies } from "agent-bundle/dependencies";
 
 const deps: AgentDependencies = {
   createSandbox,

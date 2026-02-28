@@ -19,5 +19,9 @@ pnpm-debug.log*
 .DS_Store
 .claude/
 
+# Spikes runtime artifacts
+spikes/**/results/
+spikes/**/package-lock.json
+
 # Demo build artifacts
 demo/personalized-recommend/tools/

@@ -16,32 +16,39 @@ function fnv1a32(input: string): number {
 
 /**
  * Detect if cwd is inside a Git worktree (not the main repo).
+ * Walks up parent directories to find the nearest `.git` entry.
  * In a worktree the `.git` path is a file containing `gitdir: <path>`,
  * whereas in the main repo `.git` is a directory.
- * Returns the worktree directory basename, or null if not a worktree.
+ * Returns the worktree root directory basename, or null if not a worktree.
  */
 function detectWorktreeName(cwd: string): string | null {
-  const dotGitPath = resolve(cwd, ".git");
+  let dir = resolve(cwd);
 
-  try {
-    const stat = statSync(dotGitPath);
-    if (stat.isDirectory()) {
-      return null; // main repo
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const dotGitPath = resolve(dir, ".git");
+
+    try {
+      const stat = statSync(dotGitPath);
+      if (stat.isDirectory()) {
+        return null; // main repo root
+      }
+      // .git is a file — check if it's a worktree pointer
+      const content = readFileSync(dotGitPath, "utf-8").trim();
+      if (content.startsWith("gitdir:")) {
+        return basename(dir);
+      }
+      return null;
+    } catch {
+      // no .git here, try parent
     }
-  } catch {
-    return null; // no .git at all
-  }
 
-  try {
-    const content = readFileSync(dotGitPath, "utf-8").trim();
-    if (content.startsWith("gitdir:")) {
-      return basename(cwd);
+    const parent = resolve(dir, "..");
+    if (parent === dir) {
+      return null; // reached filesystem root
     }
-  } catch {
-    // ignore read errors
+    dir = parent;
   }
-
-  return null;
 }
 
 export type WorktreePortResult = {

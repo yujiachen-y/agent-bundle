@@ -19,6 +19,10 @@
     "./observability": {
       "types": "./dist/observability/index.d.ts",
       "default": "./dist/observability/index.js"
+    },
+    "./dependencies": {
+      "types": "./dist/agent/dependencies.d.ts",
+      "default": "./dist/agent/dependencies.js"
     }
   },
   "bin": {

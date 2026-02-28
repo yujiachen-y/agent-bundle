@@ -21,6 +21,7 @@ pnpm-debug.log*
 
 # Spikes runtime artifacts
 spikes/**/results/
+spikes/**/artifacts/
 spikes/**/package-lock.json
 
 # Demo build artifacts

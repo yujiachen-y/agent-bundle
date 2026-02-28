@@ -73,7 +73,7 @@ prefix: worktree isolation
 
 - `src/cli/` — CLI commands (build / generate / serve / dev).
 - `src/agent/` — Agent interface and lifecycle.
-- `src/sandbox/` — Sandbox abstraction (E2B, Kubernetes, Docker providers).
+- `src/sandbox/` — Sandbox abstraction (E2B, Kubernetes providers). Docker is used only as a build tool for sandbox images.
 - `src/webui/` — WebUI (Hono + static assets + WebSocket). Frontend uses relative URLs — no hardcoded ports.
 - `demo/` — Standalone demo servers; not part of the main package.
 

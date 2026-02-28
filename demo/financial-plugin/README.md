@@ -32,7 +32,7 @@ pnpm build:demo:financial-plugin
 pnpm build
 
 # 3. Start the dev server
-pnpm exec tsx src/cli/index.ts dev --config demo/financial-plugin/agent-bundle.yaml
+pnpm exec agent-bundle dev --config demo/financial-plugin/agent-bundle.yaml
 ```
 
 ## What It Shows

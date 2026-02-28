@@ -33,11 +33,11 @@ done
 ok "All prerequisites found"
 
 info "Building observability-demo bundle"
-pnpm exec tsx src/cli/index.ts build --config demo/observability-demo/agent-bundle.yaml
+pnpm exec agent-bundle build --config demo/observability-demo/agent-bundle.yaml
 ok "Bundle built"
 
 info "Generating observability-demo package"
-pnpm exec tsx src/cli/index.ts generate --config demo/observability-demo/agent-bundle.yaml
+pnpm exec agent-bundle generate --config demo/observability-demo/agent-bundle.yaml
 ok "Package generated"
 
 info "Building TypeScript project"

@@ -47,11 +47,11 @@ pnpm exec esbuild \
 ok "STDIO server bundled"
 
 info "Building personalized-recommend bundle"
-pnpm exec tsx src/cli/index.ts build --config demo/personalized-recommend/agent-bundle.yaml
+pnpm exec agent-bundle build --config demo/personalized-recommend/agent-bundle.yaml
 ok "Bundle built"
 
 info "Generating personalized-recommend package"
-pnpm exec tsx src/cli/index.ts generate --config demo/personalized-recommend/agent-bundle.yaml
+pnpm exec agent-bundle generate --config demo/personalized-recommend/agent-bundle.yaml
 ok "Package generated"
 
 info "Building TypeScript project"

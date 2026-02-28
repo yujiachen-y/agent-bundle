@@ -56,5 +56,5 @@ pnpm build
 ok "Build complete"
 
 info "Starting agent-bundle dev (port auto-detected, see output below)"
-exec pnpm exec tsx src/cli/index.ts dev \
+exec pnpm exec agent-bundle dev \
   --config demo/data-analyst-e2b/agent-bundle.yaml ${PORT:+--port "$PORT"}

@@ -88,5 +88,5 @@ pnpm build
 ok "Build complete"
 
 info "Starting server (port auto-detected, see output below)"
-exec pnpm exec tsx src/cli/index.ts dev \
+exec pnpm exec agent-bundle dev \
   --config demo/code-formatter/k8s/agent-bundle.yaml ${PORT:+--port "$PORT"}

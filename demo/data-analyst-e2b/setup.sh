@@ -3,7 +3,7 @@
 # E2B web demo (data-analyst) — one-command setup + start
 #
 # Usage (from repo root):
-#   E2B_API_KEY=... OPENROUTER_API_KEY=... ./demo/data-analyst-e2b/setup.sh
+#   E2B_API_KEY=... OPENAI_API_KEY=... ./demo/data-analyst-e2b/setup.sh
 #
 # What it does:
 #   1. Validates API keys and prerequisites
@@ -27,8 +27,8 @@ if [ -z "${E2B_API_KEY:-}" ]; then
   fail "E2B_API_KEY is required."
 fi
 
-if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-  fail "OPENROUTER_API_KEY is required."
+if [ -z "${OPENAI_API_KEY:-}" ]; then
+  fail "OPENAI_API_KEY is required."
 fi
 
 info "Checking prerequisites"

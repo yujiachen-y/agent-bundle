@@ -231,55 +231,85 @@ The current README is solid but can be improved for conversion:
 
 ## Post-Launch Demo Roadmap
 
-Prior market research (15 market segments, 18+ competing frameworks, viral content analysis) scored 10 demo concepts across buzz, impact, reproducibility, differentiation, and shareability. Three high-value demos are not yet built and should be prioritized post-launch.
+Prior market research (15 market segments, 18+ competing frameworks, viral content analysis) scored 10 demo concepts across buzz, impact, reproducibility, differentiation, and shareability.
+
+**Hard rule**: Every demo must be built on high-quality, popular skills from [skills.sh](https://skills.sh). This constraint serves two purposes — it ensures demo quality, and it showcases agent-bundle's value as an open-skill bundling platform. If a demo concept has no strong skill on skills.sh, we don't build it.
+
+### Skills.sh Audit Results
+
+| Demo Concept | Best Available Skill(s) | Installs | Owner | Verdict |
+|---|---|---|---|---|
+| `pdf-to-deck` | `pdf` + `pptx` + `theme-factory` | 24.2K + 20.3K + 9.9K | `anthropics/skills` | **BUILD** — Anthropic official, top-tier installs |
+| `pr-doctor` | `requesting-code-review` + `receiving-code-review` | 13.8K + 11.1K | `obra/superpowers` | **BUILD** — 64.6K repo stars, proven methodology |
+| `screenshot-to-app` | `frontend-design` + `web-artifacts-builder` | 108.8K + 9.6K | `anthropics/skills` | **BUILD** — #5 globally, 108.8K installs |
+| `security-suite` | `audit-website` | 28.9K | `squirrelscan/skills` | **DEFER** — No SAST/Trivy skill exists; audit-website is web-only, not sandbox escape testing |
+| `data-analyst` | `xlsx` + `python-executor` | 17.8K + 7.0K | `anthropics/skills` + `inference-sh-9/skills` | **ALREADY EXISTS** — `data-analyst-e2b` demo covers this |
+| `web-scraper` | `firecrawl` | 6.9K | `firecrawl/cli` | **MAYBE** — Decent skill, but crowded space |
+| `sql-analyst` | `supabase-postgres-best-practices` | 25.8K | `supabase/agent-skills` | **SKIP** — No text-to-SQL skill; Supabase skill is best-practices, not NL→SQL |
+| `api-test-gen` | `openapi-spec-generation` + `webapp-testing` | 2.7K + 16.1K | `wshobson/agents` + `anthropics/skills` | **SKIP** — openapi-spec-generation is too low installs for a flagship |
+| `open-source-launch-pack` | `release-skills` | 5.6K | `jimliu/baoyu-skills` | **SKIP** — Moderate installs, not a strong showcase |
 
 ### Priority 1: `pdf-to-deck` — "PDF to Presentation Deck in 60 Seconds"
 
+> Turn any PDF into a polished slide deck — structure extracted, visuals generated, speaker notes written. All in a sandbox.
+
 - **Score**: 92/100 (highest overall)
-- **Why build this**: Visual before/after contrast (raw PDF → polished PPTX) is the most shareable format on social media. Reaches non-developer audiences (PMs, consultants, students), expanding beyond the developer bubble. python-pptx + pdfplumber are straightforward sandbox dependencies.
-- **Skills**: `pdf-processing` (extract structure/figures) → `pptx-builder` (assemble slides + speaker notes)
-- **Sandbox**: Python 3.12 + pdfplumber + python-pptx + Pillow
+- **Why build this**: Visual before/after contrast (raw PDF → polished PPTX) is the most shareable format on social media. Reaches non-developer audiences (PMs, consultants, students), expanding beyond the developer bubble.
+- **skills.sh skills**:
+  - [`pdf`](https://skills.sh) from `anthropics/skills` (24.2K installs) — extract structure, tables, figures from PDF
+  - [`pptx`](https://skills.sh) from `anthropics/skills` (20.3K installs) — create/edit PPTX with PptxGenJS, design guidance
+  - [`theme-factory`](https://skills.sh) from `anthropics/skills` (9.9K installs) — 10 professional font/color themes
+- **Sandbox**: Python 3.12 + pdfplumber + python-pptx + Pillow (or Node.js + PptxGenJS per skill spec)
 - **Channel**: Twitter video (30s before/after), LinkedIn (enterprise appeal)
-- **Reference**: Agent Skills repo (73k stars) already has pptx-builder and pdf-processing as popular patterns
+- **Why these skills**: All three from Anthropic's official skill repo (78.5K GitHub stars). The `pdf` + `pptx` combo is the natural pipeline. `theme-factory` adds visual polish that differentiates from ugly auto-generated decks.
 
-### Priority 2: `security-suite` — "We Told an Agent to Escape Its Sandbox"
+### Priority 2: `pr-doctor` — "One-Click PR Health Check"
 
-- **Score**: 88/100
-- **Why build this**: No competitor has a security visualization demo. Controversial framing ("can an agent break out?") drives organic sharing. Directly ties into real incidents (OpenClaw malicious skills, Cline supply chain attacks). Showcases agent-bundle's core sandbox isolation story.
-- **Part A — Sandbox Escape Test**: Agent attempts file traversal, network egress, resource exhaustion → all blocked → audit report with "SANDBOX INTEGRITY: PASS"
-- **Part B — Skill Supply Chain Guard**: Scan skill directories for suspicious patterns (curl|bash, executable downloads, ssh key access) → risk report by severity
-- **Sandbox**: Standard sandbox with resource limits + Gitleaks
-- **Channel**: Show HN (security angle), Twitter video (provocative 30s clip), r/netsec
-- **Risk**: Frame as defensive/educational only. "Suspicious ≠ malicious" — never provide executable attack code.
-
-### Priority 3: `pr-doctor` — "One-Click PR Health Check"
+> Turn any PR into merge-ready: automated review + structured feedback + applicable patch — multi-skill pipeline in one agent.
 
 - **Score**: 90/100
-- **Why build this**: PR review is the largest developer audience pain point. Demonstrates multi-skill pipeline (review → SAST → vuln scan → patch generation) — best showcase for agent-bundle's skill composability. Hits the most active communities (r/programming, HN).
-- **Skills**: `pr-review` (risk points + code smells) → `sast-semgrep` (file:line findings) → `vuln-scan` (Trivy directory scan) → `pr-improve` (applicable patch)
-- **Sandbox**: Python + Node.js + Semgrep + Trivy + git
+- **Why build this**: PR review is the largest developer audience pain point. Demonstrates multi-skill pipeline — best showcase for agent-bundle's skill composability. Hits the most active communities (r/programming, HN).
+- **skills.sh skills**:
+  - [`requesting-code-review`](https://skills.sh) from `obra/superpowers` (13.8K installs) — dispatches code-reviewer subagent, structured severity feedback
+  - [`receiving-code-review`](https://skills.sh) from `obra/superpowers` (11.1K installs) — processes review feedback, generates fixes
+  - [`test-driven-development`](https://skills.sh) from `obra/superpowers` (15.6K installs) — ensures fixes include tests
+- **Sandbox**: Node.js + git
 - **Channel**: Show HN + technical blog post, r/programming
-- **Reference**: PR-Agent (10.2k stars) validates demand; our angle is "sandboxed execution + multi-tool pipeline"
+- **Why these skills**: All from `obra/superpowers` (64.6K repo stars) — the second most popular skill repo on skills.sh. The review→fix→test pipeline is a natural multi-skill demo. Dropped the Semgrep/Trivy angle since no quality SAST/vuln skills exist on skills.sh.
 
-### Remaining Candidates (Build Based on Community Demand)
+### Priority 3: `screenshot-to-app` — "Screenshot to Running React App in 90 Seconds"
 
-| Demo | Score | When to Build |
-|---|---|---|
-| `screenshot-to-app` | 86 | If frontend/design community shows interest |
-| `open-source-launch-pack` | 86 | Self-referential appeal ("we used this for our own launch") — good for 2nd wave |
-| `web-scraper` | 78 | If scraping community (Crawl4AI 58k, Firecrawl 40k audiences) engages |
-| `sql-analyst` | 77 | If data/analytics audience shows interest |
-| `api-test-gen` | 74 | If QA/testing community requests it |
+> Give it a screenshot. Get back a built, tested, running React app — not just code, but a working build.
+
+- **Score**: 86/100
+- **Why build this**: `frontend-design` is the #5 most installed skill globally (108.8K). This is the strongest signal that the audience exists. screenshot-to-code (71.5K GitHub stars) only generates code but does not verify it builds and runs — our sandbox closes that gap.
+- **skills.sh skills**:
+  - [`frontend-design`](https://skills.sh) from `anthropics/skills` (108.8K installs) — production-grade frontend with bold design choices, React/Tailwind/shadcn
+  - [`web-artifacts-builder`](https://skills.sh) from `anthropics/skills` (9.6K installs) — React 18 + TypeScript + Vite + Tailwind + shadcn artifact generation
+- **Sandbox**: Node.js 20 + npm + Vite + React + Tailwind CSS
+- **Channel**: Twitter video (90s screenshot → build success), r/webdev, r/reactjs
+- **Why these skills**: `frontend-design` at 108.8K installs is the strongest demand signal on the entire platform. Combined with sandbox build verification ("it actually compiles"), this is a uniquely compelling demo no competitor offers.
+
+### Deferred / Skipped
+
+| Demo | Reason |
+|---|---|
+| `security-suite` | No quality SAST (Semgrep) or vuln scanner (Trivy) skills on skills.sh. `audit-website` (28.9K) is web audit only, doesn't match our sandbox escape narrative. Revisit if security skills appear on skills.sh. |
+| `sql-analyst` | No text-to-SQL skill exists. `supabase-postgres-best-practices` is about optimization, not NL→SQL generation. |
+| `api-test-gen` | `openapi-spec-generation` has only 2.7K installs — not flagship quality. |
+| `open-source-launch-pack` | `release-skills` (5.6K) and `crafting-effective-readmes` (550) are too niche. |
+| `web-scraper` | `firecrawl` (6.9K) is decent but the scraping space is crowded. Could build later if demand emerges. |
 
 ### Demo Build Principles
 
-Each new demo should follow the same structure as existing demos:
+Each new demo must:
 
-1. Self-contained directory with its own `package.json`, `setup.sh`, `README.md`
-2. One-command setup (`./setup.sh`)
-3. 15-second screen recording at the top of its README
-4. Both CLI (`agent-bundle dev`) and API (`curl POST /v1/responses`) entry points
-5. Fixed sample inputs in the repo for reproducibility
+1. Use **at least one skill with 10K+ installs** from skills.sh as its primary skill
+2. Self-contained directory with its own `package.json`, `setup.sh`, `README.md`
+3. One-command setup (`./setup.sh`)
+4. 15-second screen recording at the top of its README
+5. Both CLI (`agent-bundle dev`) and API (`curl POST /v1/responses`) entry points
+6. Fixed sample inputs in the repo for reproducibility
 
 ---
 

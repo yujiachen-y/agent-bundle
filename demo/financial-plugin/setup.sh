@@ -1,19 +1,6 @@
 #!/usr/bin/env bash
-# ------------------------------------------------------------------
-# Financial plugin demo — one-command setup + start
-#
-# Usage (from repo root):
-#   E2B_API_KEY=... ANTHROPIC_API_KEY=... ./demo/financial-plugin/setup.sh
-#
-# What it does:
-#   1. Validates API keys and prerequisites
-#   2. Verifies E2B API access
-#   3. Builds the E2B demo bundle and template
-#   4. Builds the TypeScript project and starts the HTTP server
-# ------------------------------------------------------------------
 set -euo pipefail
 
-# ── helpers ──────────────────────────────────────────────────────
 info()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()    { printf '\033[1;32m ✓\033[0m  %s\n' "$*"; }
 fail()  { printf '\033[1;31m ✗\033[0m  %s\n' "$*" >&2; exit 1; }
@@ -22,39 +9,54 @@ check_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1. Please install it first."
 }
 
-# ── 1. API keys + prerequisites ───────────────────────────────────
-if [ -z "${E2B_API_KEY:-}" ]; then
-  fail "E2B_API_KEY is required."
-fi
+require_env() {
+  [ -n "${!1:-}" ] || fail "$1 is required."
+}
 
-if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-  fail "ANTHROPIC_API_KEY is required."
+run_agent_bundle() {
+  if [ -x "./node_modules/.bin/agent-bundle" ]; then
+    ./node_modules/.bin/agent-bundle "$@"
+    return
+  fi
+  npx --yes agent-bundle "$@"
+}
+
+exec_agent_bundle() {
+  if [ -x "./node_modules/.bin/agent-bundle" ]; then
+    exec ./node_modules/.bin/agent-bundle "$@"
+  fi
+  exec npx --yes agent-bundle "$@"
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+require_env E2B_API_KEY
+export ANTHROPIC_OAUTH_TOKEN="${ANTHROPIC_OAUTH_TOKEN:-${CLAUDE_CODE_OAUTH_TOKEN:-}}"
+if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -z "${ANTHROPIC_OAUTH_TOKEN:-}" ]; then
+  fail "Set ANTHROPIC_API_KEY, ANTHROPIC_OAUTH_TOKEN, or CLAUDE_CODE_OAUTH_TOKEN."
 fi
 
 info "Checking prerequisites"
-for cmd in pnpm node; do
+for cmd in node npm; do
   check_cmd "$cmd"
 done
 ok "All prerequisites found"
 
-# ── 2. verify E2B API access ─────────────────────────────────────
+info "Installing npm dependencies"
+npm install
+ok "Dependencies installed"
+
 info "Checking E2B API access with SDK"
-if pnpm exec tsx -e "import { Template } from 'e2b'; void (async () => { await Template.exists('financial-analyst-demo'); })();" >/dev/null 2>&1; then
+if node -e "import('e2b').then(async ({ Template }) => { await Template.exists('financial-analyst-demo'); }).catch(() => process.exit(1));" >/dev/null 2>&1; then
   ok "E2B API access works"
 else
   fail "Unable to access E2B API with current credentials. Verify E2B_API_KEY and network connectivity."
 fi
 
-# ── 3. build E2B demo bundle and template ─────────────────────────
 info "Building E2B demo bundle and template"
-pnpm build:demo:financial-plugin
+run_agent_bundle build --config ./agent-bundle.yaml
 ok "E2B demo bundle built"
 
-# ── 4. build project + start server ──────────────────────────────
-info "Building TypeScript project"
-pnpm build
-ok "Build complete"
-
-info "Starting server (port auto-detected, see output below)"
-exec pnpm exec agent-bundle dev \
-  --config demo/financial-plugin/agent-bundle.yaml ${PORT:+--port "$PORT"}
+info "Starting agent-bundle dev"
+exec_agent_bundle dev --config ./agent-bundle.yaml ${PORT:+--port "$PORT"}

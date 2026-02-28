@@ -1,43 +1,38 @@
 # Observability Demo
 
-Demonstrates OpenTelemetry integration with agent-bundle. The server
-initializes an OTEL SDK with console exporters, creates an observability
-provider, and passes it to `createServer` so every HTTP request, agent
-respond, and tool call is automatically instrumented.
+Standalone custom-server demo using OpenTelemetry + generated bundle code.
 
 ## Prerequisites
 
-- Node.js >= 20 and pnpm
+- Node.js 20+
 - `OPENAI_API_KEY`
 
-## Quick start
+## Quick Start
 
 ```bash
-OPENAI_API_KEY=... pnpm demo:observability
+cd demo/observability-demo
+npm install
+OPENAI_API_KEY=... npm run setup
 ```
 
-The setup script builds and generates the bundle, then starts the demo
-server on `resolveServicePort(6)` (`http://localhost:3006` on main repo).
+The setup script installs dependencies, runs `agent-bundle build`, runs
+`agent-bundle generate`, then starts `tsx main.ts`.
 
-Trace spans and metric snapshots are printed to stdout every 15 seconds.
+## Smoke Test
 
-## API endpoints
-
-- `GET /health` — returns `{ status: "ok", observability: true }`
-- `/agent/*` — standard `createServer(agent)` routes (`/agent/health`,
-  `/agent/v1/responses`)
-
-## Switching to Prometheus or OTLP
-
-The demo uses console exporters for zero-dependency setup. Swap them for
-production backends as shown in `docs/observability.md`:
-
-```ts
-import { PrometheusExporter } from "@opentelemetry/exporter-prometheus";
-
-const sdk = new NodeSDK({
-  metricReader: new PrometheusExporter({ port: 9464 }),
-});
+```bash
+curl http://localhost:3006/health
 ```
 
-Then point Grafana at `http://localhost:9464/metrics`.
+```bash
+curl -s http://localhost:3006/agent/v1/responses \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "input": [
+      {
+        "role": "user",
+        "content": "Reply with exactly: observability demo ok"
+      }
+    ]
+  }'
+```

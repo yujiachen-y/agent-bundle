@@ -1,0 +1,22 @@
+{
+  "name": "agent-bundle-demo-observability",
+  "private": true,
+  "type": "module",
+  "description": "Standalone observability demo with OpenTelemetry integration",
+  "scripts": {
+    "build": "agent-bundle build && agent-bundle generate",
+    "dev": "tsx main.ts",
+    "setup": "bash ./setup.sh"
+  },
+  "dependencies": {
+    "agent-bundle": "^0.1.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/resources": "^2.5.1",
+    "@opentelemetry/sdk-metrics": "^2.5.1",
+    "@opentelemetry/sdk-node": "^0.212.0",
+    "@opentelemetry/sdk-trace-base": "^2.5.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}

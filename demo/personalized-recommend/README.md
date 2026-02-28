@@ -1,33 +1,37 @@
 # Personalized Recommend Demo
 
-Shows a custom server integration that combines:
-
-- generated bundle factory (`@agent-bundle/personalized-recommend`)
-- two MCP servers (`memory` via stdio in-sandbox, `products` via local HTTP)
-- custom API routes for events, recommendations, and memory flush
+Standalone custom-server demo with generated bundle code and two MCP servers.
 
 ## Prerequisites
 
-- Node.js >= 20 and pnpm
+- Node.js 20+
 - `E2B_API_KEY`
-- `ANTHROPIC_API_KEY`
+- `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN`
 
-## Quick start
+## Quick Start
 
 ```bash
-E2B_API_KEY=... ANTHROPIC_API_KEY=... pnpm demo:personalized-recommend
+cd demo/personalized-recommend
+npm install
+E2B_API_KEY=... ANTHROPIC_API_KEY=... npm run setup
 ```
 
-The setup script builds and generates the bundle, then starts:
+The setup script installs dependencies, bundles the memory MCP server with
+esbuild, runs `agent-bundle build`, runs `agent-bundle generate`, then starts
+`tsx main.ts`.
 
-- Memory MCP server via stdio (runs inside the sandbox)
-- Product MCP server on `http://127.0.0.1:3102/mcp`
-- Demo API server on `resolveServicePort(5)` (`http://localhost:3005` on main repo)
+## Smoke Test
 
-## API endpoints
+```bash
+curl http://localhost:3005/health
+```
 
-- `POST /api/events`
-- `GET /api/recommendations/:userId`
-- `POST /api/flush`
-- `GET /health`
-- `/agent/*` for raw `createServer(agent)` API routes
+```bash
+curl -s -X POST http://localhost:3005/api/events \
+  -H 'Content-Type: application/json' \
+  -d '{"userId":"u-1","event":"likes running shoes"}'
+```
+
+```bash
+curl -s http://localhost:3005/api/recommendations/u-1
+```

@@ -3,12 +3,16 @@ import { dirname, join, resolve } from "node:path";
 import type { Writable } from "node:stream";
 
 import { generateSystemPromptTemplate } from "../../agent-loop/system-prompt/generate.js";
+import { loadAllCommands } from "../../commands/loader.js";
+import { loadAllPlugins, type LoadPluginOptions } from "../../plugins/loader.js";
+import { mergePluginComponents } from "../../plugins/merge.js";
 import type { BundleConfig } from "../../schema/bundle.js";
 import { loadAllSkills, type Skill } from "../../skills/loader.js";
 import { toSkillSummaries } from "../../skills/summaries.js";
 import {
   createResolvedBundleConfig,
   generateSources,
+  toCommandSummaries,
   type ResolvedBundleConfig,
   type SandboxImageRef,
 } from "./codegen.js";
@@ -34,11 +38,14 @@ export type RunBuildResult = {
 type BuildDependencies = {
   loadConfig?: typeof loadBundleConfig;
   loadSkills?: typeof loadAllSkills;
+  loadCommands?: typeof loadAllCommands;
+  loadPlugins?: typeof loadAllPlugins;
   generateSystemPrompt?: typeof generateSystemPromptTemplate;
   buildSandbox?: typeof buildSandboxImage;
   buildE2B?: typeof buildE2BTemplate;
   writeFileImpl?: typeof writeFile;
   mkdirImpl?: typeof mkdir;
+  pluginOptions?: LoadPluginOptions;
 };
 
 function ensureKubernetesImage(config: BundleConfig): string {
@@ -184,6 +191,8 @@ export async function runBuildCommand(
 ): Promise<RunBuildResult> {
   const loadConfigImpl = dependencies.loadConfig ?? loadBundleConfig;
   const loadSkillsImpl = dependencies.loadSkills ?? loadAllSkills;
+  const loadCommandsImpl = dependencies.loadCommands ?? loadAllCommands;
+  const loadPluginsImpl = dependencies.loadPlugins ?? loadAllPlugins;
   const promptGenerator = dependencies.generateSystemPrompt ?? generateSystemPromptTemplate;
   const buildSandboxImpl = dependencies.buildSandbox ?? buildSandboxImage;
   const buildE2BImpl = dependencies.buildE2B ?? buildE2BTemplate;
@@ -198,12 +207,24 @@ export async function runBuildCommand(
 
   stdout.write(`Building bundle "${config.name}" from ${configPath}\n`);
 
-  const skills = await loadSkillsImpl(config.skills, bundleDir);
-  const skillSummaries = toSkillSummaries(skills);
+  const baseSkills = await loadSkillsImpl(config.skills, bundleDir);
+  const baseCommands = config.commands
+    ? await loadCommandsImpl(config.commands, bundleDir)
+    : [];
+  const pluginResults = config.plugins
+    ? await loadPluginsImpl(config.plugins, dependencies.pluginOptions)
+    : [];
+  const existingMcpServers = config.mcp?.servers ?? [];
+  const merged = mergePluginComponents(baseSkills, baseCommands, existingMcpServers, pluginResults);
+  const skillSummaries = toSkillSummaries(merged.skills);
+  const commandSummaries = toCommandSummaries(merged.commands);
+  const configWithMergedMcp = merged.mcpServers.length > 0
+    ? { ...config, mcp: { servers: merged.mcpServers } }
+    : config;
   const sandboxImage = await resolveSandboxImageRef({
-    config,
+    config: configWithMergedMcp,
     bundleDir,
-    skills,
+    skills: merged.skills,
     buildSandbox: buildSandboxImpl,
     buildE2B: buildE2BImpl,
     stdout,
@@ -214,12 +235,14 @@ export async function runBuildCommand(
     skills: skillSummaries,
   });
   const resolvedConfig = createResolvedBundleConfig({
-    config,
+    config: configWithMergedMcp,
     skills: skillSummaries,
+    commands: commandSummaries,
     systemPrompt,
     sandboxImage,
   });
-  const sources = generateSources(resolvedConfig);
+  const commandContents = new Map(merged.commands.map((cmd) => [cmd.name, cmd.content]));
+  const sources = generateSources(resolvedConfig, commandContents);
   const outputRoot = resolve(options.outputDir ?? DEFAULT_OUTPUT_DIR);
   const outputDir = join(outputRoot, config.name);
 

@@ -106,7 +106,16 @@ async function closeNodeServer(server: Server): Promise<void> {
 
 export async function startHttpServer(input: StartHttpServerInput): Promise<StartedHttpServer> {
   const server = createHttpServer((request, response) => {
-    const fetchRequest = toFetchRequest(request);
+    let fetchRequest: Request;
+    try {
+      fetchRequest = toFetchRequest(request);
+    } catch {
+      response.statusCode = 400;
+      response.setHeader("content-type", "text/plain; charset=utf-8");
+      response.end("Bad Request");
+      return;
+    }
+
     void Promise.resolve(input.appFetch(fetchRequest))
       .then(async (fetchResponse) => {
         await writeFetchResponse(fetchResponse, response);

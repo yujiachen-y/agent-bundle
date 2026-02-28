@@ -11,6 +11,7 @@ import {
   resolveServeInputs,
   resolveServeSandboxConfig,
   type KeyValueArgInput,
+  type SkillInfo,
 } from "./runtime.js";
 import type { StartedHttpServer, StartHttpServerInput } from "./http.js";
 
@@ -35,6 +36,7 @@ export type InitializedServeContext = {
   agent: Agent;
   webUISandbox: Sandbox;
   commands: Command[];
+  skills: SkillInfo[];
 };
 
 export type RunServeOptions = {
@@ -92,7 +94,7 @@ export async function initializeServeContext(
   const variableOverrides = parseKeyValueEntries(options.variableEntries, "--var");
   const mcpTokenOverrides = parseKeyValueEntries(options.mcpTokenEntries, "--mcp-token");
 
-  const { configPath, config, systemPrompt, commands } = await resolveServeInputs(
+  const { configPath, config, systemPrompt, commands, skills } = await resolveServeInputs(
     options.configPath,
     dependencies.loadConfig,
     dependencies.loadSkills,
@@ -135,6 +137,7 @@ export async function initializeServeContext(
     agent,
     webUISandbox: toWebUISandboxAdapter(capturedSandboxIO),
     commands,
+    skills,
   };
 }
 

@@ -17,11 +17,17 @@ const MCP_TOKEN_ENV_FALLBACK_PREFIX = "MCP_TOKEN_";
 
 export type KeyValueArgInput = string | string[] | boolean | undefined;
 
+export type SkillInfo = {
+  name: string;
+  description: string;
+};
+
 export type ResolvedServeInputs = {
   configPath: string;
   config: BundleConfig;
   systemPrompt: string;
   commands: Command[];
+  skills: SkillInfo[];
 };
 
 function toEnvSuffix(name: string): string {
@@ -196,10 +202,16 @@ export async function resolveServeInputs(
     ? { ...config, mcp: { servers: merged.mcpServers } }
     : config;
 
+  const skills: SkillInfo[] = merged.skills.map((s) => ({
+    name: s.name,
+    description: s.description,
+  }));
+
   return {
     configPath: absoluteConfigPath,
     config: mergedConfig,
     systemPrompt,
     commands: merged.commands,
+    skills,
   };
 }

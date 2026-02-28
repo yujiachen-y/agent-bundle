@@ -81,6 +81,7 @@ export async function runDevCommand(
       agent: context.agent,
       sandbox: context.webUISandbox,
       commands: context.commands,
+      skills: context.skills,
     });
     httpServer = await startHttpServerImpl({
       appFetch: webUI.app.fetch.bind(webUI.app),

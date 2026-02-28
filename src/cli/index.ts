@@ -11,6 +11,10 @@ import { runServeCommand } from "./serve/serve.js";
 const DEFAULT_CONFIG_PATH = "./agent-bundle.yaml";
 
 function resolveConfigPath(configArg: string | boolean | undefined): string {
+  if (typeof configArg === "boolean") {
+    throw new Error("--config requires a file path value.");
+  }
+
   if (typeof configArg === "string" && configArg.length > 0) {
     return configArg;
   }
@@ -27,8 +31,12 @@ function resolvePort(portArg: string | boolean | undefined): number | undefined 
     return undefined;
   }
 
+  if (!/^\d+$/.test(portArg.trim())) {
+    throw new Error("Invalid --port value. Expected a numeric integer.");
+  }
+
   const port = Number.parseInt(portArg, 10);
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+  if (port < 1 || port > 65_535) {
     throw new Error("Invalid --port value. Expected an integer between 1 and 65535.");
   }
 

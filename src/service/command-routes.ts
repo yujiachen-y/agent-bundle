@@ -31,11 +31,15 @@ export function createCommandRoutes(agent: Agent, registry: CommandRegistry): Ho
     }
 
     let args = "";
-    try {
-      const body = await c.req.json<{ args?: string }>();
-      args = typeof body.args === "string" ? body.args : "";
-    } catch {
-      // No body or invalid JSON — use empty args
+    const contentType = c.req.header("content-type") ?? "";
+    const hasBody = contentType.includes("application/json");
+    if (hasBody) {
+      try {
+        const body = await c.req.json<{ args?: string }>();
+        args = typeof body.args === "string" ? body.args : "";
+      } catch {
+        return c.json({ error: { message: "Invalid JSON in request body." } }, 400);
+      }
     }
 
     const userMessage = substituteArguments(command.content, args);

@@ -16,10 +16,16 @@ import { createServer } from "../service/create-server.js";
 import { substituteArguments } from "../service/command-routes.js";
 import { WebUIEventBus, type WebUIEvent } from "./event-bus.js";
 
+export type SkillInfo = {
+  name: string;
+  description: string;
+};
+
 export type WebUIServerOptions = {
   agent: Agent;
   sandbox: Sandbox;
   commands?: readonly Command[];
+  skills?: readonly SkillInfo[];
 };
 
 type FileTreeNode = {
@@ -40,6 +46,20 @@ const PUBLIC_DIR = path.join(
 );
 
 const WORKSPACE_ROOT = "/workspace";
+
+/** Strict prefix check — prevents `/workspacevil` from passing. */
+function isWithinWorkspace(resolved: string): boolean {
+  return resolved === WORKSPACE_ROOT || resolved.startsWith(WORKSPACE_ROOT + "/");
+}
+
+/** Reject characters that can break double-quoted shell interpolation. */
+const SHELL_UNSAFE_CHARS = /["$`\\!;|&<>(){}[\]#~*?\n\r\0]/;
+
+function assertShellSafePath(filePath: string): void {
+  if (SHELL_UNSAFE_CHARS.test(filePath)) {
+    throw new Error("Path contains characters unsafe for shell execution.");
+  }
+}
 
 function toContentType(ext: string): string {
   switch (ext) {
@@ -105,7 +125,7 @@ export function createWebUIServer(options: WebUIServerOptions): {
   handleUpgrade: (request: IncomingMessage, socket: unknown, head: Buffer) => void;
   shutdown: () => void;
 } {
-  const { agent, sandbox, commands } = options;
+  const { agent, sandbox, commands, skills } = options;
   const eventBus = new WebUIEventBus();
   const clients = new Set<WsClient>();
 
@@ -117,7 +137,7 @@ export function createWebUIServer(options: WebUIServerOptions): {
     return c.json({
       name: agent.name,
       status: agent.status,
-      skills: [{ name: "data-analysis", description: "Analyze data using Python" }],
+      skills: skills ?? [],
     });
   });
 
@@ -140,7 +160,7 @@ export function createWebUIServer(options: WebUIServerOptions): {
     );
 
     // Path traversal protection: must stay within /workspace
-    if (!resolved.startsWith(WORKSPACE_ROOT)) {
+    if (!isWithinWorkspace(resolved)) {
       return c.json({ error: "Forbidden" }, 403);
     }
 
@@ -150,6 +170,7 @@ export function createWebUIServer(options: WebUIServerOptions): {
     try {
       if (isImage) {
         // Binary files: read via base64 to avoid text encoding corruption
+        assertShellSafePath(resolved);
         const result = await sandbox.exec(`base64 < "${resolved}"`);
         if (result.exitCode !== 0) {
           return c.json({ error: "Not found" }, 404);
@@ -312,7 +333,8 @@ async function handleFileUpload(c: Context, sandbox: Sandbox): Promise<Response>
     const safeName = path.basename(file.name);
     const targetDir = typeof body.dir === "string" ? body.dir : WORKSPACE_ROOT;
     const resolved = path.normalize(path.join(targetDir, safeName));
-    if (!resolved.startsWith(WORKSPACE_ROOT)) return c.json({ error: "Forbidden" }, 403);
+    if (!isWithinWorkspace(resolved)) return c.json({ error: "Forbidden" }, 403);
+    assertShellSafePath(resolved);
     // Binary-safe write via base64
     const buf = Buffer.from(await file.arrayBuffer());
     const tmpPath = resolved + ".__upload_tmp";
@@ -331,8 +353,9 @@ async function handleFileDownload(c: Context, sandbox: Sandbox): Promise<Respons
   const resolved = path.normalize(
     filePath.startsWith(WORKSPACE_ROOT) ? filePath : path.join(WORKSPACE_ROOT, filePath),
   );
-  if (!resolved.startsWith(WORKSPACE_ROOT)) return c.json({ error: "Forbidden" }, 403);
+  if (!isWithinWorkspace(resolved)) return c.json({ error: "Forbidden" }, 403);
   try {
+    assertShellSafePath(resolved);
     const ext = path.extname(resolved).toLowerCase();
     const fileName = path.basename(resolved);
     const result = await sandbox.exec(`base64 < "${resolved}"`);

@@ -40,7 +40,7 @@ name: my-agent
 
 model:
   provider: anthropic
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-20250514
 
 prompt:
   system: |
@@ -125,7 +125,7 @@ const response = await agent.respond([
 await agent.shutdown();
 ```
 
-Variable names are checked at compile time. Lifecycle hooks, file I/O, and session recovery are covered in the [Configuration Guide](./docs/configuration.md).
+Variable names are checked at compile time. See the [Configuration Guide](./docs/configuration.md) for all available YAML options.
 
 ---
 

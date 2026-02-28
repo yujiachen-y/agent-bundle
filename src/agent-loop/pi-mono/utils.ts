@@ -1,16 +1,7 @@
 import type { TokenUsage } from "../types.js";
+import { toErrorMessage, isRecord } from "../../shared/errors.js";
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
-}
+export { toErrorMessage, isRecord };
 
 function isExecResultLike(value: unknown): value is {
   stdout: string;

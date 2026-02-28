@@ -1,7 +1,3 @@
----
-doc_sync_id: "3a6b6892-c3e2-4d71-82a5-dc71db090ec5"
----
-
 # Observability Integration Guide
 
 agent-bundle ships a vendor-neutral observability layer built on the

@@ -2,27 +2,38 @@
 
 End-to-end demo: WebUI/API request -> Agent -> E2B sandbox -> skill execution -> formatted Python code.
 
+This demo is designed to run as a standalone folder. You do not need to run `pnpm` from the monorepo root.
+
 ## Prerequisites
 
-- Node.js >= 20 and pnpm
+- Node.js >= 20
 - `E2B_API_KEY`
 - `OPENAI_API_KEY`
 
-Run commands from repository root.
+## Quick start (standalone)
 
-## Quick start
+Run inside this directory:
 
 ```bash
-E2B_API_KEY=... OPENAI_API_KEY=... pnpm demo:e2b-server
+npm install
+E2B_API_KEY=... OPENAI_API_KEY=... npm run setup
 ```
 
-This runs `agent-bundle dev` with:
+`setup.sh` will:
 
-```text
-demo/code-formatter/e2b/agent-bundle.yaml
+1. Validate required environment variables
+2. Ensure `agent-bundle` CLI is available
+3. Run `agent-bundle build --config ./agent-bundle.yaml`
+4. Run `agent-bundle dev --config ./agent-bundle.yaml`
+
+Then open `http://localhost:3000` (or the auto-detected worktree port).
+
+## Manual commands
+
+```bash
+E2B_API_KEY=... OPENAI_API_KEY=... npx -y agent-bundle@latest build --config ./agent-bundle.yaml
+E2B_API_KEY=... OPENAI_API_KEY=... npx -y agent-bundle@latest dev --config ./agent-bundle.yaml
 ```
-
-By default, open `http://localhost:3000` (or the auto-detected worktree port).
 
 ## Test with curl
 

@@ -1,8 +1,22 @@
 {
   "name": "agent-bundle",
-  "private": true,
+  "version": "0.1.0",
+  "description": "CLI tool and framework for defining, developing, and shipping AI agent skills",
+  "author": "Yujia Chen",
+  "homepage": "https://agent-bundle.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yujiachen-y/agent-bundle.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yujiachen-y/agent-bundle/issues"
+  },
   "type": "module",
+  "license": "MIT",
   "packageManager": "pnpm@10.30.1",
+  "files": [
+    "dist/"
+  ],
   "exports": {
     "./runtime": {
       "types": "./dist/runtime.d.ts",
@@ -11,10 +25,6 @@
     "./service": {
       "types": "./dist/service/create-server.d.ts",
       "default": "./dist/service/create-server.js"
-    },
-    "./worktree-port": {
-      "types": "./dist/cli/serve/worktree-port.d.ts",
-      "default": "./dist/cli/serve/worktree-port.js"
     },
     "./observability": {
       "types": "./dist/observability/index.d.ts",
@@ -34,7 +44,7 @@
     "build:sandbox:execd": "docker build -t agent-bundle/execd:latest -f packages/execd/Dockerfile packages/execd",
     "build:demo:k8s-server": "pnpm build:sandbox:execd && pnpm exec agent-bundle build --config demo/code-formatter/k8s/agent-bundle.yaml",
     "build:demo:e2b-server": "pnpm exec agent-bundle build --config demo/code-formatter/e2b/agent-bundle.yaml",
-    "lint": "eslint \"spikes/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\" \"src/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\"",
+    "lint": "eslint \"src/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\"",
     "duplicate": "jscpd --config .jscpd.json",
     "test": "vitest run --coverage",
     "test:e2e:skills": "SKILLS_LOADER_E2E=1 vitest run src/skills/loader.e2e.test.ts",

@@ -26,14 +26,15 @@ All services use a **prefix/suffix** port scheme defined in `src/cli/serve/workt
 Port = prefix × 1000 + suffix
 
 suffix (last 3 digits): stable service identity
-  000 = serve (CLI main service)
-  001 = demo/code-formatter/e2b
-  002 = demo/code-formatter/k8s
-  003 = demo/financial-plugin
-  004 = (retired) demo/coding-assistant-ollama
-  005 = demo/personalized-recommend
-  006 = demo/observability-demo
-  … new demos increment
+  000 = serve / dev (CLI main service + all config-only demos)
+  005 = demo/personalized-recommend (standalone server)
+  006 = demo/observability-demo (standalone server)
+  … new standalone demos increment from 007
+
+Config-only demos (code-formatter, financial-plugin, data-analyst-e2b) run
+through `agent-bundle dev` and share suffix 0. Only standalone servers that
+call `resolveServicePort(suffix)` directly in their own `main.ts` need a
+dedicated suffix.
 
 prefix: worktree isolation
   3      = main repo (ports 3000–3999, backward-compatible)
@@ -48,7 +49,7 @@ prefix: worktree isolation
 
 ### For Agents: Adding a New Demo
 
-1. Pick the next available suffix (currently **7**).
+1. Pick the next available suffix (currently **7** — only needed for standalone servers that call `resolveServicePort` directly).
 2. Call `resolveServicePort(<suffix>)` in your `main.ts`.
 3. Update the suffix table above.
 4. **Never hardcode a port number** in new server code.
@@ -61,7 +62,8 @@ prefix: worktree isolation
 | `src/cli/serve/init.ts` | Shared serve/dev init + `DEFAULT_SERVE_PORT` |
 | `src/cli/serve/serve.ts` | API-only `serve` command implementation |
 | `src/cli/serve/dev.ts` | WebUI-enabled `dev` command implementation |
-| `src/cli/index.ts` | CLI entry, `--port` flag parsing |
+| `src/cli/deploy/deploy.ts` | AWS ECS Fargate deploy command |
+| `src/cli/index.ts` | CLI entry, subcommand definitions and argument parsing |
 | `scripts/setup-worktree-hooks.sh` | Optional post-checkout hook installer |
 
 ## Serve vs Dev
@@ -71,15 +73,24 @@ prefix: worktree isolation
 
 ## Architecture Boundaries
 
-- `src/cli/` — CLI commands (build / generate / serve / dev).
+- `src/cli/` — CLI commands (build / deploy / generate / serve / dev).
 - `src/agent/` — Agent interface and lifecycle.
+- `src/agent-loop/` — Agent loop abstraction and pi-mono implementation.
+- `src/commands/` — Command discovery and loading.
+- `src/mcp/` — MCP client management and sandbox transport.
+- `src/observability/` — OpenTelemetry tracing and metrics.
+- `src/plugins/` — Plugin loading, parsing, and merging.
 - `src/sandbox/` — Sandbox abstraction (E2B, Kubernetes providers). Docker is used only as a build tool for sandbox images.
+- `src/schema/` — Bundle config schema (Zod).
+- `src/service/` — HTTP service abstraction (Hono).
+- `src/skills/` — Skill loading and summaries.
+- `src/test-helpers/` — Shared test utilities.
 - `src/webui/` — WebUI (Hono + static assets + WebSocket). Frontend uses relative URLs — no hardcoded ports.
 - `demo/` — Standalone demo servers; not part of the main package.
 
 ## Quality Gates
 
-Pre-commit hooks enforce: max file lines (850), max function lines (90), duplicate detection, eslint, test coverage, directory size limits (15 files per dir under `src/`). Do not disable or weaken these gates.
+Pre-commit hooks enforce: max file lines (850), max function lines (90), duplicate detection, eslint, test coverage, directory size limits (15 files per dir under `src/`). Additional Python linting hooks may apply to helper scripts if present. Do not disable or weaken these gates.
 
 ## Conventions
 

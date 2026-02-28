@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------
-# E2B server demo — one-command setup + start
+# E2B formatter demo — one-command setup + start
 #
-# Usage (from repo root):
-#   E2B_API_KEY=... OPENAI_API_KEY=sk-... ./demo/code-formatter/e2b/setup.sh
+# Usage (from this directory):
+#   E2B_API_KEY=... OPENAI_API_KEY=... ./setup.sh
 #
 # What it does:
 #   1. Validates API keys and prerequisites
-#   2. Verifies E2B API access
+#   2. Ensures agent-bundle CLI is available (local/global/npx fallback)
 #   3. Builds the E2B demo bundle and template
-#   4. Builds the TypeScript project and starts the HTTP server
+#   4. Starts agent-bundle dev server
 # ------------------------------------------------------------------
 set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
 
 # ── helpers ──────────────────────────────────────────────────────
 info()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -20,6 +23,32 @@ fail()  { printf '\033[1;31m ✗\033[0m  %s\n' "$*" >&2; exit 1; }
 
 check_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1. Please install it first."
+}
+
+run_agent_bundle() {
+  if [ -x "./node_modules/.bin/agent-bundle" ]; then
+    ./node_modules/.bin/agent-bundle "$@"
+    return
+  fi
+
+  if command -v agent-bundle >/dev/null 2>&1; then
+    agent-bundle "$@"
+    return
+  fi
+
+  npx -y agent-bundle@latest "$@"
+}
+
+exec_agent_bundle() {
+  if [ -x "./node_modules/.bin/agent-bundle" ]; then
+    exec ./node_modules/.bin/agent-bundle "$@"
+  fi
+
+  if command -v agent-bundle >/dev/null 2>&1; then
+    exec agent-bundle "$@"
+  fi
+
+  exec npx -y agent-bundle@latest "$@"
 }
 
 # ── 1. API keys + prerequisites ───────────────────────────────────
@@ -32,29 +61,33 @@ if [ -z "${OPENAI_API_KEY:-}" ]; then
 fi
 
 info "Checking prerequisites"
-for cmd in pnpm node; do
+for cmd in node npm; do
   check_cmd "$cmd"
 done
 ok "All prerequisites found"
 
-# ── 2. verify E2B API access ─────────────────────────────────────
-info "Checking E2B API access with SDK"
-if pnpm exec tsx -e "import { Template } from 'e2b'; void (async () => { await Template.exists('code-formatter-e2b-demo'); })();" >/dev/null 2>&1; then
-  ok "E2B API access works"
+# ── 2. ensure CLI availability ────────────────────────────────────
+if [ ! -x "./node_modules/.bin/agent-bundle" ] && [ -f "./package.json" ]; then
+  info "Installing demo dependencies"
+  npm install
+  ok "Demo dependencies installed"
+fi
+
+info "Checking agent-bundle CLI availability"
+if run_agent_bundle --help >/dev/null 2>&1; then
+  ok "agent-bundle CLI is available"
 else
-  fail "Unable to access E2B API with current credentials. Verify E2B_API_KEY and network connectivity."
+  fail "Unable to run agent-bundle CLI. Install it globally or ensure npm can access the registry."
 fi
 
 # ── 3. build E2B demo bundle and template ─────────────────────────
 info "Building E2B demo bundle and template"
-pnpm build:demo:e2b-server
+run_agent_bundle build
 ok "E2B demo bundle built"
 
-# ── 4. build project + start server ──────────────────────────────
-info "Building TypeScript project"
-pnpm build
-ok "Build complete"
-
-info "Starting server (port auto-detected, see output below)"
-exec pnpm exec agent-bundle dev \
-  --config demo/code-formatter/e2b/agent-bundle.yaml ${PORT:+--port "$PORT"}
+# ── 4. start dev server ───────────────────────────────────────────
+info "Starting agent-bundle dev server (port auto-detected, see output below)"
+if [ -n "${PORT:-}" ]; then
+  exec_agent_bundle dev --port "${PORT}"
+fi
+exec_agent_bundle dev

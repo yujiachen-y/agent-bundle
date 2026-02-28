@@ -44,7 +44,9 @@ async function shutdownDevResources(resources: ShutdownResources): Promise<void>
     errors.push(error);
   }
 
-  if (errors.length > 0) {
+  if (errors.length > 1) {
+    throw new AggregateError(errors, "Shutdown failed");
+  } else if (errors.length === 1) {
     throw errors[0];
   }
 }

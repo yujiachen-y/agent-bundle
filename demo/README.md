@@ -7,3 +7,4 @@
 | `financial-plugin` | Plugins + commands | `pnpm demo:financial-plugin` |
 | `data-analyst-e2b` | WebUI dev mode | `pnpm demo:web-e2b` |
 | `personalized-recommend` | generate + custom server + MCP | `pnpm demo:personalized-recommend` |
+| `observability-demo` | OpenTelemetry tracing & metrics | `pnpm demo:observability` |

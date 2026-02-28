@@ -7,6 +7,7 @@ import type { AgentLoopTool } from "../agent-loop/index.js";
 import type { McpServerConfig } from "../agent/types.js";
 import type { SandboxIO } from "../sandbox/types.js";
 import { SandboxStdioTransport } from "./sandbox-stdio-transport.js";
+import { toErrorMessage, isRecord } from "../shared/errors.js";
 
 const CLIENT_INFO = {
   name: "agent-bundle",
@@ -39,18 +40,6 @@ export type ConnectMcpServer = (
   token: string | undefined,
   sandbox: SandboxIO | null,
 ) => Promise<McpConnection>;
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function toDescription(description: unknown): string {
   if (typeof description === "string" && description.trim().length > 0) {
@@ -129,9 +118,17 @@ function isToolCallError(result: RemoteCallToolResult): boolean {
 }
 
 async function listAllTools(client: Client, cursor?: string): Promise<RemoteToolList> {
-  const page = await client.listTools(cursor ? { cursor } : undefined);
-  const next = page.nextCursor ? await listAllTools(client, page.nextCursor) : [];
-  return [...page.tools, ...next];
+  const tools: RemoteToolList = [];
+  let nextCursor = cursor;
+  let pages = 0;
+  const MAX_PAGES = 100;
+  do {
+    const page = await client.listTools(nextCursor ? { cursor: nextCursor } : undefined);
+    tools.push(...page.tools);
+    nextCursor = page.nextCursor;
+    pages++;
+  } while (nextCursor && pages < MAX_PAGES);
+  return tools;
 }
 
 function createAuthHeaders(token: string | undefined): HeadersInit | undefined {

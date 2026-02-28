@@ -15,6 +15,7 @@ import type { Sandbox, FileEntry } from "../sandbox/types.js";
 import { createServer } from "../service/create-server.js";
 import { substituteArguments } from "../service/command-routes.js";
 import { WebUIEventBus, type WebUIEvent } from "./event-bus.js";
+import { isRecord } from "../shared/errors.js";
 
 export type SkillInfo = {
   name: string;
@@ -88,7 +89,9 @@ function serveStaticFile(c: Context, filePath: string): Response | null {
   }
 }
 
-async function buildFileTree(sandbox: Sandbox, dirPath: string): Promise<FileTreeNode[]> {
+async function buildFileTree(sandbox: Sandbox, dirPath: string, maxDepth = 10): Promise<FileTreeNode[]> {
+  if (maxDepth <= 0) return [];
+
   let entries: FileEntry[];
   try {
     entries = await sandbox.file.list(dirPath);
@@ -107,7 +110,7 @@ async function buildFileTree(sandbox: Sandbox, dirPath: string): Promise<FileTre
 
     if (entry.type === "directory") {
       try {
-        node.children = await buildFileTree(sandbox, entry.path);
+        node.children = await buildFileTree(sandbox, entry.path, maxDepth - 1);
       } catch {
         node.children = [];
       }
@@ -339,7 +342,7 @@ async function handleFileUpload(c: Context, sandbox: Sandbox): Promise<Response>
     const buf = Buffer.from(await file.arrayBuffer());
     const tmpPath = resolved + ".__upload_tmp";
     await sandbox.file.write(tmpPath, buf.toString("base64"));
-    const res = await sandbox.exec(`base64 -d "${tmpPath}" > "${resolved}" && rm "${tmpPath}"`);
+    const res = await sandbox.exec(`base64 -d "${tmpPath}" > "${resolved}"; status=$?; rm -f "${tmpPath}"; exit $status`);
     if (res.exitCode !== 0) return c.json({ error: "Write failed" }, 500);
     return c.json({ ok: true, path: resolved });
   } catch {
@@ -372,6 +375,3 @@ async function handleFileDownload(c: Context, sandbox: Sandbox): Promise<Respons
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}

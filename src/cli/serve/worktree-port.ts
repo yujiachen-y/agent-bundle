@@ -51,34 +51,6 @@ function detectWorktreeName(cwd: string): string | null {
   }
 }
 
-export type WorktreePortResult = {
-  port: number;
-  worktreeName: string;
-};
-
-/**
- * Resolve a deterministic port for the current worktree.
- * Returns null when not running inside a worktree.
- *
- * Port formula: basePort + (fnv1a(worktreeName) % 99 + 1) * 10
- * This yields offsets 10..990 in steps of 10, giving each worktree
- * a block of 10 ports (e.g. 3010-3019, 3140-3149).
- *
- * @deprecated Use {@link resolveServicePort} for new code.
- */
-export function resolveWorktreePort(
-  basePort: number,
-  cwd: string = process.cwd(),
-): WorktreePortResult | null {
-  const name = detectWorktreeName(cwd);
-  if (!name) {
-    return null;
-  }
-
-  const offset = (fnv1a32(name) % 99 + 1) * 10;
-  return { port: basePort + offset, worktreeName: name };
-}
-
 // ── Service port allocation (prefix × 1000 + suffix) ────────────
 
 const MIN_WORKTREE_PREFIX = 10;
@@ -102,7 +74,7 @@ export async function isPortAvailable(port: number): Promise<boolean> {
  * Compute a service port: `prefix × 1000 + suffix`.
  *
  * - **suffix** (last three digits): stable service identity
- *   (0 = serve/dev, 1 = code-formatter/e2b, 2 = code-formatter/k8s, 3 = financial-plugin, 5 = personalized-recommend, 6 = observability-demo, …).
+ *   (0 = serve/dev, 1–4 = retired, 5 = personalized-recommend, 6 = observability-demo, …).
  * - **prefix**: `defaultPrefix` (3) for the main repo,
  *   hash-based 10–63 for worktrees.
  *
@@ -117,7 +89,11 @@ export async function resolveServicePort(
 ): Promise<number> {
   const envPort = process.env.PORT;
   if (envPort !== undefined && envPort !== "") {
-    return Number(envPort);
+    const parsed = Number(envPort);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65_535) {
+      throw new Error(`Invalid PORT environment variable: "${envPort}". Expected an integer between 1 and 65535.`);
+    }
+    return parsed;
   }
 
   const defaultPrefix = options?.defaultPrefix ?? 3;

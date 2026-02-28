@@ -1,7 +1,3 @@
----
-doc_sync_id: "1252b191-685b-4969-8024-213dd3cc6b2b"
----
-
 # Configuration
 
 agent-bundle is configured via an `agent-bundle.yaml` file. This guide covers all available options.

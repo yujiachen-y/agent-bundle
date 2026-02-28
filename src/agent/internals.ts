@@ -8,20 +8,10 @@ import type {
 import type { ExecResult, Sandbox } from "../sandbox/index.js";
 import type { AgentStatus } from "./types.js";
 import type { McpClientManager } from "./dependencies.js";
+import { toErrorMessage } from "../shared/errors.js";
+import { MCP_TOOL_PREFIX } from "../mcp/client-manager.js";
 
-const MCP_TOOL_PREFIX = "mcp__";
-
-export function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  return "Unknown error";
-}
+export { toErrorMessage };
 
 export function toToolError(toolCallId: string, message: string): ToolResult {
   return {

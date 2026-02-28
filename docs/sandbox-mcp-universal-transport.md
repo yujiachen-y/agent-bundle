@@ -1,7 +1,3 @@
----
-doc_sync_id: "40c542a5-1d89-4942-9b69-f6834a36cc0e"
----
-
 # Sandbox Universal MCP Transport Support
 
 ## Status: Implemented

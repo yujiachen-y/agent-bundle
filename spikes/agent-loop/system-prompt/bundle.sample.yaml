@@ -1,5 +1,0 @@
-skills:
-  - ./sample-skills/pdf-extractor
-  - path: ./sample-skills/data-validator
-    prompt: full
-  - ./sample-skills/release-notes

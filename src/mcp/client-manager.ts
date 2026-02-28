@@ -7,8 +7,9 @@ import {
   type ConnectMcpServer,
   type McpConnection,
 } from "./connect-server.js";
+import { toErrorMessage } from "../shared/errors.js";
 
-const MCP_TOOL_PREFIX = "mcp__";
+export const MCP_TOOL_PREFIX = "mcp__";
 
 type ToolRoute = {
   serverName: string;
@@ -39,14 +40,6 @@ export type CreateMcpClientManagerOptions = {
   logger?: Logger;
   sandbox?: SandboxIO | null;
 };
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
-}
 
 function toToolError(toolCallId: string, message: string): ToolResult {
   return {

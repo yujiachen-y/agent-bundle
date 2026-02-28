@@ -17,6 +17,12 @@ import {
   type SandboxImageRef,
 } from "./codegen.js";
 import { buildE2BTemplate, type BuildE2BTemplateResult } from "./e2b-template.js";
+import {
+  ensureExecdBaseImage,
+  resolveExecdRuntimeDependencies,
+  type ExecdRuntime,
+  type ExecdRuntimeDependencies,
+} from "./execd-base-image.js";
 import { buildSandboxImage, type BuildSandboxImageResult } from "./sandbox-image.js";
 import { writeGeneratedFiles } from "../generate/generate.js";
 import { loadBundleConfig } from "../config/load-bundle-config.js";
@@ -35,7 +41,7 @@ export type RunBuildResult = {
   resolvedConfig: ResolvedBundleConfig;
 };
 
-type BuildDependencies = {
+type BuildDependencies = ExecdRuntimeDependencies & {
   loadConfig?: typeof loadBundleConfig;
   loadSkills?: typeof loadAllSkills;
   loadCommands?: typeof loadAllCommands;
@@ -83,6 +89,7 @@ async function buildKubernetesSandboxImage(input: {
   config: BundleConfig;
   bundleDir: string;
   buildSandbox: typeof buildSandboxImage;
+  execdRuntime: ExecdRuntime;
   stdout: Writable;
   stderr: Writable;
 }): Promise<SandboxImageRef> {
@@ -97,11 +104,19 @@ async function buildKubernetesSandboxImage(input: {
     };
   }
 
+  const baseImageTag = await ensureExecdBaseImage({
+    buildSandbox: input.buildSandbox,
+    stdout: input.stdout,
+    stderr: input.stderr,
+    runtime: input.execdRuntime,
+  });
+
   input.stdout.write(`Building sandbox image with Docker: ${imageTag}\n`);
   const buildResult = await input.buildSandbox({
     bundleDir: input.bundleDir,
     dockerfile: buildConfig.dockerfile,
     context: buildConfig.context,
+    buildArgs: { BASE_IMAGE: baseImageTag },
     imageTag,
     stdout: input.stdout,
     stderr: input.stderr,
@@ -162,6 +177,7 @@ async function resolveSandboxImageRef(input: {
   skills: Skill[];
   buildSandbox: typeof buildSandboxImage;
   buildE2B: typeof buildE2BTemplate;
+  execdRuntime: ExecdRuntime;
   stdout: Writable;
   stderr: Writable;
 }): Promise<SandboxImageRef> {
@@ -170,6 +186,7 @@ async function resolveSandboxImageRef(input: {
       config: input.config,
       bundleDir: input.bundleDir,
       buildSandbox: input.buildSandbox,
+      execdRuntime: input.execdRuntime,
       stdout: input.stdout,
       stderr: input.stderr,
     });
@@ -196,6 +213,12 @@ export async function runBuildCommand(
   const promptGenerator = dependencies.generateSystemPrompt ?? generateSystemPromptTemplate;
   const buildSandboxImpl = dependencies.buildSandbox ?? buildSandboxImage;
   const buildE2BImpl = dependencies.buildE2B ?? buildE2BTemplate;
+  const execdRuntime = resolveExecdRuntimeDependencies({
+    readFileImpl: dependencies.readFileImpl,
+    getPackageVersion: dependencies.getPackageVersion,
+    inspectDockerImage: dependencies.inspectDockerImage,
+    moduleUrl: dependencies.moduleUrl,
+  });
   const writeFileImpl = dependencies.writeFileImpl ?? writeFile;
   const mkdirImpl = dependencies.mkdirImpl ?? mkdir;
   const stdout = options.stdout ?? process.stdout;
@@ -227,6 +250,7 @@ export async function runBuildCommand(
     skills: merged.skills,
     buildSandbox: buildSandboxImpl,
     buildE2B: buildE2BImpl,
+    execdRuntime,
     stdout,
     stderr,
   });

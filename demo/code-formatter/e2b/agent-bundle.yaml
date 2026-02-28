@@ -1,7 +1,7 @@
 name: code-formatter-e2b
 model:
-  provider: openai
-  model: gpt-5.1-codex
+  provider: openrouter
+  model: z-ai/glm-5
 prompt:
   system: |
     You are a code formatting agent.

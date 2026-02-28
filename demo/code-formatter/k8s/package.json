@@ -1,0 +1,15 @@
+{
+  "name": "agent-bundle-demo-code-formatter-k8s",
+  "private": true,
+  "type": "module",
+  "description": "Standalone code formatter demo using Kubernetes sandbox",
+  "scripts": {
+    "build": "agent-bundle build",
+    "dev": "agent-bundle dev",
+    "start": "agent-bundle serve",
+    "setup": "bash ./setup.sh"
+  },
+  "dependencies": {
+    "agent-bundle": "file:../../.."
+  }
+}

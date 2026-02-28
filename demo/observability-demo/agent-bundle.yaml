@@ -1,7 +1,7 @@
 name: observability-demo
 model:
-  provider: openai
-  model: gpt-5.3-codex
+  provider: openrouter
+  model: moonshotai/kimi-k2.5
 prompt:
   system: |
     You are a helpful assistant. Answer questions concisely.

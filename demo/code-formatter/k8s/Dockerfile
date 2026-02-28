@@ -1,4 +1,5 @@
-FROM agent-bundle/execd:latest
+ARG BASE_IMAGE=agent-bundle/execd:latest
+FROM ${BASE_IMAGE}
 
 RUN if command -v apk >/dev/null 2>&1; then \
       apk add --no-cache py3-pip; \

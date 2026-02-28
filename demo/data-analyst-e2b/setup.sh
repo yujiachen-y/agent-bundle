@@ -32,7 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 require_env E2B_API_KEY
-require_env OPENAI_API_KEY
+require_env OPENROUTER_API_KEY
 
 info "Checking prerequisites"
 for cmd in node npm; do

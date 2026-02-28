@@ -23,6 +23,7 @@ export type BuildSandboxImageOptions = {
   bundleDir: string;
   dockerfile: string;
   context?: string;
+  buildArgs?: Record<string, string>;
   imageTag: string;
   spawnImpl?: SpawnLike;
   stdout?: Writable;
@@ -82,12 +83,16 @@ export async function buildSandboxImage(
     dockerfile: options.dockerfile,
     context: options.context,
   });
+  const buildArgs = options.buildArgs
+    ? Object.entries(options.buildArgs).flatMap(([key, value]) => ["--build-arg", `${key}=${value}`])
+    : [];
   const args = [
     "build",
     "-t",
     options.imageTag,
     "-f",
     paths.dockerfilePath,
+    ...buildArgs,
     paths.contextPath,
   ];
 

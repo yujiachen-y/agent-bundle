@@ -1,7 +1,7 @@
 name: code-formatter
 model:
-  provider: anthropic
-  model: claude-sonnet-4-5
+  provider: openrouter
+  model: anthropic/claude-opus-4.6
 prompt:
   system: |
     You are a code formatting agent.

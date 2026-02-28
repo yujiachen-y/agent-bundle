@@ -56,8 +56,8 @@ if [ -z "${E2B_API_KEY:-}" ]; then
   fail "E2B_API_KEY is required."
 fi
 
-if [ -z "${OPENAI_API_KEY:-}" ]; then
-  fail "OPENAI_API_KEY is required."
+if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+  fail "OPENROUTER_API_KEY is required."
 fi
 
 info "Checking prerequisites"

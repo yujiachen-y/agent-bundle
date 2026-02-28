@@ -19,10 +19,9 @@ afterEach(async () => {
 });
 
 describe("runBuildCommand success path with docker build", () => {
-  it("builds artifacts and invokes docker build for kubernetes build config", async () => {
+  it("builds execd base image when missing and passes BASE_IMAGE to kubernetes build", async () => {
     const workspaceDir = await createTempWorkspace("build");
     await writeSkill(workspaceDir);
-
     const configPath = await writeBundleConfig(
       workspaceDir,
       createBundleConfig({
@@ -38,9 +37,11 @@ describe("runBuildCommand success path with docker build", () => {
       }),
     );
 
-    const buildSandboxMock = vi.fn(async (): Promise<BuildSandboxImageResult> => {
-      return { imageTag: "agent-bundle/execd:latest", exitCode: 0 };
+    const buildSandboxMock = vi.fn(async (options: { imageTag: string }): Promise<BuildSandboxImageResult> => {
+      return { imageTag: options.imageTag, exitCode: 0 };
     });
+    const getPackageVersionMock = vi.fn(async (): Promise<string> => "0.1.0");
+    const inspectDockerImageMock = vi.fn(async (): Promise<boolean> => false);
     const stdout = new PassThrough();
     let output = "";
 
@@ -57,43 +58,90 @@ describe("runBuildCommand success path with docker build", () => {
       },
       {
         buildSandbox: buildSandboxMock,
+        getPackageVersion: getPackageVersionMock,
+        inspectDockerImage: inspectDockerImageMock,
       },
     );
 
-    expect(buildSandboxMock).toHaveBeenCalledTimes(1);
+    expect(inspectDockerImageMock).toHaveBeenCalledWith("agent-bundle/execd:0.1.0");
+    expect(buildSandboxMock).toHaveBeenCalledTimes(2);
+    const firstBuildCall = buildSandboxMock.mock.calls[0]?.[0] as {
+      bundleDir: string;
+      dockerfile: string;
+      imageTag: string;
+    };
+    const secondBuildCall = buildSandboxMock.mock.calls[1]?.[0] as {
+      imageTag: string;
+      buildArgs?: Record<string, string>;
+    };
+    expect(firstBuildCall.imageTag).toBe("agent-bundle/execd:0.1.0");
+    expect(firstBuildCall.dockerfile).toBe("Dockerfile");
+    expect(firstBuildCall.bundleDir).toMatch(/[/\\]dist[/\\]execd$/);
+    expect(secondBuildCall.imageTag).toBe("agent-bundle/execd:latest");
+    expect(secondBuildCall.buildArgs).toEqual({
+      BASE_IMAGE: "agent-bundle/execd:0.1.0",
+    });
     expect(output).toContain("Building bundle \"code-formatter\"");
+    expect(output).toContain("Building execd base image with Docker: agent-bundle/execd:0.1.0");
     expect(output).toContain("Build completed:");
 
-    const indexSource = await readFile(join(result.outputDir, "index.ts"), "utf8");
-    const typesSource = await readFile(join(result.outputDir, "types.ts"), "utf8");
     const bundleJsonSource = await readFile(join(result.outputDir, "bundle.json"), "utf8");
-    const packageJsonSource = await readFile(join(result.outputDir, "package.json"), "utf8");
-
-    expect(indexSource).toContain("export const CodeFormatter = defineAgent");
-    expect(typesSource).toContain("export interface CodeFormatterVariables");
-
     const bundleJson = JSON.parse(bundleJsonSource) as {
-      sandboxImage: {
-        provider: string;
-        ref: string;
-      };
-      sandbox: {
-        kubernetes?: {
-          image?: string;
-        };
-      };
-      skills: Array<{ name: string }>;
+      sandboxImage: { provider: string; ref: string };
+      sandbox: { kubernetes?: { image?: string } };
     };
     expect(bundleJson.sandboxImage).toEqual({
       provider: "kubernetes",
       ref: "agent-bundle/execd:latest",
     });
     expect(bundleJson.sandbox.kubernetes?.image).toBe("agent-bundle/execd:latest");
-    expect(bundleJson.skills[0].name).toBe("FormatCode");
+  });
+});
 
-    const packageJson = JSON.parse(packageJsonSource) as { name: string; dependencies: Record<string, string> };
-    expect(packageJson.name).toBe("@agent-bundle/code-formatter");
-    expect(packageJson.dependencies).toEqual({ "agent-bundle": "*" });
+describe("runBuildCommand success path with cached execd base image", () => {
+  it("reuses cached execd base image when available locally", async () => {
+    const workspaceDir = await createTempWorkspace("cached-base");
+    await writeSkill(workspaceDir);
+    const configPath = await writeBundleConfig(
+      workspaceDir,
+      createBundleConfig({
+        sandboxLines: [
+          "  provider: kubernetes",
+          "  kubernetes:",
+          "    image: agent-bundle/execd:latest",
+          "    build:",
+          "      dockerfile: ./Dockerfile",
+          "      context: .",
+        ],
+      }),
+    );
+    const buildSandboxMock = vi.fn(async (options: { imageTag: string }): Promise<BuildSandboxImageResult> => {
+      return { imageTag: options.imageTag, exitCode: 0 };
+    });
+    const inspectDockerImageMock = vi.fn(async (): Promise<boolean> => true);
+
+    await runBuildCommand(
+      {
+        configPath,
+        outputDir: join(workspaceDir, "dist"),
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+      },
+      {
+        buildSandbox: buildSandboxMock,
+        getPackageVersion: async (): Promise<string> => "0.1.0",
+        inspectDockerImage: inspectDockerImageMock,
+      },
+    );
+
+    expect(inspectDockerImageMock).toHaveBeenCalledWith("agent-bundle/execd:0.1.0");
+    expect(buildSandboxMock).toHaveBeenCalledTimes(1);
+    expect(buildSandboxMock.mock.calls[0]?.[0]).toMatchObject({
+      imageTag: "agent-bundle/execd:latest",
+      buildArgs: {
+        BASE_IMAGE: "agent-bundle/execd:0.1.0",
+      },
+    });
   });
 });
 

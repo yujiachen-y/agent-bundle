@@ -20,7 +20,7 @@ function makeBaseConfig() {
   };
 }
 
-describe("parseBundleConfig", () => {
+describe("parseBundleConfig basic behavior", () => {
   it("parses a valid bundle config", () => {
     const config = parseBundleConfig(makeBaseConfig());
 
@@ -48,7 +48,9 @@ describe("parseBundleConfig", () => {
     expect(parsed.model.ollama?.contextWindow).toBe(16_384);
     expect(parsed.model.ollama?.maxTokens).toBe(4_096);
   });
+});
 
+describe("parseBundleConfig rejects invalid model fields", () => {
   it("rejects missing required fields", () => {
     const config = makeBaseConfig();
     delete (config as { model?: unknown }).model;
@@ -92,7 +94,9 @@ describe("parseBundleConfig", () => {
 
     expect(() => parseBundleConfig(config)).toThrowError();
   });
+});
 
+describe("parseBundleConfig unions and defaults", () => {
   it("discriminates skill entry union variants", () => {
     const config = makeBaseConfig();
     config.skills = [
@@ -119,6 +123,39 @@ describe("parseBundleConfig", () => {
     });
   });
 
+  it("parses deploy aws config and applies deploy defaults", () => {
+    const config = makeBaseConfig();
+    config.deploy = {
+      target: "aws",
+      aws: {
+        region: "us-west-2",
+      },
+    };
+
+    const parsed = parseBundleConfig(config);
+
+    expect(parsed.deploy?.target).toBe("aws");
+    expect(parsed.deploy?.aws).toEqual({
+      region: "us-west-2",
+      cpu: "256",
+      memory: "512",
+      desiredCount: 1,
+      containerPort: 3000,
+    });
+  });
+
+  it("rejects invalid deploy target", () => {
+    const config = makeBaseConfig() as {
+      deploy?: {
+        target: string;
+      };
+    };
+    config.deploy = {
+      target: "gcp",
+    };
+
+    expect(() => parseBundleConfig(config)).toThrowError();
+  });
 });
 
 describe("parseBundleConfig sandbox validation", () => {

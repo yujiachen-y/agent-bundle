@@ -79,6 +79,23 @@ const sandboxSchema = z
   })
   .strict();
 
+const awsDeploySchema = z
+  .object({
+    region: z.string().min(1).default("us-east-1"),
+    cpu: z.string().default("256"),
+    memory: z.string().default("512"),
+    desiredCount: z.number().int().positive().default(1),
+    containerPort: z.number().int().positive().default(3000),
+  })
+  .strict();
+
+const deploySchema = z
+  .object({
+    target: z.enum(["aws"]),
+    aws: awsDeploySchema.optional(),
+  })
+  .strict();
+
 const localSkillSchema = z
   .object({
     path: z.string().min(1),
@@ -200,6 +217,7 @@ export const bundleSchema = z
       })
       .strict(),
     sandbox: sandboxSchema,
+    deploy: deploySchema.optional(),
     skills: z.array(skillEntrySchema).min(1),
     commands: z.array(commandEntrySchema).optional(),
     mcp: mcpSchema.optional(),

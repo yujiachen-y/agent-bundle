@@ -3,6 +3,7 @@
 import { defineCommand, runMain } from "citty";
 
 import { DEFAULT_OUTPUT_DIR, runBuildCommand } from "./build/build.js";
+import { runDeployCommand } from "./deploy/deploy.js";
 import { runGenerateCommand } from "./generate/generate.js";
 import { runDevCommand } from "./serve/dev.js";
 import { runServeCommand } from "./serve/serve.js";
@@ -54,6 +55,22 @@ const portArg = {
 const keyValueArg = {
   type: "string",
   description: "Key-value entry in key=value format. Repeat flag or use comma-separated values.",
+} as const;
+
+const secretKeyArg = {
+  type: "string",
+  description: "Secret key name. Repeat flag or use comma-separated values. Values are read from environment variables.",
+} as const;
+
+const deployTargetArg = {
+  type: "string",
+  description: "Deployment target (aws).",
+  default: "aws",
+} as const;
+
+const regionArg = {
+  type: "string",
+  description: "AWS region override for deploy.",
 } as const;
 
 const serveCommand = defineCommand({
@@ -135,6 +152,35 @@ const buildCommand = defineCommand({
   },
 });
 
+const deployCommand = defineCommand({
+  meta: {
+    name: "deploy",
+    description: "Deploy built bundle artifacts to a target platform.",
+  },
+  args: {
+    config: configArg,
+    output: outputArg,
+    target: deployTargetArg,
+    region: regionArg,
+    secret: secretKeyArg,
+    teardown: {
+      type: "boolean",
+      description: "Delete AWS resources created by deploy.",
+      default: false,
+    },
+  },
+  run: async ({ args }): Promise<void> => {
+    await runDeployCommand({
+      configPath: resolveConfigPath(args.config),
+      outputDir: typeof args.output === "string" ? args.output : DEFAULT_OUTPUT_DIR,
+      target: args.target,
+      region: args.region,
+      secretEntries: args.secret,
+      teardown: args.teardown === true,
+    });
+  },
+});
+
 const mainCommand = defineCommand({
   meta: {
     name: "agent-bundle",
@@ -145,6 +191,7 @@ const mainCommand = defineCommand({
     dev: devCommand,
     generate: generateCommand,
     build: buildCommand,
+    deploy: deployCommand,
   },
 });
 

@@ -53,7 +53,7 @@ const productServer = await startProductServer();
 const agent = await factory.init({
   variables: {} as Record<never, string>,
   mcpTokens: {
-    products: "demo",
+    products: process.env["PRODUCT_MCP_TOKEN"] ?? "demo",
   },
 });
 

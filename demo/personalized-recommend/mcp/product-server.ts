@@ -11,7 +11,10 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-const EXPECTED_BEARER_TOKEN = "demo";
+const EXPECTED_BEARER_TOKEN = process.env["PRODUCT_MCP_TOKEN"] ?? "demo";
+if (!process.env["PRODUCT_MCP_TOKEN"]) {
+  console.warn("⚠ PRODUCT_MCP_TOKEN not set, using insecure default. Do not use in production.");
+}
 export const PRODUCT_SERVER_PORT = 3102;
 
 type Product = {
@@ -284,7 +287,7 @@ export async function startProductServer(port: number = PRODUCT_SERVER_PORT): Pr
 
   await new Promise<void>((resolveListen, rejectListen) => {
     httpServer.once("error", rejectListen);
-    httpServer.listen(port, () => {
+    httpServer.listen(port, "127.0.0.1", () => {
       httpServer.off("error", rejectListen);
       resolveListen();
     });

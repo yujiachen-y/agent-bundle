@@ -2,7 +2,7 @@
   "name": "agent-bundle",
   "version": "0.1.0",
   "description": "CLI tool and framework for defining, developing, and shipping AI agent skills",
-  "author": "Yujia Chen",
+  "author": "Jiachen Yu",
   "homepage": "https://agent-bundle.com",
   "repository": {
     "type": "git",
@@ -44,7 +44,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && rm -rf dist/webui/public && cp -r src/webui/public dist/webui/public",
-    "postbuild": "rm -rf dist/execd && cp -r packages/execd dist/execd && chmod +x dist/cli/index.js && ln -sf ../../dist/cli/index.js node_modules/.bin/agent-bundle",
+    "postbuild": "rm -rf dist/execd && cp -r packages/execd dist/execd && chmod +x dist/cli/index.js",
+    "cli": "node dist/cli/index.js",
     "build:sandbox:execd": "docker build -t agent-bundle/execd:latest -f packages/execd/Dockerfile packages/execd",
     "lint": "eslint \"src/**/*.{js,mjs,cjs,ts,mts,cts,tsx}\"",
     "duplicate": "jscpd --config .jscpd.json",

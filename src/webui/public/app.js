@@ -226,7 +226,7 @@
 
   function removeThinkingIndicator() { var el = document.getElementById("thinking-msg"); if (el) el.remove(); }
 
-  function addToolCallMessage(toolName) {
+  function addToolCallMessage(toolName, toolInput) {
     hideWelcome();
     var msg = document.createElement("div");
     msg.className = "message message--tool";
@@ -239,14 +239,31 @@
     headerEl.setAttribute('role', 'button');
     headerEl.setAttribute('tabindex', '0');
     headerEl.setAttribute('aria-expanded', 'false');
+
+    // Show command inline in header for Bash tools
+    var command = toolInput && toolInput.command;
+    var headerLabel = escapeHtml(toolName);
+    if (command) {
+      var shortCmd = command.length > 80 ? command.slice(0, 80) + "…" : command;
+      headerLabel += ' <span class="tool-command-preview">' + escapeHtml(shortCmd) + "</span>";
+    }
+
     headerEl.innerHTML =
       '<span class="tool-icon">&#9881;</span>' +
-      '<span class="tool-name">' + escapeHtml(toolName) + "</span>" +
+      '<span class="tool-name">' + headerLabel + "</span>" +
       '<span class="tool-status">running...</span>' +
       '<span class="tool-chevron">&#9656;</span>';
 
     var body = document.createElement("div");
     body.className = "tool-body";
+
+    // Pre-populate body with the full command if available
+    if (command) {
+      var cmdEl = document.createElement("div");
+      cmdEl.className = "tool-command";
+      cmdEl.textContent = "$ " + command;
+      body.appendChild(cmdEl);
+    }
 
     headerEl.addEventListener("click", function () {
       var chevron = headerEl.querySelector(".tool-chevron");
@@ -720,22 +737,57 @@
           currentAgentText = "";
         }
         var toolName = (event.toolCall && event.toolCall.name) || "tool";
-        addToolCallMessage(toolName);
+        var toolInput = event.toolCall && event.toolCall.input;
+        addToolCallMessage(toolName, toolInput);
+        break;
+
+      case "tool_execution_update":
+        if (currentToolEl && event.chunk) {
+          var body = currentToolEl.querySelector(".tool-body");
+          if (body) {
+            var outputEl = body.querySelector(".tool-output");
+            if (!outputEl) {
+              outputEl = document.createElement("div");
+              outputEl.className = "tool-output";
+              body.appendChild(outputEl);
+            }
+            outputEl.textContent += event.chunk;
+            if (!body.classList.contains("tool-body--open")) {
+              body.classList.add("tool-body--open");
+              var chevron = currentToolEl.querySelector(".tool-chevron");
+              if (chevron) chevron.classList.add("tool-chevron--open");
+              var header = currentToolEl.querySelector(".tool-header");
+              if (header) header.setAttribute("aria-expanded", "true");
+            }
+            scrollToBottom();
+          }
+        }
         break;
 
       case "response.tool_call.done":
         var isError = event.result && event.result.isError;
         updateToolStatus(isError);
-        if (isError && event.result.output) {
-          if (currentToolEl) {
-            var body = currentToolEl.querySelector(".tool-body");
-            if (body) {
-              body.textContent = typeof event.result.output === "string"
+        if (currentToolEl && event.result && event.result.output) {
+          var body = currentToolEl.querySelector(".tool-body");
+          if (body) {
+            // If no streaming output was received, show the final result
+            var outputEl = body.querySelector(".tool-output");
+            if (!outputEl) {
+              outputEl = document.createElement("div");
+              outputEl.className = "tool-output";
+              body.appendChild(outputEl);
+            }
+            if (!outputEl.textContent) {
+              outputEl.textContent = typeof event.result.output === "string"
                 ? event.result.output
                 : JSON.stringify(event.result.output, null, 2);
+            }
+            if (isError) {
               body.classList.add("tool-body--open");
               var chevron = currentToolEl.querySelector(".tool-chevron");
               if (chevron) chevron.classList.add("tool-chevron--open");
+              var header = currentToolEl.querySelector(".tool-header");
+              if (header) header.setAttribute("aria-expanded", "true");
             }
           }
         }

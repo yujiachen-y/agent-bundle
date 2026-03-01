@@ -627,12 +627,34 @@ html, body {
   font-size: 12px;
   line-height: 1.7;
   color: var(--text-secondary);
-  max-height: 200px;
+  max-height: 400px;
   overflow-y: auto;
   background: rgba(0, 0, 0, 0.2);
 }
 
 .tool-body--open { display: block; }
+
+.tool-command-preview {
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.tool-command {
+  color: var(--teal);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.tool-output {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .tool-status { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
 .tool-status--success { color: var(--green); }
 .tool-status--error { color: var(--red); }

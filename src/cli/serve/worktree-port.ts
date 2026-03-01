@@ -24,8 +24,7 @@ function fnv1a32(input: string): number {
 function detectWorktreeName(cwd: string): string | null {
   let dir = resolve(cwd);
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (;;) {
     const dotGitPath = resolve(dir, ".git");
 
     try {

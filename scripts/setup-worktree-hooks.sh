@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Install a post-checkout Git hook that prints the assigned worktree port
-# block when a new worktree is created.
+# Install a post-checkout Git hook that prints deterministic worktree ports
+# when a new worktree is created.
 #
 # Usage:  bash scripts/setup-worktree-hooks.sh
 
@@ -15,19 +15,6 @@ fi
 HOOKS_DIR="$REPO_ROOT/.git/hooks"
 HOOK_FILE="$HOOKS_DIR/post-checkout"
 
-# ── FNV-1a 32-bit in pure bash ──────────────────────────────────
-fnv1a32() {
-  local input="$1"
-  local hash=2166136261 # 0x811c9dc5
-  local i byte
-  for (( i = 0; i < ${#input}; i++ )); do
-    printf -v byte '%d' "'${input:$i:1}"
-    hash=$(( (hash ^ byte) * 16777619 ))           # 0x01000193
-    hash=$(( hash & 0xFFFFFFFF ))                   # keep 32-bit
-  done
-  echo "$hash"
-}
-
 # ── Create hook ─────────────────────────────────────────────────
 if [[ -f "$HOOK_FILE" ]]; then
   if grep -q 'agent-bundle-worktree-port' "$HOOK_FILE" 2>/dev/null; then
@@ -40,8 +27,16 @@ fi
 cat >> "$HOOK_FILE" << 'HOOK_EOF'
 
 # ── agent-bundle-worktree-port ──────────────────────────────────
-# Print the deterministic port block when a new worktree is created.
+# Print deterministic service ports when a new worktree is created.
 # A new worktree has previous_ref = 0000...0000.
+#
+# Port model (same as src/cli/serve/worktree-port.ts):
+#   port = prefix * 1000 + suffix
+#   prefix: 10-63 (FNV-1a hash of worktree name)
+#   suffix:
+#     000 = serve/dev (CLI main service + config-only demos)
+#     005 = demo/personalized-recommend
+#     006 = demo/observability-demo
 _ab_prev_ref="$1"
 if [ "$_ab_prev_ref" = "0000000000000000000000000000000000000000" ]; then
   _ab_wt_name="$(basename "$(pwd)")"
@@ -55,15 +50,14 @@ if [ "$_ab_prev_ref" = "0000000000000000000000000000000000000000" ]; then
     echo "$hash"
   }
   _ab_hash=$(_ab_fnv1a32 "$_ab_wt_name")
-  _ab_offset=$(( (_ab_hash % 99 + 1) * 10 ))
-  _ab_port=$(( 3000 + _ab_offset ))
+  _ab_prefix=$((10 + (_ab_hash % 54)))
+  _ab_base=$((_ab_prefix * 1000))
   echo ""
-  echo "  [agent-bundle] Worktree port block: ${_ab_port}-$((_ab_port + 9))"
-  echo "  [agent-bundle]   serve:  ${_ab_port}"
-  echo "  [agent-bundle]   code-formatter/e2b: $((_ab_port + 1))"
-  echo "  [agent-bundle]   code-formatter/k8s: $((_ab_port + 2))"
-  echo "  [agent-bundle]   financial-plugin: $((_ab_port + 3))"
-  echo "  [agent-bundle]   personalized-recommend: $((_ab_port + 5))"
+  echo "  [agent-bundle] Worktree prefix: ${_ab_prefix}"
+  echo "  [agent-bundle] Port range: ${_ab_base}-$((_ab_base + 999))"
+  echo "  [agent-bundle]   serve/dev: ${_ab_base}"
+  echo "  [agent-bundle]   personalized-recommend: $((_ab_base + 5))"
+  echo "  [agent-bundle]   observability-demo: $((_ab_base + 6))"
   echo ""
 fi
 # ── end agent-bundle-worktree-port ──────────────────────────────

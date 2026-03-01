@@ -6,14 +6,14 @@ Standalone custom-server demo with generated bundle code and two MCP servers.
 
 - Node.js 20+
 - `E2B_API_KEY`
-- `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN`
+- `OPENROUTER_API_KEY`
 
 ## Quick Start
 
 ```bash
 cd demo/personalized-recommend
 npm ci
-E2B_API_KEY=... ANTHROPIC_API_KEY=... npm run setup
+E2B_API_KEY=... OPENROUTER_API_KEY=... npm run setup
 ```
 
 The setup script installs dependencies, bundles the memory MCP server with

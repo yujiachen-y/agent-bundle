@@ -8,7 +8,7 @@ This demo is designed to run as a standalone folder. You do not need to run `pnp
 
 - Node.js >= 20
 - `E2B_API_KEY`
-- `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY`
 
 ## Quick start (standalone)
 
@@ -16,7 +16,7 @@ Run inside this directory:
 
 ```bash
 npm ci
-E2B_API_KEY=... OPENAI_API_KEY=... npm run setup
+E2B_API_KEY=... OPENROUTER_API_KEY=... npm run setup
 ```
 
 `setup.sh` will:
@@ -31,8 +31,8 @@ Then open `http://localhost:3000` (or the auto-detected worktree port).
 ## Manual commands
 
 ```bash
-E2B_API_KEY=... OPENAI_API_KEY=... npx -y agent-bundle@latest build --config ./agent-bundle.yaml
-E2B_API_KEY=... OPENAI_API_KEY=... npx -y agent-bundle@latest dev --config ./agent-bundle.yaml
+E2B_API_KEY=... OPENROUTER_API_KEY=... npx -y agent-bundle@latest build --config ./agent-bundle.yaml
+E2B_API_KEY=... OPENROUTER_API_KEY=... npx -y agent-bundle@latest dev --config ./agent-bundle.yaml
 ```
 
 ## Test with curl

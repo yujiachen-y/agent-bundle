@@ -5,14 +5,14 @@ Standalone custom-server demo using OpenTelemetry + generated bundle code.
 ## Prerequisites
 
 - Node.js 20+
-- `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY`
 
 ## Quick Start
 
 ```bash
 cd demo/observability-demo
 npm ci
-OPENAI_API_KEY=... npm run setup
+OPENROUTER_API_KEY=... npm run setup
 ```
 
 The setup script installs dependencies, runs `agent-bundle build`, runs

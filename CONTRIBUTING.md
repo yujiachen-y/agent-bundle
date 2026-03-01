@@ -24,7 +24,7 @@ Thanks for your interest in contributing! This guide covers the basics.
 ```bash
 pnpm test              # run unit tests
 pnpm run lint          # lint check
-pnpm run typecheck     # type check
+pnpm run quality       # lint + duplicate + tests
 ```
 
 ### Pre-commit Hooks
@@ -56,7 +56,7 @@ All hooks must pass before your code can be committed.
    ```
 
 3. Include a clear description of what changed and why
-4. Make sure all checks pass (`pnpm test`, `pnpm run lint`, `pnpm run typecheck`)
+4. Make sure all checks pass (`pnpm run quality`)
 5. Rebase on latest `main` before requesting review
 
 ## Reporting Bugs

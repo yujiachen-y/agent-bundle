@@ -7,14 +7,14 @@ and local commands.
 
 - Node.js 20+
 - `E2B_API_KEY`
-- `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN`
+- `OPENROUTER_API_KEY`
 
 ## Quick Start
 
 ```bash
 cd demo/financial-plugin
 npm ci
-E2B_API_KEY=... ANTHROPIC_API_KEY=... npm run setup
+E2B_API_KEY=... OPENROUTER_API_KEY=... npm run setup
 ```
 
 The setup script validates API access, builds the E2B template, and starts `agent-bundle dev`.

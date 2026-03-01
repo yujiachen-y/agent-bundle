@@ -3,7 +3,7 @@
 # E2B formatter demo — one-command setup + start
 #
 # Usage (from this directory):
-#   E2B_API_KEY=... OPENAI_API_KEY=... ./setup.sh
+#   E2B_API_KEY=... OPENROUTER_API_KEY=... ./setup.sh
 #
 # What it does:
 #   1. Validates API keys and prerequisites

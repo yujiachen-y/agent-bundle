@@ -3,8 +3,7 @@ import { trace, metrics } from "@opentelemetry/api";
 import type { ObservabilityProvider } from "./types.js";
 
 const LIBRARY_NAME = "agent-bundle";
-// TODO: keep in sync with package.json version or read dynamically
-const LIBRARY_VERSION = "0.1.0";
+const LIBRARY_VERSION = process.env.npm_package_version ?? "0.1.0";
 
 /**
  * Create an {@link ObservabilityProvider} from the OpenTelemetry global API.

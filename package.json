@@ -26,6 +26,10 @@
       "types": "./dist/service/create-server.d.ts",
       "default": "./dist/service/create-server.js"
     },
+    "./worktree-port": {
+      "types": "./dist/cli/serve/worktree-port.d.ts",
+      "default": "./dist/cli/serve/worktree-port.js"
+    },
     "./observability": {
       "types": "./dist/observability/index.d.ts",
       "default": "./dist/observability/index.js"

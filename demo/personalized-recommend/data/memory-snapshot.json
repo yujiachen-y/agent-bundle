@@ -1,0 +1,11 @@
+{
+  "u-demo": {
+    "interests": ["running", "fitness", "outdoor activities"],
+    "preferences": {
+      "priceRange": "mid",
+      "brands": ["Nike", "Adidas"]
+    },
+    "recentEvents": ["browsed running shoes", "liked hydration bottles"],
+    "updatedAt": "2025-01-01T00:00:00.000Z"
+  }
+}

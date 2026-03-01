@@ -21,5 +21,4 @@ pnpm-debug.log*
 
 spikes/
 
-# Demo build artifacts
-demo/personalized-recommend/tools/
+# Demo build artifacts are gitignored locally in each demo's own .gitignore

@@ -57,7 +57,8 @@
     "test:e2e": "pnpm run test:e2e:skills && pnpm run test:e2e:e2b && pnpm run test:e2e:k8s && pnpm run test:e2e:pi-mono && pnpm run test:e2e:service",
     "quality": "pnpm run lint && pnpm run duplicate && pnpm run test",
     "ci": "pnpm run quality",
-    "ci:full": "pnpm run quality && pnpm run test:e2e"
+    "ci:full": "pnpm run quality && pnpm run test:e2e",
+    "demo:pdf-to-deck": "cd demo/pdf-to-deck && bash setup.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

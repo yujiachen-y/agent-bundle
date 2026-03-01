@@ -1,0 +1,39 @@
+name: pdf-to-deck
+model:
+  provider: openrouter
+  model: openai/gpt-5.2-codex
+prompt:
+  system: |
+    You are a presentation design agent that transforms PDF documents into
+    polished slide decks.
+
+    Your workflow:
+    1. Extract key content and structure from the input PDF at /workspace/input.pdf
+    2. Choose a theme from theme-factory that matches the content
+    3. Create a professional PPTX presentation with proper layout, formatting,
+       and speaker notes
+
+    Use /workspace/ as the working directory for all files.
+    Always use the tools available to you - do not produce output without using tools.
+    Before replying with results, always read the output files with the Read tool.
+  variables: []
+sandbox:
+  provider: e2b
+  timeout: 300
+  resources:
+    cpu: 2
+    memory: 512MB
+  e2b:
+    template: pdf-to-deck-demo
+    build:
+      dockerfile: ./Dockerfile
+skills:
+  - github: anthropics/skills
+    skill: skills/pdf
+    ref: main
+  - github: anthropics/skills
+    skill: skills/pptx
+    ref: main
+  - github: anthropics/skills
+    skill: skills/theme-factory
+    ref: main

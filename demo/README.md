@@ -6,5 +6,6 @@
 | `code-formatter/k8s` | Config-only agent, K8s sandbox | `cd demo/code-formatter/k8s && npm run setup` |
 | `financial-plugin` | Plugins + commands | `cd demo/financial-plugin && npm run setup` |
 | `data-analyst-e2b` | WebUI dev mode | `cd demo/data-analyst-e2b && npm run setup` |
+| `pdf-to-deck` | skills.sh skills (pdf + pptx + theme-factory) -> E2B sandbox | `pnpm demo:pdf-to-deck` |
 | `personalized-recommend` | generate + custom server + MCP | `cd demo/personalized-recommend && npm run setup` |
 | `observability-demo` | OpenTelemetry tracing & metrics | `cd demo/observability-demo && npm run setup` |

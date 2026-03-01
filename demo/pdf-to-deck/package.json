@@ -1,0 +1,14 @@
+{
+  "name": "agent-bundle-demo-pdf-to-deck",
+  "private": true,
+  "description": "Standalone PDF-to-PPTX demo using E2B sandbox",
+  "scripts": {
+    "build": "agent-bundle build",
+    "dev": "agent-bundle dev",
+    "start": "agent-bundle serve",
+    "setup": "bash ./setup.sh"
+  },
+  "dependencies": {
+    "agent-bundle": "^0.1.0"
+  }
+}

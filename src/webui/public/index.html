@@ -52,22 +52,11 @@
                 <rect x="1" y="1" width="22" height="22" rx="3" ry="3" stroke="#8b5cf6" stroke-width="1.5" fill="none" opacity="0.3"></rect>
               </svg>
             </div>
-            <h2 class="welcome-title" id="welcome-agent-name">Data Analysis Agent</h2>
+            <h2 class="welcome-title" id="welcome-agent-name"></h2>
             <p class="welcome-powered">powered by agent<span class="dot">&middot;</span>bundle</p>
-            <p class="welcome-subtitle">Drop a CSV, ask questions in plain English, get charts and reports</p>
+            <p class="welcome-subtitle" id="welcome-subtitle"></p>
             <div id="skill-badges" class="skill-badges"></div>
-            <div class="welcome-heading">Try an example</div>
-            <div id="prompt-chips" class="prompt-chips">
-              <button class="prompt-chip" data-prompt="Generate sample sales data for 12 months and show monthly revenue trends">
-                &#128202; Monthly revenue trends
-              </button>
-              <button class="prompt-chip" data-prompt="Create a dataset of 100 students with random grades, then show the grade distribution histogram">
-                &#128200; Grade distribution analysis
-              </button>
-              <button class="prompt-chip" data-prompt="Analyze the correlation between temperature and ice cream sales with sample data">
-                &#128279; Correlation analysis
-              </button>
-            </div>
+            <div id="prompt-chips" class="prompt-chips"></div>
           </div>
 
           <!-- Empty state: no files yet -->
@@ -82,11 +71,6 @@
                 </svg>
               </div>
               <div class="workspace-empty-text">Files will appear here as the agent works.</div>
-              <div class="workspace-empty-suggestions">
-                <button class="workspace-empty-suggestion" data-prompt="Analyze the data and show trends">Analyze the data and show trends</button>
-                <button class="workspace-empty-suggestion" data-prompt="Generate a chart from the dataset">Generate a chart from the dataset</button>
-                <button class="workspace-empty-suggestion" data-prompt="Create a summary report">Create a summary report</button>
-              </div>
             </div>
           </div>
 

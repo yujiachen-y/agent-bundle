@@ -13,14 +13,6 @@ require_env() {
   [ -n "${!1:-}" ] || fail "$1 is required."
 }
 
-run_agent_bundle() {
-  if [ -x "./node_modules/.bin/agent-bundle" ]; then
-    ./node_modules/.bin/agent-bundle "$@"
-    return
-  fi
-  npx --yes agent-bundle "$@"
-}
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -37,11 +29,11 @@ npm ci
 ok "Dependencies installed"
 
 info "Building observability-demo bundle"
-run_agent_bundle build --config ./agent-bundle.yaml
+npx agent-bundle build --config ./agent-bundle.yaml
 ok "Bundle built"
 
 info "Generating observability-demo package"
-run_agent_bundle generate --config ./agent-bundle.yaml
+npx agent-bundle generate --config ./agent-bundle.yaml
 ok "Package generated"
 
 info "Starting observability demo server"

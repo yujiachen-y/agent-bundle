@@ -7,7 +7,7 @@
 #
 # What it does:
 #   1. Validates API keys and prerequisites
-#   2. Ensures agent-bundle CLI is available (local/global/npx fallback)
+#   2. Installs demo dependencies
 #   3. Builds the E2B demo bundle and template
 #   4. Starts agent-bundle dev server
 # ------------------------------------------------------------------
@@ -25,32 +25,6 @@ check_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1. Please install it first."
 }
 
-run_agent_bundle() {
-  if [ -x "./node_modules/.bin/agent-bundle" ]; then
-    ./node_modules/.bin/agent-bundle "$@"
-    return
-  fi
-
-  if command -v agent-bundle >/dev/null 2>&1; then
-    agent-bundle "$@"
-    return
-  fi
-
-  npx -y agent-bundle@latest "$@"
-}
-
-exec_agent_bundle() {
-  if [ -x "./node_modules/.bin/agent-bundle" ]; then
-    exec ./node_modules/.bin/agent-bundle "$@"
-  fi
-
-  if command -v agent-bundle >/dev/null 2>&1; then
-    exec agent-bundle "$@"
-  fi
-
-  exec npx -y agent-bundle@latest "$@"
-}
-
 # ── 1. API keys + prerequisites ───────────────────────────────────
 if [ -z "${E2B_API_KEY:-}" ]; then
   fail "E2B_API_KEY is required."
@@ -66,28 +40,16 @@ for cmd in node npm; do
 done
 ok "All prerequisites found"
 
-# ── 2. ensure CLI availability ────────────────────────────────────
-if [ ! -x "./node_modules/.bin/agent-bundle" ] && [ -f "./package.json" ]; then
-  info "Installing demo dependencies"
-  npm ci
-  ok "Demo dependencies installed"
-fi
-
-info "Checking agent-bundle CLI availability"
-if run_agent_bundle --help >/dev/null 2>&1; then
-  ok "agent-bundle CLI is available"
-else
-  fail "Unable to run agent-bundle CLI. Install it globally or ensure npm can access the registry."
-fi
+# ── 2. install dependencies ───────────────────────────────────────
+info "Installing demo dependencies"
+npm ci
+ok "Demo dependencies installed"
 
 # ── 3. build E2B demo bundle and template ─────────────────────────
 info "Building E2B demo bundle and template"
-run_agent_bundle build
+npx agent-bundle build
 ok "E2B demo bundle built"
 
 # ── 4. start dev server ───────────────────────────────────────────
 info "Starting agent-bundle dev server (port auto-detected, see output below)"
-if [ -n "${PORT:-}" ]; then
-  exec_agent_bundle dev --port "${PORT}"
-fi
-exec_agent_bundle dev
+exec npx agent-bundle dev ${PORT:+--port "$PORT"}

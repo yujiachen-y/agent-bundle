@@ -39,7 +39,7 @@ else
 fi
 
 info "Building sandbox images via agent-bundle build"
-npm run build
+npx agent-bundle build
 ok "Sandbox images built"
 
 AGENT_BUNDLE_VERSION="$(node --input-type=module -e "import { readFileSync } from 'node:fs'; import { join } from 'node:path'; const pkg = JSON.parse(readFileSync(join(process.cwd(), 'node_modules/agent-bundle/package.json'), 'utf8')); process.stdout.write(pkg.version);")"
@@ -85,8 +85,4 @@ else
 fi
 
 info "Starting development server"
-if [ -n "${PORT:-}" ]; then
-  exec npm run dev -- --config "${CONFIG_PATH}" --port "${PORT}"
-fi
-
-exec npm run dev -- --config "${CONFIG_PATH}"
+exec npx agent-bundle dev --config "${CONFIG_PATH}" ${PORT:+--port "$PORT"}

@@ -13,21 +13,6 @@ require_env() {
   [ -n "${!1:-}" ] || fail "$1 is required."
 }
 
-run_agent_bundle() {
-  if [ -x "./node_modules/.bin/agent-bundle" ]; then
-    ./node_modules/.bin/agent-bundle "$@"
-    return
-  fi
-  npx --yes agent-bundle "$@"
-}
-
-exec_agent_bundle() {
-  if [ -x "./node_modules/.bin/agent-bundle" ]; then
-    exec ./node_modules/.bin/agent-bundle "$@"
-  fi
-  exec npx --yes agent-bundle "$@"
-}
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -52,8 +37,8 @@ else
 fi
 
 info "Building E2B demo bundle and template"
-run_agent_bundle build --config ./agent-bundle.yaml
+npx agent-bundle build --config ./agent-bundle.yaml
 ok "E2B demo bundle built"
 
 info "Starting agent-bundle dev"
-exec_agent_bundle dev --config ./agent-bundle.yaml ${PORT:+--port "$PORT"}
+exec npx agent-bundle dev --config ./agent-bundle.yaml ${PORT:+--port "$PORT"}

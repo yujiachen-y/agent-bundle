@@ -122,6 +122,10 @@ export class AgentImpl<V extends string> implements Agent {
     return responseOutput;
   }
 
+  public clearHistory(): void {
+    this.conversationHistory = [];
+  }
+
   public async *respondStream(input: ResponseInput, options?: RespondStreamOptions) {
     ensureRunnableStatus(this.statusValue);
 

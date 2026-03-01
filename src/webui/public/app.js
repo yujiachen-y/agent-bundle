@@ -20,7 +20,15 @@
   var chatForm = document.getElementById("chat-form");
   var chatInput = document.getElementById("chat-input");
   var sendBtn = document.getElementById("send-btn");
+  var attachBtn = document.getElementById("attach-btn");
+  var chatFileInput = document.getElementById("chat-file-input");
+  var chatAttachments = document.getElementById("chat-attachments");
   var statusBadge = document.getElementById("status-badge");
+  var clearContextBtn = document.getElementById("clear-context-btn");
+  var clearModalOverlay = document.getElementById("clear-modal-overlay");
+  var clearWorkspaceCheckbox = document.getElementById("clear-workspace-checkbox");
+  var clearModalCancel = document.getElementById("clear-modal-cancel");
+  var clearModalConfirm = document.getElementById("clear-modal-confirm");
   var menuToggle = document.getElementById("menu-toggle");
   var panelOverlay = document.querySelector(".panel-overlay");
   // --  Markdown Configuration
@@ -45,6 +53,9 @@
 
   // Currently active tool message for status updates
   var currentToolEl = null;
+
+  // Pending chat attachments
+  var pendingFiles = [];
 
   // Track active file for preview highlighting
   var activeFilePath = null;
@@ -90,7 +101,34 @@
 
   // --  Status Badge
   function setStatus(s) { statusBadge.textContent = s; statusBadge.className = "badge badge--" + s; }
-  function setInputEnabled(en) { chatInput.disabled = !en; sendBtn.disabled = !en; if (en) chatInput.focus(); }
+  function setClearContextEnabled(en) {
+    if (!clearContextBtn) return;
+    clearContextBtn.disabled = !en;
+  }
+
+  function setInputEnabled(en) {
+    chatInput.disabled = !en;
+    sendBtn.disabled = !en;
+    if (attachBtn) attachBtn.disabled = !en;
+    setClearContextEnabled(en || !isStreaming);
+    if (en) chatInput.focus();
+  }
+
+  function showToast(message, isError) {
+    if (
+      window.FileTransferUI &&
+      typeof window.FileTransferUI.showToast === "function"
+    ) {
+      window.FileTransferUI.showToast(message, isError);
+      return;
+    }
+
+    var toast = document.createElement("div");
+    toast.className = "ft-toast" + (isError ? " ft-toast--error" : "");
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(function () { toast.remove(); }, 3000);
+  }
 
   // --  Welcome State
   function hideWelcome() {
@@ -356,7 +394,18 @@
   function closeImageModal() { imageModal.classList.remove("image-modal--open"); imageModal.style.display = "none"; modalImage.src = ""; }
   modalClose.addEventListener("click", closeImageModal);
   imageModal.addEventListener("click", function (e) { if (e.target === imageModal) closeImageModal(); });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeImageModal(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (isClearModalOpen()) {
+      e.stopImmediatePropagation();
+      closeClearModal();
+      return;
+    }
+    if (imageModal.classList.contains("image-modal--open")) {
+      e.stopImmediatePropagation();
+    }
+    closeImageModal();
+  });
 
   // --  File Tree
   var FILE_ICON_MAP = {
@@ -671,9 +720,133 @@
     }
   });
 
-  // --  Chat Submission
+  function createPendingFile(file) {
+    return {
+      id: String(Date.now()) + "-" + Math.random().toString(36).slice(2, 10),
+      file: file,
+      status: "pending",
+    };
+  }
+
+  function isDuplicatePendingFile(file) {
+    return pendingFiles.some(function (pending) {
+      return (
+        pending.file.name === file.name &&
+        pending.file.size === file.size &&
+        pending.file.lastModified === file.lastModified
+      );
+    });
+  }
+
+  function renderChatAttachments() {
+    if (!chatAttachments) return;
+
+    chatAttachments.innerHTML = "";
+    if (pendingFiles.length === 0) {
+      chatAttachments.style.display = "none";
+      return;
+    }
+
+    chatAttachments.style.display = "flex";
+    pendingFiles.forEach(function (pending) {
+      var chip = document.createElement("div");
+      chip.className = "chat-attachment-chip";
+      chip.setAttribute("data-id", pending.id);
+      if (pending.status === "uploading") chip.classList.add("chat-attachment-chip--uploading");
+      if (pending.status === "error") chip.classList.add("chat-attachment-chip--error");
+
+      var name = document.createElement("span");
+      name.className = "chat-attachment-name";
+      name.textContent = pending.file.name;
+      chip.appendChild(name);
+
+      if (pending.status === "uploading") {
+        var spinner = document.createElement("span");
+        spinner.className = "chat-attachment-spinner";
+        spinner.setAttribute("aria-hidden", "true");
+        chip.appendChild(spinner);
+      } else {
+        var remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "chat-attachment-remove";
+        remove.setAttribute("aria-label", "Remove attachment");
+        remove.innerHTML = "&times;";
+        chip.appendChild(remove);
+      }
+
+      chatAttachments.appendChild(chip);
+    });
+  }
+
+  function addPendingFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    Array.from(fileList).forEach(function (file) {
+      if (!isDuplicatePendingFile(file)) {
+        pendingFiles.push(createPendingFile(file));
+      }
+    });
+    renderChatAttachments();
+  }
+
+  function uploadPendingFiles() {
+    if (pendingFiles.length === 0) {
+      return Promise.resolve({ uploadedPaths: [], failedFiles: [] });
+    }
+
+    pendingFiles.forEach(function (pending) {
+      pending.status = "uploading";
+    });
+    renderChatAttachments();
+
+    var uploadTasks = pendingFiles.map(function (pending) {
+      var form = new FormData();
+      form.append("file", pending.file);
+      return fetch("/api/file-upload", { method: "POST", body: form })
+        .then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (data) {
+            if (!res.ok || !data.ok || typeof data.path !== "string") {
+              return { ok: false };
+            }
+            return { ok: true, path: data.path };
+          });
+        })
+        .catch(function () {
+          return { ok: false };
+        });
+    });
+
+    return Promise.allSettled(uploadTasks).then(function (results) {
+      var uploadedPaths = [];
+      var failedFiles = [];
+
+      results.forEach(function (result, index) {
+        var pending = pendingFiles[index];
+        if (!pending) return;
+
+        if (result.status === "fulfilled" && result.value.ok && result.value.path) {
+          pending.status = "uploaded";
+          uploadedPaths.push(result.value.path);
+          return;
+        }
+
+        pending.status = "error";
+        failedFiles.push(pending.file.name);
+      });
+
+      renderChatAttachments();
+      return { uploadedPaths: uploadedPaths, failedFiles: failedFiles };
+    });
+  }
+
+  function buildOutgoingMessage(text, uploadedPaths) {
+    if (!uploadedPaths || uploadedPaths.length === 0) return text;
+    var prefixed = uploadedPaths.map(function (p) { return "[Uploaded: " + p + "]"; }).join("\n");
+    return text ? prefixed + "\n\n" + text : prefixed;
+  }
+
   function sendMessage(text) {
-    if (!text || isStreaming) return;
+    var trimmedText = (text || "").trim();
+    if ((trimmedText.length === 0 && pendingFiles.length === 0) || isStreaming) return;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       addErrorMessage("Not connected to agent.");
       return;
@@ -682,22 +855,185 @@
     isStreaming = true;
     setStatus("running");
     setInputEnabled(false);
-    addUserMessage(text);
 
-    ws.send(JSON.stringify({
-      type: "chat",
-      input: [{ role: "user", content: text }],
-    }));
+    var uploadPromise = pendingFiles.length > 0
+      ? uploadPendingFiles()
+      : Promise.resolve({ uploadedPaths: [], failedFiles: [] });
+    uploadPromise
+      .then(function (uploadResult) {
+        var uploadedPaths = uploadResult.uploadedPaths;
+        var failedFiles = uploadResult.failedFiles;
+
+        if (failedFiles.length > 0) {
+          showToast("Some uploads failed: " + failedFiles.join(", "), true);
+        }
+
+        pendingFiles = pendingFiles.filter(function (pending) {
+          return pending.status !== "uploaded";
+        });
+        pendingFiles.forEach(function (pending) {
+          if (pending.status === "error") pending.status = "pending";
+        });
+        renderChatAttachments();
+
+        var outgoingText = buildOutgoingMessage(trimmedText, uploadedPaths);
+        if (!outgoingText) {
+          if (failedFiles.length > 0) {
+            throw new Error("All selected files failed to upload.");
+          }
+          throw new Error("Message is empty.");
+        }
+
+        addUserMessage(outgoingText);
+        ws.send(JSON.stringify({
+          type: "chat",
+          input: [{ role: "user", content: outgoingText }],
+        }));
+      })
+      .catch(function (error) {
+        isStreaming = false;
+        setStatus("idle");
+        setInputEnabled(true);
+        showToast(error instanceof Error ? error.message : "Upload failed.", true);
+      });
   }
 
   chatForm.addEventListener("submit", function (e) {
     e.preventDefault();
     var text = chatInput.value.trim();
-    if (text.length === 0) return;
+    if (text.length === 0 && pendingFiles.length === 0) return;
     chatInput.value = "";
     chatInput.style.height = "auto";
     sendMessage(text);
   });
+
+  if (attachBtn && chatFileInput) {
+    attachBtn.addEventListener("click", function () {
+      if (isStreaming) return;
+      chatFileInput.click();
+    });
+
+    chatFileInput.addEventListener("change", function () {
+      addPendingFiles(chatFileInput.files);
+      chatFileInput.value = "";
+    });
+  }
+
+  if (chatAttachments) {
+    chatAttachments.addEventListener("click", function (e) {
+      var removeBtn = e.target.closest(".chat-attachment-remove");
+      if (!removeBtn) return;
+      var chip = removeBtn.closest(".chat-attachment-chip");
+      if (!chip) return;
+      var id = chip.getAttribute("data-id");
+      pendingFiles = pendingFiles.filter(function (pending) { return pending.id !== id; });
+      renderChatAttachments();
+    });
+  }
+
+  var inputWrapper = chatForm.querySelector(".input-wrapper");
+  if (inputWrapper) {
+    inputWrapper.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      inputWrapper.classList.add("input-wrapper--drag-over");
+    });
+    inputWrapper.addEventListener("dragleave", function (e) {
+      if (!inputWrapper.contains(e.relatedTarget)) {
+        inputWrapper.classList.remove("input-wrapper--drag-over");
+      }
+    });
+    inputWrapper.addEventListener("drop", function (e) {
+      e.preventDefault();
+      inputWrapper.classList.remove("input-wrapper--drag-over");
+      if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+        addPendingFiles(e.dataTransfer.files);
+      }
+    });
+  }
+
+  function isClearModalOpen() {
+    return !!(clearModalOverlay && clearModalOverlay.style.display !== "none");
+  }
+
+  function closeClearModal() {
+    if (!clearModalOverlay) return;
+    clearModalOverlay.style.display = "none";
+    if (clearWorkspaceCheckbox) clearWorkspaceCheckbox.checked = false;
+  }
+
+  function resetUiAfterContextClear(clearWorkspace) {
+    chatMessages.innerHTML = "";
+    removeThinkingIndicator();
+    if (renderTimer) {
+      clearTimeout(renderTimer);
+      renderTimer = null;
+    }
+    currentAgentText = "";
+    currentAgentEl = null;
+    currentToolEl = null;
+    isStreaming = false;
+    setStatus("idle");
+    setInputEnabled(true);
+    setWorkspaceState("welcome");
+    welcomeVisible = true;
+    activeFilePath = null;
+    previewArea.removeAttribute("data-file-path");
+    chatInput.value = "";
+    chatInput.style.height = "auto";
+    pendingFiles = [];
+    renderChatAttachments();
+    fetchAgentInfo();
+
+    if (clearWorkspace) {
+      previousFilePaths = new Set();
+      lastFileEntries = [];
+      lastNewPaths = new Set();
+      refreshFileTreeUI();
+    }
+  }
+
+  function confirmClearContext() {
+    if (isStreaming || !clearModalConfirm || !clearModalCancel) return;
+
+    var clearWorkspace = !!(clearWorkspaceCheckbox && clearWorkspaceCheckbox.checked);
+    clearModalConfirm.disabled = true;
+    clearModalCancel.disabled = true;
+
+    fetch("/api/clear-context", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clearWorkspace: clearWorkspace }),
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          if (!res.ok || !body.ok) {
+            throw new Error(body.error || "Failed to clear context.");
+          }
+          resetUiAfterContextClear(clearWorkspace);
+          closeClearModal();
+          showToast("Context cleared.", false);
+        });
+      })
+      .catch(function (error) {
+        showToast(error instanceof Error ? error.message : "Failed to clear context.", true);
+      })
+      .finally(function () {
+        clearModalConfirm.disabled = false;
+        clearModalCancel.disabled = false;
+      });
+  }
+
+  if (clearContextBtn && clearModalOverlay && clearModalCancel && clearModalConfirm) {
+    clearContextBtn.addEventListener("click", function () {
+      if (isStreaming) return;
+      clearModalOverlay.style.display = "flex";
+    });
+    clearModalCancel.addEventListener("click", closeClearModal);
+    clearModalConfirm.addEventListener("click", confirmClearContext);
+    clearModalOverlay.addEventListener("click", function (e) {
+      if (e.target === clearModalOverlay) closeClearModal();
+    });
+  }
 
   // --  Agent Event Handling (WebSocket)
   function handleAgentEvent(event) {

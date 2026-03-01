@@ -36,6 +36,7 @@ function mockAgent(respondFn?: Agent["respond"]): Agent {
         yield { type: "response.completed", output: out } satisfies ResponseEvent;
       },
     }),
+    clearHistory: vi.fn<Agent["clearHistory"]>().mockImplementation(() => undefined),
     shutdown: vi.fn<Agent["shutdown"]>().mockResolvedValue(undefined),
   };
 }

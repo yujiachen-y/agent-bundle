@@ -11,6 +11,9 @@
     setTimeout(function () { toast.remove(); }, 3000);
   }
 
+  window.FileTransferUI = window.FileTransferUI || {};
+  window.FileTransferUI.showToast = showToast;
+
   // ── Upload button in file-panel header ──
   var panelHeader = document.querySelector("#file-panel .panel-header");
   if (!panelHeader) return;

@@ -15,6 +15,7 @@ class StreamingStubAgent implements Agent {
   public readonly name = "ws-test-agent";
   private statusValue: AgentStatus = "ready";
   public respondStreamEvents: ResponseEvent[] = [];
+  public clearHistoryCalls = 0;
 
   public get status(): AgentStatus { return this.statusValue; }
 
@@ -36,6 +37,10 @@ class StreamingStubAgent implements Agent {
 
   public async shutdown(): Promise<void> {
     this.statusValue = "stopped";
+  }
+
+  public clearHistory(): void {
+    this.clearHistoryCalls += 1;
   }
 }
 
@@ -114,7 +119,7 @@ function closeServer(ctx: TestContext): Promise<void> {
   });
 }
 
-describe("createWebUIServer — WebSocket", () => {
+describe("createWebUIServer — WebSocket streaming", () => {
   let ctx: TestContext | null = null;
 
   afterEach(async () => {
@@ -225,5 +230,47 @@ describe("createWebUIServer — WebSocket", () => {
 
     ws1.close();
     ws2.close();
+  });
+});
+
+describe("createWebUIServer — WebSocket clear context", () => {
+  let ctx: TestContext | null = null;
+
+  afterEach(async () => {
+    if (ctx) { await closeServer(ctx); ctx = null; }
+  });
+
+  it("handles clear_context messages and acknowledges completion", async () => {
+    const agent = new StreamingStubAgent();
+    ctx = await startTestServer(agent);
+    const ws = await connectWs(ctx.port);
+
+    ws.send(JSON.stringify({
+      type: "clear_context",
+      clearWorkspace: false,
+    }));
+
+    const receivedTypes: string[] = [];
+    await new Promise<void>((resolve) => {
+      ws.on("message", (data) => {
+        const raw = typeof data === "string" ? data : data.toString("utf-8");
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        if (typeof parsed.type === "string") {
+          receivedTypes.push(parsed.type);
+        }
+        if (
+          receivedTypes.includes("files_changed") &&
+          receivedTypes.includes("clear_context.done")
+        ) {
+          resolve();
+        }
+      });
+      setTimeout(() => resolve(), 5000);
+    });
+
+    expect(agent.clearHistoryCalls).toBe(1);
+    expect(receivedTypes).toContain("files_changed");
+    expect(receivedTypes).toContain("clear_context.done");
+    ws.close();
   });
 });

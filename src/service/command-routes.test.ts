@@ -19,6 +19,7 @@ function createAgentMock(): {
       status: "ready",
       respond,
       respondStream,
+      clearHistory: vi.fn<Agent["clearHistory"]>().mockImplementation(() => undefined),
       shutdown: vi.fn<Agent["shutdown"]>().mockResolvedValue(undefined),
     },
     respond,

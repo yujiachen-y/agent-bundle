@@ -13,6 +13,7 @@ class StubAgent implements Agent {
   public readonly name = "test-agent";
   private statusValue: AgentStatus = "ready";
   public respondStreamEvents: ResponseEvent[] = [];
+  public clearHistoryCalls = 0;
 
   public get status(): AgentStatus {
     return this.statusValue;
@@ -36,6 +37,10 @@ class StubAgent implements Agent {
 
   public async shutdown(): Promise<void> {
     this.statusValue = "stopped";
+  }
+
+  public clearHistory(): void {
+    this.clearHistoryCalls += 1;
   }
 }
 
@@ -130,7 +135,7 @@ describe("createWebUIServer — static assets", () => {
   });
 });
 
-describe("createWebUIServer — API endpoints", () => {
+describe("createWebUIServer — core API endpoints", () => {
   let agent: StubAgent;
   let sandbox: FakeSandbox;
 
@@ -189,6 +194,70 @@ describe("createWebUIServer — API endpoints", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.output).toBe("ok");
+    shutdown();
+  });
+});
+
+describe("createWebUIServer — clear-context API", () => {
+  let agent: StubAgent;
+  let sandbox: FakeSandbox;
+
+  beforeEach(() => {
+    const s = setup();
+    agent = s.agent;
+    sandbox = s.sandbox;
+  });
+
+  it("POST /api/clear-context clears agent history", async () => {
+    const { app, shutdown } = createWebUIServer({ agent, sandbox });
+    const res = await app.request("/api/clear-context", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(agent.clearHistoryCalls).toBe(1);
+    expect(sandbox.execCalls).toEqual([]);
+    shutdown();
+  });
+
+  it("POST /api/clear-context clears workspace files when requested", async () => {
+    const { app, eventBus, shutdown } = createWebUIServer({ agent, sandbox });
+    const events: string[] = [];
+    const unsubscribe = eventBus.subscribe((event) => events.push(event.type));
+
+    const res = await app.request("/api/clear-context", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clearWorkspace: true }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(agent.clearHistoryCalls).toBe(1);
+    expect(sandbox.execCalls[0]?.command).toContain(
+      "find /workspace -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +",
+    );
+    expect(events).toContain("files_changed");
+    unsubscribe();
+    shutdown();
+  });
+
+  it("POST /api/clear-context returns 500 when workspace clear fails", async () => {
+    sandbox.nextExecResult = { stdout: "", stderr: "rm failed", exitCode: 1 };
+    const { app, shutdown } = createWebUIServer({ agent, sandbox });
+
+    const res = await app.request("/api/clear-context", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clearWorkspace: true }),
+    });
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toContain("rm failed");
     shutdown();
   });
 });

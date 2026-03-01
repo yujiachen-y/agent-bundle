@@ -46,6 +46,7 @@ export interface Agent {
 
   respond(input: ResponseInput): Promise<ResponseOutput>;
   respondStream(input: ResponseInput, options?: RespondStreamOptions): AsyncIterable<ResponseEvent>;
+  clearHistory(): void;
   shutdown(): Promise<void>;
 }
 

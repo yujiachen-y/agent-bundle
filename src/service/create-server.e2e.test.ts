@@ -94,6 +94,10 @@ class PiMonoLoopAgent implements Agent {
     this.statusValue = "stopped";
     await this.loop.dispose();
   }
+
+  public clearHistory(): void {
+    // E2E agent is stateless across requests in this test suite.
+  }
 }
 
 function withTemporaryEnv(updates: Record<string, string | undefined>): EnvRestore {

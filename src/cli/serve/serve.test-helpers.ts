@@ -193,6 +193,7 @@ export function createServeHarness(options: ServeHarnessOptions = {}): ServeHarn
   const sandboxIO = createSandboxIO();
 
   const agentShutdownMock = vi.fn(async () => undefined);
+  const agentClearHistoryMock = vi.fn(() => undefined);
   const agent: Agent = {
     name: config.name,
     status: "ready",
@@ -208,6 +209,7 @@ export function createServeHarness(options: ServeHarnessOptions = {}): ServeHarn
     respondStream: async function* () {
       return;
     },
+    clearHistory: agentClearHistoryMock,
     shutdown: agentShutdownMock,
   };
 

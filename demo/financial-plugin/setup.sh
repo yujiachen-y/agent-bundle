@@ -41,7 +41,7 @@ done
 ok "All prerequisites found"
 
 info "Installing npm dependencies"
-npm install
+npm ci
 ok "Dependencies installed"
 
 info "Checking E2B API access with SDK"

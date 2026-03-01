@@ -69,7 +69,7 @@ ok "All prerequisites found"
 # ── 2. ensure CLI availability ────────────────────────────────────
 if [ ! -x "./node_modules/.bin/agent-bundle" ] && [ -f "./package.json" ]; then
   info "Installing demo dependencies"
-  npm install
+  npm ci
   ok "Demo dependencies installed"
 fi
 

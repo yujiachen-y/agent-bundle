@@ -12,7 +12,7 @@ Standalone config-only demo for `agent-bundle dev` with an E2B sandbox.
 
 ```bash
 cd demo/data-analyst-e2b
-npm install
+npm ci
 E2B_API_KEY=... OPENAI_API_KEY=... npm run setup
 ```
 

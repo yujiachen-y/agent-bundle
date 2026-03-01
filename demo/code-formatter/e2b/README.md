@@ -15,7 +15,7 @@ This demo is designed to run as a standalone folder. You do not need to run `pnp
 Run inside this directory:
 
 ```bash
-npm install
+npm ci
 E2B_API_KEY=... OPENAI_API_KEY=... npm run setup
 ```
 

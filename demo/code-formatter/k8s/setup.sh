@@ -27,7 +27,7 @@ done
 ok "All prerequisites found"
 
 info "Installing demo dependencies"
-npm install
+npm ci
 ok "Dependencies installed"
 
 if k3d cluster list -o json 2>/dev/null | grep -q "\"name\":\"${CLUSTER_NAME}\""; then

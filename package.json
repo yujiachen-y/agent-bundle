@@ -53,8 +53,7 @@
     "test:e2e": "pnpm run test:e2e:skills && pnpm run test:e2e:e2b && pnpm run test:e2e:k8s && pnpm run test:e2e:pi-mono && pnpm run test:e2e:service",
     "quality": "pnpm run lint && pnpm run duplicate && pnpm run test",
     "ci": "pnpm run quality",
-    "ci:full": "pnpm run quality && pnpm run test:e2e",
-    "test:e2e:otel-demo": "OTEL_DEMO_E2E=1 vitest run demo/observability-demo/observability-demo.e2e.test.ts"
+    "ci:full": "pnpm run quality && pnpm run test:e2e"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

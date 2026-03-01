@@ -11,7 +11,7 @@ Standalone custom-server demo using OpenTelemetry + generated bundle code.
 
 ```bash
 cd demo/observability-demo
-npm install
+npm ci
 OPENAI_API_KEY=... npm run setup
 ```
 

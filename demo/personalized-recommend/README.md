@@ -12,7 +12,7 @@ Standalone custom-server demo with generated bundle code and two MCP servers.
 
 ```bash
 cd demo/personalized-recommend
-npm install
+npm ci
 E2B_API_KEY=... ANTHROPIC_API_KEY=... npm run setup
 ```
 

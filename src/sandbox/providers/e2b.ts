@@ -82,6 +82,7 @@ export class E2BSandbox implements Sandbox {
 
   private runtime: E2BClientSandbox | null = null;
   private runtimeStatus: SandboxStatus = "idle";
+  private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 
   public readonly file = {
     read: async (path: string): Promise<string> => {
@@ -136,7 +137,9 @@ export class E2BSandbox implements Sandbox {
       await this.runMountHook("preMount");
       await this.runMountHook("postMount");
       this.runtimeStatus = "ready";
+      this.startKeepAlive();
     } catch (error) {
+      this.stopKeepAlive();
       await this.killRuntime(createdRuntime ?? this.runtime);
       this.runtime = null;
       this.runtimeStatus = "stopped";
@@ -276,6 +279,8 @@ export class E2BSandbox implements Sandbox {
   }
 
   public async shutdown(): Promise<void> {
+    this.stopKeepAlive();
+
     if (this.runtime === null) {
       this.runtimeStatus = "stopped";
       return;
@@ -327,17 +332,27 @@ export class E2BSandbox implements Sandbox {
     if (template && template.length > 0) {
       return await E2BClientSandbox.create(template, { timeoutMs });
     }
-
     return await E2BClientSandbox.create({ timeoutMs });
   }
-
   private async runMountHook(hookName: "preMount" | "postMount"): Promise<void> {
     const hook = this.hooks[hookName];
-    if (!hook) {
-      return;
-    }
-
+    if (!hook) { return; }
     await hook(this);
+  }
+
+  private startKeepAlive(): void {
+    if (this.runtime === null) return;
+    this.stopKeepAlive();
+    const timeoutMs = toCreateTimeoutMs(this.config);
+    this.keepAliveTimer = setInterval(() => {
+      if (this.runtime === null) return;
+      try { void this.runtime.setTimeout(timeoutMs).catch(() => undefined); } catch {}
+    }, timeoutMs / 2).unref();
+  }
+  private stopKeepAlive(): void {
+    if (this.keepAliveTimer === null) return;
+    clearInterval(this.keepAliveTimer);
+    this.keepAliveTimer = null;
   }
 
   private async killRuntime(runtime: E2BClientSandbox | null): Promise<void> {

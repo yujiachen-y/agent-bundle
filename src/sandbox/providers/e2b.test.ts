@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SandboxConfig } from "../types.js";
 
@@ -18,6 +18,7 @@ const { E2BSandbox } = await import("./e2b.js");
 
 type MockRuntime = {
   kill: ReturnType<typeof vi.fn>;
+  setTimeout: ReturnType<typeof vi.fn>;
   commands: {
     run: ReturnType<typeof vi.fn>;
     sendStdin: ReturnType<typeof vi.fn>;
@@ -44,6 +45,7 @@ function makeSandboxConfig(overrides?: Partial<SandboxConfig>): SandboxConfig {
 function makeRuntime(overrides?: Partial<MockRuntime>): MockRuntime {
   return {
     kill: vi.fn(async () => undefined),
+    setTimeout: vi.fn(async () => undefined),
     commands: {
       run: vi.fn(async () => ({
         stdout: "stdout",
@@ -77,15 +79,12 @@ describe("E2BSandbox start", () => {
         hookOrder.push("postMount");
       },
     });
-
     expect(sandbox.status).toBe("idle");
     await sandbox.start();
-
     expect(sandbox.status).toBe("ready");
     expect(hookOrder).toEqual(["preMount", "postMount"]);
     expect(createSandboxMock).toHaveBeenCalledWith({ timeoutMs: 90_000 });
   });
-
   it("uses E2B template when configured", async () => {
     const runtime = makeRuntime();
     createSandboxMock.mockResolvedValueOnce(runtime);
@@ -94,14 +93,12 @@ describe("E2BSandbox start", () => {
         e2b: { template: "agent-bundle-template" },
       }),
     );
-
     await sandbox.start();
     expect(createSandboxMock).toHaveBeenCalledWith(
       "agent-bundle-template",
       { timeoutMs: 90_000 },
     );
   });
-
   it("kills runtime when start fails after creation", async () => {
     const runtime = makeRuntime();
     createSandboxMock.mockResolvedValueOnce(runtime);
@@ -110,13 +107,40 @@ describe("E2BSandbox start", () => {
         throw new Error("preMount failed");
       },
     });
-
     await expect(sandbox.start()).rejects.toThrowError("preMount failed");
     expect(runtime.kill).toHaveBeenCalledTimes(1);
     expect(sandbox.status).toBe("stopped");
   });
 });
 
+describe("E2BSandbox keepAlive", () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+  function setupKeepAliveSandbox(overrides?: Partial<MockRuntime>) {
+    const runtime = makeRuntime(overrides);
+    createSandboxMock.mockResolvedValueOnce(runtime);
+    return { runtime, sandbox: new E2BSandbox(makeSandboxConfig({ timeout: 90 })) };
+  }
+  async function startAndAdvanceKeepAlive(sandbox: E2BSandbox): Promise<void> {
+    await sandbox.start();
+    await vi.advanceTimersByTimeAsync(45_000);
+  }
+  it("stops keepAlive timer on shutdown", async () => {
+    const { runtime, sandbox } = setupKeepAliveSandbox();
+    await startAndAdvanceKeepAlive(sandbox);
+    expect(runtime.setTimeout).toHaveBeenCalledWith(90_000);
+    await sandbox.shutdown();
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(runtime.setTimeout).toHaveBeenCalledTimes(1);
+  });
+  it("tolerates keepAlive failure", async () => {
+    const { runtime, sandbox } = setupKeepAliveSandbox({ setTimeout: vi.fn(async () => { throw new Error("setTimeout failed"); }) });
+    await startAndAdvanceKeepAlive(sandbox);
+    expect(runtime.setTimeout).toHaveBeenCalledTimes(1);
+    expect(sandbox.status).toBe("ready");
+    await sandbox.shutdown();
+  });
+});
 describe("E2BSandbox exec and files", () => {
   it("delegates command and file operations to runtime", async () => {
     const runtime = makeRuntime({

@@ -90,16 +90,17 @@ async function handleFileContent(c: Context, sandbox: Sandbox): Promise<Response
 
   const ext = path.extname(resolved).toLowerCase();
   const isImage = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"].includes(ext);
+  const isPdf = ext === ".pdf";
 
   try {
-    if (isImage) {
+    if (isImage || isPdf) {
       assertShellSafePath(resolved);
       const result = await sandbox.exec(`base64 < "${resolved}"`);
       if (result.exitCode !== 0) {
         return c.json({ error: "Not found" }, 404);
       }
       const base64 = result.stdout.replace(/\s/g, "");
-      return c.json({ type: "image", ext, base64 });
+      return c.json({ type: isPdf ? "pdf" : "image", ext, base64 });
     }
 
     const content = await sandbox.file.read(resolved);

@@ -54,12 +54,36 @@ function writeLocalSnapshot(snapshot: Snapshot): void {
 // In-memory mirror of the sandbox memory, updated from tool outputs.
 let localMirror: Snapshot = loadSnapshot() ?? {};
 
-/** Parse a tool result output (string or object) into a plain object. */
+/** Extract the text payload from a raw tool output, unwrapping MCP content arrays. */
+function extractToolText(raw: unknown): string | null {
+  if (typeof raw === "string") return raw;
+  if (typeof raw !== "object" || raw === null) return null;
+
+  // MCP content-array format: { content: [{ type: "text", text: "..." }] }
+  const content = (raw as Record<string, unknown>).content;
+  if (Array.isArray(content)) {
+    const texts = content
+      .filter((item): item is { type: string; text: string } =>
+        typeof item === "object" && item !== null
+        && (item as Record<string, unknown>).type === "text"
+        && typeof (item as Record<string, unknown>).text === "string",
+      )
+      .map((item) => item.text);
+    if (texts.length > 0) return texts.join("\n");
+  }
+
+  return null;
+}
+
+/** Parse a tool result output (string, MCP content array, or object) into a plain object. */
 function parseToolOutput(raw: unknown): Record<string, unknown> | null {
-  try {
-    if (typeof raw === "string") return JSON.parse(raw) as Record<string, unknown>;
-    if (typeof raw === "object" && raw !== null) return raw as Record<string, unknown>;
-  } catch { /* ignore */ }
+  const text = extractToolText(raw);
+  if (text !== null) {
+    try { return JSON.parse(text) as Record<string, unknown>; } catch { /* ignore */ }
+    return null;
+  }
+
+  if (typeof raw === "object" && raw !== null) return raw as Record<string, unknown>;
   return null;
 }
 

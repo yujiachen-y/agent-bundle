@@ -163,6 +163,9 @@ async function createConnectionFromTransport(
   transport: Transport,
 ): Promise<McpConnection> {
   const client = new Client(CLIENT_INFO, { capabilities: {} });
+  client.onerror = (error) => {
+    console.error(`[mcp] ${serverName} transport error:`, error);
+  };
   await client.connect(transport);
 
   const tools = await listAllTools(client);

@@ -218,6 +218,7 @@ export class E2BSandbox implements Sandbox {
         stdin: true,
         cwd: opts?.cwd,
         envs: opts?.env,
+        timeoutMs: 0, // Disable gRPC stream deadline for long-lived processes
         onStdout: async (data) => {
           stdoutController?.enqueue(toBytes(data));
         },

@@ -7,6 +7,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadAllSkills, loadSkill } from "./loader.js";
 
 const CREATED_DIRS: string[] = [];
+const SKILL_MARKDOWN = `---
+name: Extract Line Items
+description: Parse invoice rows from OCR output.
+---
+Use this skill for invoice extraction.
+`;
 
 async function createTempDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "agent-bundle-skills-"));
@@ -15,6 +21,7 @@ async function createTempDirectory(): Promise<string> {
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(
     CREATED_DIRS.splice(0).map(async (directory) => {
       await rm(directory, { recursive: true, force: true });
@@ -27,16 +34,7 @@ describe("loadAllSkills", () => {
     const basePath = await createTempDirectory();
     const skillDir = join(basePath, "skills", "extract-line-items");
     await mkdir(skillDir, { recursive: true });
-    await writeFile(
-      join(skillDir, "SKILL.md"),
-      `---
-name: Extract Line Items
-description: Parse invoice rows from OCR output.
----
-Use this skill for invoice extraction.
-`,
-      "utf8",
-    );
+    await writeFile(join(skillDir, "SKILL.md"), SKILL_MARKDOWN, "utf8");
 
     const skills = await loadAllSkills([{ path: "./skills/extract-line-items" }], basePath);
     expect(skills).toHaveLength(1);
@@ -44,6 +42,7 @@ Use this skill for invoice extraction.
       name: "Extract Line Items",
       description: "Parse invoice rows from OCR output.",
       sourcePath: join(basePath, "skills", "extract-line-items", "SKILL.md"),
+      resourceDir: undefined,
     });
   });
 });
@@ -63,14 +62,7 @@ Missing description field.
       "utf8",
     );
 
-    await expect(
-      loadSkill(
-        { path: "./skills/broken-skill" },
-        {
-          basePath,
-        },
-      ),
-    ).rejects.toThrowError(
+    await expect(loadSkill({ path: "./skills/broken-skill" }, { basePath })).rejects.toThrowError(
       /must define a non-empty frontmatter field: description/,
     );
   });
@@ -80,13 +72,7 @@ describe("loadSkill remote loading and cache", () => {
   it("uses cache on repeated requests", async () => {
     const workspaceDir = await createTempDirectory();
     const cacheDir = join(workspaceDir, "cache");
-    const markdown = `---
-name: OCR Skill
-description: Extract text from images.
----
-Skill body.
-`;
-    const fetchMock = vi.fn(async () => new Response(markdown, { status: 200 }));
+    const fetchMock = vi.fn(async () => new Response(SKILL_MARKDOWN, { status: 200 }));
 
     await loadSkill(
       { url: "https://registry.example.com/skills/ocr" },
@@ -107,18 +93,12 @@ Skill body.
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith("https://registry.example.com/skills/ocr/SKILL.md");
-    expect(secondLoad.name).toBe("OCR Skill");
+    expect(secondLoad.name).toBe("Extract Line Items");
     await expect(readdir(cacheDir)).resolves.toHaveLength(1);
   });
 
   it("builds GitHub raw URL using default ref", async () => {
-    const markdown = `---
-name: GitHub Skill
-description: Test skill.
----
-Skill body.
-`;
-    const fetchMock = vi.fn(async () => new Response(markdown, { status: 200 }));
+    const fetchMock = vi.fn(async () => new Response(SKILL_MARKDOWN, { status: 200 }));
 
     await loadSkill(
       { github: "acme/invoice-skills", skill: "extract-line-items", ref: "main" },

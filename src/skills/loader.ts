@@ -5,24 +5,27 @@ import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import type { SkillEntry } from "../schema/bundle.js";
+import { resolveGithubSkillResources, toGithubSkillRawUrl } from "./github-resources.js";
 
 const DEFAULT_CACHE_DIR = "node_modules/.cache/agent-bundle/skills";
 const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n?/;
+
+type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export type Skill = {
   name: string;
   description: string;
   content: string;
   sourcePath: string;
+  resourceDir?: string;
 };
-
-type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export type LoadSkillOptions = {
   basePath?: string;
   cache?: boolean;
   cacheDir?: string;
   fetchImpl?: FetchLike;
+  resolveResources?: boolean;
 };
 
 export type LoadAllSkillsOptions = Omit<LoadSkillOptions, "basePath">;
@@ -69,28 +72,7 @@ function getMetadataField(
 
 function toLocalSkillFilePath(basePath: string, skillPath: string): string {
   const resolved = resolve(basePath, skillPath);
-  if (resolved.endsWith(".md")) {
-    return resolved;
-  }
-
-  return join(resolved, "SKILL.md");
-}
-
-function toGithubRawUrl(entry: Extract<SkillEntry, { github: string }>): string {
-  const normalizedRef = encodeURIComponent(entry.ref);
-  const skillPath = entry.skill?.trim() ?? "";
-  const withSkillFile = skillPath.length === 0
-    ? "SKILL.md"
-    : skillPath.endsWith(".md")
-      ? skillPath
-      : `${skillPath}/SKILL.md`;
-  const encodedPath = withSkillFile
-    .split("/")
-    .filter((segment) => segment.length > 0)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  return `https://raw.githubusercontent.com/${entry.github}/${normalizedRef}/${encodedPath}`;
+  return resolved.endsWith(".md") ? resolved : join(resolved, "SKILL.md");
 }
 
 function toUrlSkillMarkdownUrl(rawUrl: string): string {
@@ -124,8 +106,7 @@ async function readCachedContent(cachePath: string): Promise<string | null> {
 
 async function fetchRemoteSkillContent(url: string, options: LoadSkillOptions): Promise<string> {
   const shouldUseCache = options.cache ?? true;
-  const cacheDir = options.cacheDir ?? DEFAULT_CACHE_DIR;
-  const cachePath = createCachePath(url, cacheDir);
+  const cachePath = createCachePath(url, options.cacheDir ?? DEFAULT_CACHE_DIR);
 
   if (shouldUseCache) {
     const cachedContent = await readCachedContent(cachePath);
@@ -151,13 +132,14 @@ async function fetchRemoteSkillContent(url: string, options: LoadSkillOptions): 
   return content;
 }
 
-function toSkill(markdown: string, sourcePath: string): Skill {
+function toSkill(markdown: string, sourcePath: string, resourceDir?: string): Skill {
   const parsed = parseFrontmatter(markdown);
   return {
     name: getMetadataField(parsed.frontmatter, "name", sourcePath),
     description: getMetadataField(parsed.frontmatter, "description", sourcePath),
     content: parsed.content,
     sourcePath,
+    resourceDir,
   };
 }
 
@@ -171,16 +153,23 @@ async function loadLocalSkill(
 
   const filePath = toLocalSkillFilePath(options.basePath, entry.path);
   const content = await readFile(filePath, "utf8");
-  return toSkill(content, filePath);
+  return toSkill(content, filePath, options.resolveResources ? dirname(filePath) : undefined);
 }
 
 async function loadGithubSkill(
   entry: Extract<SkillEntry, { github: string }>,
   options: LoadSkillOptions,
 ): Promise<Skill> {
-  const sourceUrl = toGithubRawUrl(entry);
+  const sourceUrl = toGithubSkillRawUrl(entry);
   const content = await fetchRemoteSkillContent(sourceUrl, options);
-  return toSkill(content, sourceUrl);
+  const resourceDir = options.resolveResources
+    ? await resolveGithubSkillResources(entry, {
+      cacheDir: options.cacheDir ?? DEFAULT_CACHE_DIR,
+      fetchImpl: options.fetchImpl,
+      cache: options.cache,
+    })
+    : undefined;
+  return toSkill(content, sourceUrl, resourceDir);
 }
 
 async function loadUrlSkill(

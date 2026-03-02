@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 
@@ -22,6 +22,7 @@ describe("runBuildCommand success path with docker build", () => {
   it("builds execd base image when missing and passes BASE_IMAGE to kubernetes build", async () => {
     const workspaceDir = await createTempWorkspace("build");
     await writeSkill(workspaceDir);
+    await writeFile(join(workspaceDir, "Dockerfile"), "FROM scratch\n", "utf8");
     const configPath = await writeBundleConfig(
       workspaceDir,
       createBundleConfig({
@@ -98,10 +99,85 @@ describe("runBuildCommand success path with docker build", () => {
   });
 });
 
+describe("runBuildCommand merges kubernetes build context", () => {
+  it("builds kubernetes image from merged context with injected skills and tools", async () => {
+    const workspaceDir = await createTempWorkspace("merged-context");
+    await writeSkill(workspaceDir);
+    await writeFile(
+      join(workspaceDir, "Dockerfile"),
+      ["FROM scratch", "RUN echo merged-context", ""].join("\n"),
+      "utf8",
+    );
+    await mkdir(join(workspaceDir, "tools"), { recursive: true });
+    await writeFile(join(workspaceDir, "tools", "setup.sh"), "echo setup\n", "utf8");
+    const configPath = await writeBundleConfig(
+      workspaceDir,
+      createBundleConfig({
+        sandboxLines: [
+          "  provider: kubernetes",
+          "  kubernetes:",
+          "    image: agent-bundle/execd:latest",
+          "    build:",
+          "      dockerfile: ./Dockerfile",
+          "      context: .",
+        ],
+      }),
+    );
+
+    let mergedContextDir = "";
+    let mergedDockerfile = "";
+    let mergedSkill = "";
+    let mergedTool = "";
+    const buildSandboxMock = vi.fn(
+      async (options: {
+        bundleDir: string;
+        dockerfile: string;
+        imageTag: string;
+      }): Promise<BuildSandboxImageResult> => {
+        if (options.imageTag === "agent-bundle/execd:latest") {
+          mergedContextDir = options.bundleDir;
+          mergedDockerfile = await readFile(join(options.bundleDir, options.dockerfile), "utf8");
+          const generatedSkillDirs = await readdir(join(options.bundleDir, "skills"));
+          expect(generatedSkillDirs).toHaveLength(1);
+          mergedSkill = await readFile(
+            join(options.bundleDir, "skills", generatedSkillDirs[0], "SKILL.md"),
+            "utf8",
+          );
+          mergedTool = await readFile(join(options.bundleDir, "tools", "setup.sh"), "utf8");
+        }
+
+        return { imageTag: options.imageTag, exitCode: 0 };
+      },
+    );
+
+    await runBuildCommand(
+      {
+        configPath,
+        outputDir: join(workspaceDir, "dist"),
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+      },
+      {
+        buildSandbox: buildSandboxMock,
+        getPackageVersion: async (): Promise<string> => "0.1.0",
+        inspectDockerImage: async (): Promise<boolean> => false,
+      },
+    );
+
+    expect(mergedDockerfile).toContain("RUN echo merged-context");
+    expect(mergedSkill).toContain("name: FormatCode");
+    expect(mergedTool).toContain("echo setup");
+    await expect(readFile(join(mergedContextDir, "Dockerfile"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+});
+
 describe("runBuildCommand success path with cached execd base image", () => {
   it("reuses cached execd base image when available locally", async () => {
     const workspaceDir = await createTempWorkspace("cached-base");
     await writeSkill(workspaceDir);
+    await writeFile(join(workspaceDir, "Dockerfile"), "FROM scratch\n", "utf8");
     const configPath = await writeBundleConfig(
       workspaceDir,
       createBundleConfig({

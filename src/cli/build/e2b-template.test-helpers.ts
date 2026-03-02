@@ -70,6 +70,7 @@ export async function createLocalSkill(workspaceDir: string): Promise<Skill> {
     description: "Format source code in sandbox",
     content: skillMarkdown,
     sourcePath: join(skillDir, "SKILL.md"),
+    resourceDir: skillDir,
   };
 }
 

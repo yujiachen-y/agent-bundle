@@ -1,12 +1,13 @@
 import { spawn } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { Readable, Writable } from "node:stream";
 
 import { Template, type TemplateClass } from "e2b";
 
 import type { Skill } from "../../skills/loader.js";
+import { writeSkillsBuildContext, writeToolsBuildContext } from "./context/build-context.js";
 
 type SpawnOptions = {
   stdio: ["ignore", "pipe", "pipe"];
@@ -67,10 +68,6 @@ const defaultTemplateBuild: TemplateBuildImpl = async (template, name, options) 
   return await Template.build(template, name, options);
 };
 
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
-
 function pipeIfPresent(
   stream: Readable | null,
   output: Writable,
@@ -102,15 +99,6 @@ function detectTemplateRef(output: string, fallback: string): string {
   return latestRef ?? fallback;
 }
 
-function sanitizeSegment(value: string): string {
-  const sanitized = value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
-  return sanitized.length > 0 ? sanitized : "skill";
-}
-
-function isRemoteSourcePath(path: string): boolean {
-  return /^https?:\/\//.test(path);
-}
-
 function toCliSpawnEnv(): NodeJS.ProcessEnv {
   if (process.env.E2B_ACCESS_TOKEN || !process.env.E2B_API_KEY) {
     return process.env;
@@ -120,96 +108,6 @@ function toCliSpawnEnv(): NodeJS.ProcessEnv {
     ...process.env,
     E2B_ACCESS_TOKEN: process.env.E2B_API_KEY,
   };
-}
-
-async function copyDirectoryRecursive(sourcePath: string, destinationPath: string): Promise<void> {
-  await mkdir(destinationPath, { recursive: true });
-  const entries = await readdir(sourcePath, { withFileTypes: true });
-
-  await Promise.all(
-    entries.map(async (entry) => {
-      const sourceEntryPath = join(sourcePath, entry.name);
-      const destinationEntryPath = join(destinationPath, entry.name);
-
-      if (entry.isDirectory()) {
-        await copyDirectoryRecursive(sourceEntryPath, destinationEntryPath);
-        return;
-      }
-
-      if (entry.isFile()) {
-        await copyFile(sourceEntryPath, destinationEntryPath);
-      }
-    }),
-  );
-}
-
-async function copyLocalSkillFiles(skill: Skill, destinationPath: string): Promise<void> {
-  if (isRemoteSourcePath(skill.sourcePath)) {
-    return;
-  }
-
-  const sourceSkillDir = dirname(skill.sourcePath);
-  const sourceEntries = await readdir(sourceSkillDir, { withFileTypes: true });
-
-  await Promise.all(
-    sourceEntries.map(async (entry) => {
-      if (entry.name === "SKILL.md") {
-        return;
-      }
-
-      const sourceEntryPath = join(sourceSkillDir, entry.name);
-      const destinationEntryPath = join(destinationPath, entry.name);
-
-      if (entry.isDirectory()) {
-        await copyDirectoryRecursive(sourceEntryPath, destinationEntryPath);
-        return;
-      }
-
-      if (entry.isFile()) {
-        await copyFile(sourceEntryPath, destinationEntryPath);
-      }
-    }),
-  );
-}
-
-async function writeSkillsBuildContext(contextDir: string, skills: Skill[]): Promise<void> {
-  const skillsDir = join(contextDir, "skills");
-  await mkdir(skillsDir, { recursive: true });
-
-  await Promise.all(
-    skills.map(async (skill, index) => {
-      const skillDirName = `${String(index + 1).padStart(2, "0")}-${sanitizeSegment(skill.name)}`;
-      const skillDir = join(skillsDir, skillDirName);
-      await mkdir(skillDir, { recursive: true });
-      await writeFile(join(skillDir, "SKILL.md"), skill.content, "utf8");
-      await copyLocalSkillFiles(skill, skillDir);
-    }),
-  );
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      return false;
-    }
-
-    throw error;
-  }
-}
-
-async function writeToolsBuildContext(contextDir: string, bundleDir: string): Promise<void> {
-  const destinationToolsPath = join(contextDir, "tools");
-  const sourceToolsPath = join(bundleDir, "tools");
-
-  if (await pathExists(sourceToolsPath)) {
-    await copyDirectoryRecursive(sourceToolsPath, destinationToolsPath);
-    return;
-  }
-
-  await mkdir(destinationToolsPath, { recursive: true });
 }
 
 async function createBuildContext(options: BuildE2BTemplateOptions): Promise<string> {

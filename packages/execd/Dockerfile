@@ -11,7 +11,9 @@ RUN if command -v apk >/dev/null 2>&1; then \
 
 WORKDIR /app
 RUN mkdir -p /skills /workspace
-COPY src/execd.mjs /app/execd.mjs
+COPY package.json /app/package.json
+RUN npm install --production
+COPY src/*.mjs /app/
 
 EXPOSE 3000
 ENTRYPOINT ["node", "/app/execd.mjs"]

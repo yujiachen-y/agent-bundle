@@ -1,3 +1,4 @@
+import { DockerSandbox } from "./providers/docker.js";
 import { E2BSandbox } from "./providers/e2b.js";
 import { K8sSandbox } from "./providers/kubernetes.js";
 import type {
@@ -6,7 +7,7 @@ import type {
   SandboxConfig,
 } from "./types.js";
 
-const SUPPORTED_SANDBOX_PROVIDERS = ["e2b", "kubernetes"] as const;
+const SUPPORTED_SANDBOX_PROVIDERS = ["e2b", "kubernetes", "docker"] as const;
 
 function resolveProvider(config: SandboxConfig, mode: "build" | "serve"): string {
   if (mode === "serve" && config.serve?.provider) {
@@ -40,6 +41,10 @@ export const createSandbox: CreateSandbox = (
 
   if (provider === "kubernetes") {
     return new K8sSandbox(withProvider(config, "kubernetes"), hooks);
+  }
+
+  if (provider === "docker") {
+    return new DockerSandbox(withProvider(config, "docker"), hooks);
   }
 
   throw new Error(

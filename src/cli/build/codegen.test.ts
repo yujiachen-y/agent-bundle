@@ -85,6 +85,7 @@ describe("build code generation sandbox image refs", () => {
     expect(sandbox.provider).toBe("e2b");
     expect(sandbox.e2b?.template).toBe("invoice-processor:a3f8c2d");
   });
+
 });
 
 describe("build code generation outputs", () => {

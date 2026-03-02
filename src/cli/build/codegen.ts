@@ -23,7 +23,7 @@ type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 export type SandboxImageRef = {
-  provider: "e2b" | "kubernetes";
+  provider: "e2b" | "kubernetes" | "docker";
   ref: string;
 };
 
@@ -201,6 +201,14 @@ export function applySandboxImageRef(
       ...sandbox,
       provider: "kubernetes",
       kubernetes: { ...sandbox.kubernetes, image: imageRef.ref },
+    };
+  }
+
+  if (imageRef.provider === "docker") {
+    return {
+      ...sandbox,
+      provider: "docker",
+      docker: { ...sandbox.docker, image: imageRef.ref },
     };
   }
 

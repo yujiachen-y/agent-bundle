@@ -38,6 +38,7 @@ function createMockSandbox(id: string): Sandbox {
 
 const e2bConstructorMock = vi.fn(() => createMockSandbox("e2b-sandbox"));
 const k8sConstructorMock = vi.fn(() => createMockSandbox("k8s-sandbox"));
+const dockerConstructorMock = vi.fn(() => createMockSandbox("docker-sandbox"));
 
 vi.mock("./providers/e2b.js", () => ({
   E2BSandbox: e2bConstructorMock,
@@ -45,6 +46,10 @@ vi.mock("./providers/e2b.js", () => ({
 
 vi.mock("./providers/kubernetes.js", () => ({
   K8sSandbox: k8sConstructorMock,
+}));
+
+vi.mock("./providers/docker.js", () => ({
+  DockerSandbox: dockerConstructorMock,
 }));
 
 const { createSandbox } = await import("./factory.js");
@@ -64,6 +69,7 @@ function makeConfig(overrides?: Partial<SandboxConfig>): SandboxConfig {
 beforeEach(() => {
   e2bConstructorMock.mockClear();
   k8sConstructorMock.mockClear();
+  dockerConstructorMock.mockClear();
 });
 
 describe("createSandbox", () => {
@@ -114,6 +120,20 @@ describe("createSandbox", () => {
     expect(e2bConstructorMock).not.toHaveBeenCalled();
   });
 
+  it("creates Docker sandbox when provider is docker", () => {
+    const hooks: SandboxHooks = {};
+    const sandbox = createSandbox(makeConfig({ provider: "docker" }), hooks);
+
+    expect(sandbox.id).toBe("docker-sandbox");
+    expect(dockerConstructorMock).toHaveBeenCalledTimes(1);
+    expect(dockerConstructorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "docker" }),
+      hooks,
+    );
+    expect(e2bConstructorMock).not.toHaveBeenCalled();
+    expect(k8sConstructorMock).not.toHaveBeenCalled();
+  });
+
   it("keeps base provider in build mode even if serve override exists", () => {
     const sandbox = createSandbox(
       makeConfig({
@@ -139,12 +159,13 @@ describe("createSandbox", () => {
     const invalidConfig = makeConfig() as SandboxConfig & {
       provider: string;
     };
-    invalidConfig.provider = "docker";
+    invalidConfig.provider = "podman";
 
     expect(() => createSandbox(invalidConfig as SandboxConfig, {})).toThrowError(
-      "Unsupported sandbox provider \"docker\". Supported providers: e2b, kubernetes.",
+      "Unsupported sandbox provider \"podman\". Supported providers: e2b, kubernetes, docker.",
     );
     expect(e2bConstructorMock).not.toHaveBeenCalled();
     expect(k8sConstructorMock).not.toHaveBeenCalled();
+    expect(dockerConstructorMock).not.toHaveBeenCalled();
   });
 });

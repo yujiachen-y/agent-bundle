@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 
-import { spawnKubernetesProcess } from "./kubernetes-spawn.js";
+import { spawnExecdProcess } from "./spawn.js";
 
 type JsonMessage = Record<string, unknown>;
 
@@ -105,7 +105,7 @@ it("spawns via websocket and relays stdin/stdout/stderr/exit", async () => {
   });
 
   await waitForListening(server);
-  const process = await spawnKubernetesProcess(toBaseUrl(server), "python3", ["echo.py"], {
+  const process = await spawnExecdProcess(toBaseUrl(server), "python3", ["echo.py"], {
     cwd: "/workspace",
   });
   expect(process.pid).toBe(321);
@@ -154,7 +154,7 @@ it("encodes env as env command args and forwards kill signals", async () => {
   });
 
   await waitForListening(server);
-  const process = await spawnKubernetesProcess(toBaseUrl(server), "node", ["server.js"], {
+  const process = await spawnExecdProcess(toBaseUrl(server), "node", ["server.js"], {
     env: { A: "1", B: "2" },
   });
   await process.kill("SIGKILL");
@@ -174,8 +174,22 @@ it("rejects when websocket closes before pid is received", async () => {
 
   await waitForListening(server);
   await expect(
-    spawnKubernetesProcess(toBaseUrl(server), "python3", ["echo.py"]),
+    spawnExecdProcess(toBaseUrl(server), "python3", ["echo.py"]),
   ).rejects.toThrow(/closed before process exit/i);
+});
+
+it("rejects with server error when pid is never emitted", async () => {
+  const server = new WebSocketServer({ port: 0 });
+  openServers.push(server);
+
+  server.on("connection", (socket) => {
+    socket.send(JSON.stringify({ type: "error", message: "spawn failed: command not found" }));
+  });
+
+  await waitForListening(server);
+  await expect(
+    spawnExecdProcess(toBaseUrl(server), "missing-command"),
+  ).rejects.toThrow(/spawn failed: command not found/i);
 });
 
 it("rejects exited promise when server emits error event", async () => {
@@ -188,7 +202,7 @@ it("rejects exited promise when server emits error event", async () => {
   });
 
   await waitForListening(server);
-  const process = await spawnKubernetesProcess(toBaseUrl(server), "python3");
+  const process = await spawnExecdProcess(toBaseUrl(server), "python3");
 
   await expect(process.exited).rejects.toThrow("process failed");
 });
@@ -203,7 +217,7 @@ it("rejects exited promise on malformed server message", async () => {
   });
 
   await waitForListening(server);
-  const process = await spawnKubernetesProcess(toBaseUrl(server), "python3");
+  const process = await spawnExecdProcess(toBaseUrl(server), "python3");
 
   await expect(process.exited).rejects.toThrow(/unexpected|invalid|json/i);
 });
@@ -223,7 +237,7 @@ it("rejects exited and closes streams on abrupt socket failure", async () => {
   });
 
   await waitForListening(server);
-  const process = await spawnKubernetesProcess(toBaseUrl(server), "python3");
+  const process = await spawnExecdProcess(toBaseUrl(server), "python3");
 
   await expect(process.exited).rejects.toThrow();
   const [stdout, stderr] = await Promise.all([

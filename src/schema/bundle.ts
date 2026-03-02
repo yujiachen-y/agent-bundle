@@ -19,7 +19,7 @@ const ollamaModelSchema = z
   })
   .strict();
 
-const sandboxProviderSchema = z.enum(["e2b", "kubernetes"]);
+const sandboxProviderSchema = z.enum(["e2b", "kubernetes", "docker"]);
 
 const promptVariableSchema = z
   .string()
@@ -65,6 +65,13 @@ const sandboxSchema = z
         kubeconfig: z.string().min(1).optional(),
         nodeSelector: z.record(z.string(), z.string()).optional(),
         registry: z.string().min(1).optional(),
+        image: z.string().min(1).optional(),
+        build: sandboxBuildSchema.optional(),
+      })
+      .strict()
+      .optional(),
+    docker: z
+      .object({
         image: z.string().min(1).optional(),
         build: sandboxBuildSchema.optional(),
       })

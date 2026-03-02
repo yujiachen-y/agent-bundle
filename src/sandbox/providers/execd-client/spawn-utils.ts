@@ -1,6 +1,8 @@
 import { setTimeout as sleep } from "node:timers/promises";
+
 import WebSocket from "ws";
-import type { SpawnOptions } from "../types.js";
+
+import type { SpawnOptions } from "../../types.js";
 export type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -218,16 +220,21 @@ export function bindSocketEvents(input: {
       }
       if (event.type === "exit") {
         state.hasExited = true;
+        pidDeferred.reject(new Error("Spawn process exited before pid acknowledgement."));
         exitedDeferred.resolve(toExitCode(event));
         streams.closeStreams();
         return;
       }
       state.hasExited = true;
-      exitedDeferred.reject(new Error(event.message));
+      const eventError = new Error(event.message);
+      pidDeferred.reject(eventError);
+      exitedDeferred.reject(eventError);
       streams.closeStreams();
     } catch (error) {
       state.hasExited = true;
-      exitedDeferred.reject(new Error(error instanceof Error ? error.message : String(error)));
+      const parseError = new Error(error instanceof Error ? error.message : String(error));
+      pidDeferred.reject(parseError);
+      exitedDeferred.reject(parseError);
       streams.closeStreams();
     }
   });

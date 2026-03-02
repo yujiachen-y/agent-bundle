@@ -3,6 +3,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 
+import { registerSpawnWebSocket } from './spawn-handler.mjs';
+
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const ALLOWED_ROOTS = ['/skills', '/workspace'];
 const DEFAULT_CWD = '/workspace';
@@ -149,6 +151,12 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : 'bad request' });
   }
+});
+
+registerSpawnWebSocket({
+  server,
+  resolveSandboxPath,
+  defaultCwd: DEFAULT_CWD,
 });
 
 server.listen(PORT, '0.0.0.0', () => {

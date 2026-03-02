@@ -1,4 +1,4 @@
-import type { CommandRunResponse } from "./kubernetes-helpers.js";
+import type { CommandRunResponse } from "./types.js";
 
 type CommandRunRequest = {
   cmd: string;

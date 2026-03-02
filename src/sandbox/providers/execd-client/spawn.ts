@@ -1,6 +1,6 @@
 import WebSocket from "ws";
 
-import type { SpawnOptions, SpawnedProcess } from "../types.js";
+import type { SpawnOptions, SpawnedProcess } from "../../types.js";
 import {
   bindSocketEvents,
   createDeferred,
@@ -10,9 +10,9 @@ import {
   toExitedPromise,
   toWebSocketUrl,
   waitForPid,
-} from "./kubernetes-spawn.utils.js";
+} from "./spawn-utils.js";
 
-export async function spawnKubernetesProcess(
+export async function spawnExecdProcess(
   baseUrl: string,
   command: string,
   args: string[] = [],

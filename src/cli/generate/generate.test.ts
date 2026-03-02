@@ -169,6 +169,46 @@ describe("runGenerateCommand does not trigger docker build", () => {
       ref: "agent-bundle/execd:latest",
     });
   });
+
+  it("uses default docker image ref when docker provider omits image", async () => {
+    const workspaceDir = await createTempWorkspace("gen-docker-default-image");
+    await writeSkill(workspaceDir);
+    await writeFile(join(workspaceDir, "package.json"), "{}", "utf8");
+    const configPath = await writeBundleConfig(
+      workspaceDir,
+      [
+        "name: code-formatter",
+        "model:",
+        "  provider: anthropic",
+        "  model: claude-sonnet-4-20250514",
+        "prompt:",
+        "  system: You are a formatter.",
+        "  variables: []",
+        "sandbox:",
+        "  provider: docker",
+        "  docker: {}",
+        "skills:",
+        "  - path: ./skills/format-code",
+      ].join("\n"),
+    );
+
+    const result = await runGenerateCommand({
+      configPath,
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+    });
+
+    const bundleJsonSource = await readFile(join(result.outputDir, "bundle.json"), "utf8");
+    const bundleJson = JSON.parse(bundleJsonSource) as {
+      sandboxImage: { provider: string; ref: string };
+      sandbox: { docker?: { image?: string } };
+    };
+    expect(bundleJson.sandboxImage).toEqual({
+      provider: "docker",
+      ref: "agent-bundle/execd:latest",
+    });
+    expect(bundleJson.sandbox.docker?.image).toBe("agent-bundle/execd:latest");
+  });
 });
 
 describe("runGenerateCommand validation errors", () => {

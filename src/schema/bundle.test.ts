@@ -173,6 +173,20 @@ describe("parseBundleConfig sandbox validation", () => {
 
     expect(() => parseBundleConfig(config)).toThrowError();
   });
+
+  it("accepts docker as sandbox provider", () => {
+    const config = makeBaseConfig();
+    config.sandbox = {
+      provider: "docker",
+      docker: {
+        image: "agent-bundle/execd:latest",
+      },
+    };
+
+    const parsed = parseBundleConfig(config);
+    expect(parsed.sandbox.provider).toBe("docker");
+    expect(parsed.sandbox.docker?.image).toBe("agent-bundle/execd:latest");
+  });
 });
 
 describe("parseBundleConfig MCP validation", () => {

@@ -15,25 +15,29 @@ import type {
   SandboxStatus,
 } from "../types.js";
 import { quoteShellArg } from "../utils.js";
-import { requestCommandRun } from "./kubernetes-command-run.js";
 import { createCoreApi } from "./kubernetes-kubeconfig.js";
-import { spawnKubernetesProcess } from "./kubernetes-spawn.js";
 import {
-  DIRECT_POD_HEALTH_TIMEOUT_MS,
   DEFAULT_HEALTH_TIMEOUT_MS,
-  READY_POLL_INTERVAL_MS,
-} from "./kubernetes.constants.js";
-import type { FileListResponse, FileReadResponse, PortForwardHandle } from "./kubernetes-helpers.js";
-import {
+  DIRECT_POD_HEALTH_TIMEOUT_MS,
   EXECD_PORT,
+  requestCommandRun,
+  requestJson,
+  READY_POLL_INTERVAL_MS,
+  spawnExecdProcess,
+  toFileEntries,
+  waitForHealth,
+} from "./execd-client/index.js";
+import type {
+  FileListResponse,
+  FileReadResponse,
+} from "./execd-client/index.js";
+import {
   isNotFoundError,
   isPodReady,
-  requestJson,
   startPortForward,
-  toFileEntries,
   unwrapPodResponse,
-  waitForHealth,
 } from "./kubernetes-helpers.js";
+import type { PortForwardHandle } from "./kubernetes-helpers.js";
 
 function isDeleteEndpointMissingError(error: unknown): boolean {
   if (!(error instanceof Error)) {
@@ -160,7 +164,7 @@ export class K8sSandbox implements Sandbox {
     args: string[] = [],
     opts?: SpawnOptions,
   ): Promise<SpawnedProcess> {
-    return await spawnKubernetesProcess(this.getExecdBaseUrl(), command, args, opts);
+    return await spawnExecdProcess(this.getExecdBaseUrl(), command, args, opts);
   }
 
   public async shutdown(): Promise<void> {

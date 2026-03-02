@@ -140,4 +140,24 @@ describe("parseBundleConfig sandbox build validation", () => {
     expect(parsed.sandbox.e2b?.build?.dockerfile).toBe("./e2b.Dockerfile");
     expect(parsed.sandbox.e2b?.build?.context).toBeUndefined();
   });
+
+  it("parses docker build config with and without context", () => {
+    const withContext = makeBaseConfig();
+    withContext.sandbox = {
+      provider: "docker",
+      docker: { image: "agent-bundle/execd:latest", build: { dockerfile: "./Dockerfile", context: "." } },
+    };
+    const p1 = parseBundleConfig(withContext);
+    expect(p1.sandbox.docker?.build?.dockerfile).toBe("./Dockerfile");
+    expect(p1.sandbox.docker?.build?.context).toBe(".");
+
+    const withoutContext = makeBaseConfig();
+    withoutContext.sandbox = {
+      provider: "docker",
+      docker: { image: "agent-bundle/execd:latest", build: { dockerfile: "./Dockerfile" } },
+    };
+    const p2 = parseBundleConfig(withoutContext);
+    expect(p2.sandbox.docker?.build?.dockerfile).toBe("./Dockerfile");
+    expect(p2.sandbox.docker?.build?.context).toBeUndefined();
+  });
 });

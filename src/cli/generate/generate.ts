@@ -7,6 +7,7 @@ import { loadAllCommands } from "../../commands/loader.js";
 import { loadAllPlugins, type LoadPluginOptions } from "../../plugins/loader.js";
 import { mergePluginComponents } from "../../plugins/merge.js";
 import type { BundleConfig } from "../../schema/bundle.js";
+import { DEFAULT_DOCKER_SANDBOX_IMAGE } from "../../sandbox/constants.js";
 import { loadAllSkills } from "../../skills/loader.js";
 import {
   createResolvedBundleConfig,
@@ -62,6 +63,11 @@ function resolveSandboxImageRefFromConfig(config: BundleConfig): SandboxImageRef
     }
 
     return { provider: "kubernetes", ref: image };
+  }
+
+  if (config.sandbox.provider === "docker") {
+    const image = config.sandbox.docker?.image ?? DEFAULT_DOCKER_SANDBOX_IMAGE;
+    return { provider: "docker", ref: image };
   }
 
   const template = config.sandbox.e2b?.template;

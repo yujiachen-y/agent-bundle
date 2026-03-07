@@ -95,7 +95,7 @@ function parseGithubResourceListing(
     throw new Error(`Failed to parse GitHub resource listing from ${sourceUrl}: response is not an array.`);
   }
 
-  return payload.flatMap((item) => {
+  return payload.flatMap((item): GitHubResourceListingEntry[] => {
     if (!item || typeof item !== "object") {
       return [];
     }

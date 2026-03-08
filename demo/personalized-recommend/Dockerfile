@@ -1,5 +1,5 @@
 FROM e2bdev/base:latest
 
-RUN mkdir -p /skills /workspace /mcp
+RUN mkdir -p /skills /data /memory
+RUN npm install -g @modelcontextprotocol/server-filesystem
 COPY ./skills/ /skills/
-COPY ./tools/mcp/memory-server.mjs /mcp/memory-server.mjs

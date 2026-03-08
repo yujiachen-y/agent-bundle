@@ -1,0 +1,12 @@
+[
+  { "id": "p-100", "name": "UltraLight Running Shoes", "category": "fitness", "price": 119, "tags": ["running", "sports", "lightweight"] },
+  { "id": "p-101", "name": "Hydration Smart Bottle", "category": "fitness", "price": 49, "tags": ["hydration", "health", "daily"] },
+  { "id": "p-102", "name": "Trail Backpack 20L", "category": "outdoors", "price": 89, "tags": ["hiking", "travel", "outdoors"] },
+  { "id": "p-103", "name": "Noise-Canceling Headphones", "category": "audio", "price": 249, "tags": ["music", "focus", "wireless"] },
+  { "id": "p-104", "name": "Mechanical Keyboard", "category": "productivity", "price": 139, "tags": ["coding", "typing", "desk"] },
+  { "id": "p-105", "name": "Ergonomic Office Chair", "category": "productivity", "price": 329, "tags": ["desk", "comfort", "work"] },
+  { "id": "p-106", "name": "Pour-Over Coffee Kit", "category": "kitchen", "price": 69, "tags": ["coffee", "home", "morning"] },
+  { "id": "p-107", "name": "Smart Sleep Lamp", "category": "home", "price": 99, "tags": ["sleep", "wellness", "home"] },
+  { "id": "p-108", "name": "Compact Drone 4K", "category": "electronics", "price": 459, "tags": ["camera", "travel", "outdoors"] },
+  { "id": "p-109", "name": "Beginner Yoga Mat", "category": "fitness", "price": 39, "tags": ["yoga", "wellness", "home"] }
+]

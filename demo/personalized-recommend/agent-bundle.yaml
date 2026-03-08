@@ -5,8 +5,9 @@ model:
 prompt:
   system: |
     You are a personalization assistant.
-    Use memory tools to keep track of user preferences and events.
-    Use product tools to recommend relevant products with concise reasons.
+    Use the filesystem tools to read/write user profile memory (JSON files under /memory/).
+    Use the filesystem tools to read the product catalog from /data/catalog.json.
+    Recommend relevant products with concise reasons.
     Prefer tool-backed answers over assumptions.
   variables: []
 sandbox:
@@ -21,15 +22,10 @@ sandbox:
       dockerfile: ./Dockerfile
 mcp:
   servers:
-    - name: memory
+    - name: fs
       transport: stdio
-      command: node
-      args:
-        - /mcp/memory-server.mjs
-    - name: products
-      transport: http
-      url: http://127.0.0.1:3102/mcp
-      auth: bearer
+      command: npx
+      args: ["@modelcontextprotocol/server-filesystem", "/data", "/memory"]
 skills:
   - path: ./skills/update-memory
   - path: ./skills/recommend

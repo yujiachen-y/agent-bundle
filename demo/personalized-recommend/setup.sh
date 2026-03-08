@@ -29,15 +29,6 @@ info "Installing npm dependencies"
 npm ci
 ok "Dependencies installed"
 
-info "Bundling memory STDIO server"
-mkdir -p tools/mcp
-./node_modules/.bin/esbuild \
-  mcp/memory-server-stdio.ts \
-  --bundle --platform=node --target=node20 --format=esm \
-  --outfile=tools/mcp/memory-server.mjs \
-  '--external:node:*'
-ok "STDIO server bundled"
-
 info "Building personalized-recommend bundle"
 npx agent-bundle build --config ./agent-bundle.yaml
 ok "Bundle built"

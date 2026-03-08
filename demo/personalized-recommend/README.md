@@ -1,6 +1,8 @@
 # Personalized Recommend Demo
 
-Standalone custom-server demo with generated bundle code and two MCP servers.
+Standalone custom-server demo that uses
+[@modelcontextprotocol/server-filesystem](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)
+to give the agent read/write access to user profile memory and a product catalog.
 
 ## Prerequisites
 
@@ -16,9 +18,8 @@ npm ci
 E2B_API_KEY=... OPENROUTER_API_KEY=... npm run setup
 ```
 
-The setup script installs dependencies, bundles the memory MCP server with
-esbuild, runs `agent-bundle build`, runs `agent-bundle generate`, then starts
-`tsx main.ts`.
+The setup script installs dependencies, runs `agent-bundle build` and
+`agent-bundle generate`, then starts `tsx main.ts`.
 
 ## Smoke Test
 

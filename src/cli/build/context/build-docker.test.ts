@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 
@@ -65,6 +65,7 @@ describe("runBuildCommand docker provider build", () => {
   it("builds execd base image and docker provider image when docker.build is configured", async () => {
     const workspaceDir = await createTempWorkspace("docker-build");
     await writeSkill(workspaceDir);
+    await writeFile(join(workspaceDir, "Dockerfile"), "FROM scratch\n", "utf8");
     const configPath = await writeBundleConfig(
       workspaceDir,
       createBundleConfig({
@@ -78,9 +79,16 @@ describe("runBuildCommand docker provider build", () => {
         ],
       }),
     );
-    const buildSandboxMock = vi.fn(async (options: { imageTag: string }): Promise<BuildSandboxImageResult> => {
-      return { imageTag: options.imageTag, exitCode: 0 };
-    });
+    let mergedDockerfile = "";
+    const buildSandboxMock = vi.fn(
+      async (options: { bundleDir: string; dockerfile: string; imageTag: string }): Promise<BuildSandboxImageResult> => {
+        if (options.imageTag === "agent-bundle/execd:docker") {
+          mergedDockerfile = await readFile(join(options.bundleDir, options.dockerfile), "utf8");
+        }
+
+        return { imageTag: options.imageTag, exitCode: 0 };
+      },
+    );
     const result = await runBuildCommand(
       {
         configPath,
@@ -102,6 +110,7 @@ describe("runBuildCommand docker provider build", () => {
         BASE_IMAGE: "agent-bundle/execd:0.1.0",
       },
     });
+    expect(mergedDockerfile).toContain("COPY ./skills/ /skills/");
     const bundleJsonSource = await readFile(join(result.outputDir, "bundle.json"), "utf8");
     const bundleJson = JSON.parse(bundleJsonSource) as {
       sandboxImage: { provider: string; ref: string };

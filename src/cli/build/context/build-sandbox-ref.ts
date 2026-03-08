@@ -15,6 +15,7 @@ import { buildSandboxImage } from "../sandbox-image.js";
 import { buildE2BTemplate } from "../e2b-template.js";
 import {
   copyDirectoryRecursive,
+  injectSkillsCopyInstruction,
   writeSkillsBuildContext,
   writeToolsBuildContext,
 } from "./build-context.js";
@@ -54,8 +55,12 @@ function ensureE2BDockerfile(config: BundleConfig): string {
   return dockerfile;
 }
 
-async function buildKubernetesSandboxImage(input: {
-  config: BundleConfig;
+type ExecdProvider = "kubernetes" | "docker";
+
+async function buildExecdSandboxImage(input: {
+  provider: ExecdProvider;
+  imageTag: string;
+  buildConfig: { dockerfile: string; context?: string } | undefined;
   bundleDir: string;
   skills: Skill[];
   buildSandbox: typeof buildSandboxImage;
@@ -63,14 +68,11 @@ async function buildKubernetesSandboxImage(input: {
   stdout: Writable;
   stderr: Writable;
 }): Promise<SandboxImageRef> {
-  const imageTag = ensureKubernetesImage(input.config);
-  const buildConfig = input.config.sandbox.kubernetes?.build;
-
-  if (!buildConfig) {
-    input.stdout.write(`Skipping docker build and using configured image: ${imageTag}\n`);
+  if (!input.buildConfig) {
+    input.stdout.write(`Skipping docker build and using configured image: ${input.imageTag}\n`);
     return {
-      provider: "kubernetes",
-      ref: imageTag,
+      provider: input.provider,
+      ref: input.imageTag,
     };
   }
 
@@ -81,25 +83,27 @@ async function buildKubernetesSandboxImage(input: {
     runtime: input.execdRuntime,
   });
 
-  const dockerfilePath = resolve(input.bundleDir, buildConfig.dockerfile);
-  const userContext = buildConfig.context
-    ? resolve(input.bundleDir, buildConfig.context)
+  const dockerfilePath = resolve(input.bundleDir, input.buildConfig.dockerfile);
+  const userContext = input.buildConfig.context
+    ? resolve(input.bundleDir, input.buildConfig.context)
     : dirname(dockerfilePath);
-  const mergedContextDir = await mkdtemp(join(tmpdir(), "agent-bundle-k8s-"));
+  const mergedContextDir = await mkdtemp(join(tmpdir(), `agent-bundle-${input.provider}-`));
   let buildResult: BuildSandboxImageResult;
 
   try {
     await copyDirectoryRecursive(userContext, mergedContextDir);
     await writeSkillsBuildContext(mergedContextDir, input.skills);
     await writeToolsBuildContext(mergedContextDir, input.bundleDir);
-    await copyFile(dockerfilePath, join(mergedContextDir, "Dockerfile"));
+    const destDockerfile = join(mergedContextDir, "Dockerfile");
+    await copyFile(dockerfilePath, destDockerfile);
+    await injectSkillsCopyInstruction(destDockerfile);
 
-    input.stdout.write(`Building sandbox image with Docker: ${imageTag}\n`);
+    input.stdout.write(`Building sandbox image with Docker: ${input.imageTag}\n`);
     buildResult = await input.buildSandbox({
       bundleDir: mergedContextDir,
       dockerfile: "Dockerfile",
       buildArgs: { BASE_IMAGE: baseImageTag },
-      imageTag,
+      imageTag: input.imageTag,
       stdout: input.stdout,
       stderr: input.stderr,
     });
@@ -107,47 +111,7 @@ async function buildKubernetesSandboxImage(input: {
     await rm(mergedContextDir, { recursive: true, force: true });
   }
 
-  return toBuiltSandboxImageRef("kubernetes", buildResult);
-}
-
-async function buildDockerSandboxImage(input: {
-  config: BundleConfig;
-  bundleDir: string;
-  buildSandbox: typeof buildSandboxImage;
-  execdRuntime: ExecdRuntime;
-  stdout: Writable;
-  stderr: Writable;
-}): Promise<SandboxImageRef> {
-  const imageTag = resolveDockerImage(input.config);
-  const buildConfig = input.config.sandbox.docker?.build;
-
-  if (!buildConfig) {
-    input.stdout.write(`Skipping docker build and using configured image: ${imageTag}\n`);
-    return {
-      provider: "docker",
-      ref: imageTag,
-    };
-  }
-
-  const baseImageTag = await ensureExecdBaseImage({
-    buildSandbox: input.buildSandbox,
-    stdout: input.stdout,
-    stderr: input.stderr,
-    runtime: input.execdRuntime,
-  });
-
-  input.stdout.write(`Building sandbox image with Docker: ${imageTag}\n`);
-  const buildResult = await input.buildSandbox({
-    bundleDir: input.bundleDir,
-    dockerfile: buildConfig.dockerfile,
-    context: buildConfig.context,
-    buildArgs: { BASE_IMAGE: baseImageTag },
-    imageTag,
-    stdout: input.stdout,
-    stderr: input.stderr,
-  });
-
-  return toBuiltSandboxImageRef("docker", buildResult);
+  return toBuiltSandboxImageRef(input.provider, buildResult);
 }
 
 async function buildE2BSandboxImage(input: {
@@ -210,8 +174,10 @@ export async function resolveSandboxImageRef(input: {
   stderr: Writable;
 }): Promise<SandboxImageRef> {
   if (input.config.sandbox.provider === "kubernetes") {
-    return await buildKubernetesSandboxImage({
-      config: input.config,
+    return await buildExecdSandboxImage({
+      provider: "kubernetes",
+      imageTag: ensureKubernetesImage(input.config),
+      buildConfig: input.config.sandbox.kubernetes?.build,
       bundleDir: input.bundleDir,
       skills: input.skills,
       buildSandbox: input.buildSandbox,
@@ -222,9 +188,12 @@ export async function resolveSandboxImageRef(input: {
   }
 
   if (input.config.sandbox.provider === "docker") {
-    return await buildDockerSandboxImage({
-      config: input.config,
+    return await buildExecdSandboxImage({
+      provider: "docker",
+      imageTag: resolveDockerImage(input.config),
+      buildConfig: input.config.sandbox.docker?.build,
       bundleDir: input.bundleDir,
+      skills: input.skills,
       buildSandbox: input.buildSandbox,
       execdRuntime: input.execdRuntime,
       stdout: input.stdout,

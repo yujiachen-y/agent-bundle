@@ -13,7 +13,6 @@ prompt:
     3. Create a professional PPTX presentation with proper layout, formatting,
        and speaker notes
 
-    Use /workspace/ as the working directory for all files.
     Always use the tools available to you - do not produce output without using tools.
     Before replying with results, always read the output files with the Read tool.
   variables: []

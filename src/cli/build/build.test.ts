@@ -165,6 +165,7 @@ describe("runBuildCommand merges kubernetes build context", () => {
     );
 
     expect(mergedDockerfile).toContain("RUN echo merged-context");
+    expect(mergedDockerfile).toContain("COPY ./skills/ /skills/");
     expect(mergedSkill).toContain("name: FormatCode");
     expect(mergedTool).toContain("echo setup");
     await expect(readFile(join(mergedContextDir, "Dockerfile"), "utf8")).rejects.toMatchObject({

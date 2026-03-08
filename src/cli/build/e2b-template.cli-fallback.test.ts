@@ -17,8 +17,7 @@ import { buildE2BTemplate, type SpawnLike } from "./e2b-template.js";
 
 const DEFAULT_DOCKERFILE_CONTENT = [
   "FROM e2bdev/base:latest",
-  "RUN mkdir -p /skills /tools /workspace",
-  "COPY ./skills/ /skills/",
+  "RUN mkdir -p /tools /workspace",
   "COPY ./tools/ /tools/",
   "RUN if [ -f /tools/setup.sh ]; then chmod +x /tools/setup.sh && /tools/setup.sh; fi",
   "",
@@ -57,6 +56,7 @@ async function assertFallbackBuildContext(contextDir: string): Promise<void> {
   await stat(join(contextDir, "tools"));
 
   expect(dockerfile).toContain("FROM e2bdev/base:latest");
+  expect(dockerfile).toContain("COPY ./skills/ /skills/");
   expect(localSkillFile).toContain("name: Format Code");
   expect(localScriptFile).toContain("print('format')");
   expect(remoteSkillFile).toContain("name: Remote Skill");
@@ -176,7 +176,7 @@ describe("buildE2BTemplate CLI fallback dockerfile selection", () => {
     const { contextDir } = await waitForSpawnCall(spawnMock);
     const dockerfile = await readFile(join(contextDir, "e2b.Dockerfile"), "utf8");
     expect(dockerfile).toContain("RUN echo custom-dockerfile");
-    expect(dockerfile).not.toContain("COPY ./skills/ /skills/");
+    expect(dockerfile).toContain("COPY ./skills/ /skills/");
 
     processMock.emitClose(0);
     await expect(buildPromise).resolves.toEqual({

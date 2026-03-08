@@ -7,7 +7,11 @@ import type { Readable, Writable } from "node:stream";
 import { Template, type TemplateClass } from "e2b";
 
 import type { Skill } from "../../skills/loader.js";
-import { writeSkillsBuildContext, writeToolsBuildContext } from "./context/build-context.js";
+import {
+  injectSkillsCopyInstruction,
+  writeSkillsBuildContext,
+  writeToolsBuildContext,
+} from "./context/build-context.js";
 
 type SpawnOptions = {
   stdio: ["ignore", "pipe", "pipe"];
@@ -114,7 +118,9 @@ async function createBuildContext(options: BuildE2BTemplateOptions): Promise<str
   const contextDir = await mkdtemp(join(tmpdir(), "agent-bundle-e2b-"));
   await writeSkillsBuildContext(contextDir, options.skills);
   await writeToolsBuildContext(contextDir, options.bundleDir);
-  await copyFile(options.dockerfile, join(contextDir, E2B_DOCKERFILE_NAME));
+  const destDockerfile = join(contextDir, E2B_DOCKERFILE_NAME);
+  await copyFile(options.dockerfile, destDockerfile);
+  await injectSkillsCopyInstruction(destDockerfile);
 
   return contextDir;
 }

@@ -1,11 +1,17 @@
-import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readlink, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { Skill } from "../../../skills/loader.js";
-import { copySkillResources, writeSkillsBuildContext, writeToolsBuildContext } from "./build-context.js";
+import {
+  copyDirectoryRecursive,
+  copySkillResources,
+  injectSkillsCopyInstruction,
+  writeSkillsBuildContext,
+  writeToolsBuildContext,
+} from "./build-context.js";
 
 const CREATED_DIRS: string[] = [];
 
@@ -62,6 +68,23 @@ describe("copySkillResources", () => {
   });
 });
 
+describe("copyDirectoryRecursive", () => {
+  it("preserves symbolic links", async () => {
+    const workspaceDir = await createTempDirectory("copy-symlink");
+    const sourceDir = join(workspaceDir, "source");
+    const destinationDir = join(workspaceDir, "dest");
+
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "target.txt"), "target\n", "utf8");
+    await symlink("target.txt", join(sourceDir, "target-link.txt"));
+
+    await copyDirectoryRecursive(sourceDir, destinationDir);
+
+    await expect(readlink(join(destinationDir, "target-link.txt"))).resolves.toBe("target.txt");
+    await expect(readFile(join(destinationDir, "target-link.txt"), "utf8")).resolves.toContain("target");
+  });
+});
+
 describe("writeSkillsBuildContext", () => {
   it("creates numbered skill dirs with markdown and optional resources", async () => {
     const workspaceDir = await createTempDirectory("skills-context");
@@ -111,6 +134,100 @@ describe("writeSkillsBuildContext", () => {
     await expect(readFile(join(contextDir, "skills", "01-format-code", "SKILL.md"), "utf8")).resolves.toContain(
       "name: Format Code",
     );
+  });
+});
+
+async function injectAndReadDockerfile(name: string, content: string): Promise<string> {
+  const workspaceDir = await createTempDirectory(name);
+  const dockerfilePath = join(workspaceDir, "Dockerfile");
+  await writeFile(dockerfilePath, content, "utf8");
+  await injectSkillsCopyInstruction(dockerfilePath);
+  return await readFile(dockerfilePath, "utf8");
+}
+
+describe("injectSkillsCopyInstruction basic cases", () => {
+  it("appends COPY instruction to Dockerfile", async () => {
+    const content = await injectAndReadDockerfile(
+      "inject-skills",
+      "FROM e2bdev/base:latest\nRUN echo hello\n",
+    );
+    expect(content).toContain("COPY ./skills/ /skills/");
+    expect(content).toMatch(/RUN echo hello\nCOPY \.\/skills\/ \/skills\/\n$/);
+  });
+
+  it("skips injection when final stage already copies ./skills/ to /skills/", async () => {
+    const original = "FROM e2bdev/base:latest\nCOPY ./skills/ /skills/\nRUN echo hello\n";
+    const content = await injectAndReadDockerfile("inject-skip", original);
+    expect(content).toBe(original);
+  });
+
+  it("injects when COPY ./skills/ appears only in a comment", async () => {
+    const content = await injectAndReadDockerfile(
+      "inject-comment",
+      "FROM e2bdev/base:latest\n# COPY ./skills/ /skills/\nRUN echo hello\n",
+    );
+    expect(content).toContain("# COPY ./skills/ /skills/");
+    expect(content).toMatch(/RUN echo hello\nCOPY \.\/skills\/ \/skills\/\n$/);
+  });
+
+  it("skips injection when final stage already uses COPY --chown for ./skills/", async () => {
+    const content = await injectAndReadDockerfile(
+      "inject-chown",
+      "FROM e2bdev/base:latest\nCOPY --chown=app:app ./skills/ /skills/\n",
+    );
+    expect(content).toBe("FROM e2bdev/base:latest\nCOPY --chown=app:app ./skills/ /skills/\n");
+  });
+
+  it("skips injection when final stage uses JSON-array COPY syntax", async () => {
+    const original = 'FROM e2bdev/base:latest\nCOPY ["./skills/", "/skills/"]\n';
+    const content = await injectAndReadDockerfile("inject-json", original);
+    expect(content).toBe(original);
+  });
+});
+
+describe("injectSkillsCopyInstruction multi-stage cases", () => {
+  it("injects when only a builder stage copies ./skills/ to /skills/", async () => {
+    const content = await injectAndReadDockerfile(
+      "inject-multistage",
+      [
+        "FROM e2bdev/base:latest AS builder",
+        "COPY ./skills/ /skills/",
+        "RUN echo build",
+        "",
+        "FROM e2bdev/base:latest",
+        "RUN echo runtime",
+        "",
+      ].join("\n"),
+    );
+    expect(content).toMatch(/FROM e2bdev\/base:latest\nRUN echo runtime\nCOPY \.\/skills\/ \/skills\/\n$/);
+  });
+
+  it("skips injection when final stage copies skills from an earlier stage", async () => {
+    const original = [
+      "FROM e2bdev/base:latest AS builder",
+      "COPY ./skills/ /tmp/skills/",
+      "",
+      "FROM e2bdev/base:latest",
+      "COPY --from=builder /tmp/skills/ /skills/",
+      "",
+    ].join("\n");
+    const content = await injectAndReadDockerfile("inject-from-stage", original);
+    expect(content).toBe(original);
+  });
+
+  it("injects when final stage copies unrelated content into /skills/", async () => {
+    const content = await injectAndReadDockerfile(
+      "inject-non-skills-from-stage",
+      [
+        "FROM e2bdev/base:latest AS builder",
+        "RUN mkdir -p /tmp/output",
+        "",
+        "FROM e2bdev/base:latest",
+        "COPY --from=builder /tmp/output/ /skills/",
+        "",
+      ].join("\n"),
+    );
+    expect(content).toMatch(/COPY --from=builder \/tmp\/output\/ \/skills\/\nCOPY \.\/skills\/ \/skills\/\n$/);
   });
 });
 

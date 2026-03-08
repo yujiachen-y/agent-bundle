@@ -1,6 +1,6 @@
 FROM e2bdev/base:latest
 
-RUN mkdir -p /skills /workspace && chmod 777 /workspace
+RUN mkdir -p /workspace && chmod 777 /workspace
 
 # Python deps for pdf skill
 RUN pip install --no-cache-dir \

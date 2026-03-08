@@ -1,7 +1,23 @@
-import { copyFile, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  readdir,
+  readFile,
+  readlink,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 
 import type { Skill } from "../../../skills/loader.js";
+
+type DockerInstruction = {
+  keyword: string;
+  stageIndex: number;
+  body: string;
+};
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
@@ -29,6 +45,11 @@ export async function copyDirectoryRecursive(
 
       if (entry.isDirectory()) {
         await copyDirectoryRecursive(sourceEntryPath, destinationEntryPath);
+        return;
+      }
+
+      if (entry.isSymbolicLink()) {
+        await symlink(await readlink(sourceEntryPath), destinationEntryPath);
         return;
       }
 
@@ -61,6 +82,11 @@ export async function copySkillResources(skill: Skill, destinationPath: string):
         return;
       }
 
+      if (entry.isSymbolicLink()) {
+        await symlink(await readlink(sourceEntryPath), destinationEntryPath);
+        return;
+      }
+
       if (entry.isFile()) {
         await copyFile(sourceEntryPath, destinationEntryPath);
       }
@@ -82,6 +108,165 @@ export async function writeSkillsBuildContext(contextDir: string, skills: Skill[
       await copySkillResources(skill, skillDir);
     }),
   );
+}
+
+function parseDockerInstructions(content: string): DockerInstruction[] {
+  const instructions: DockerInstruction[] = [];
+  const pendingLines: string[] = [];
+  let currentStage = -1;
+
+  function flushPendingLines(): void {
+    if (pendingLines.length === 0) {
+      return;
+    }
+
+    const body = pendingLines.join("\n");
+    const keywordMatch = body.trimStart().match(/^([a-zA-Z]+)/);
+    pendingLines.length = 0;
+    if (!keywordMatch) {
+      return;
+    }
+
+    const keyword = keywordMatch[1].toUpperCase();
+    const stageIndex = keyword === "FROM" ? currentStage + 1 : currentStage;
+    instructions.push({ keyword, stageIndex, body });
+    if (keyword === "FROM") {
+      currentStage = stageIndex;
+    }
+  }
+
+  for (const line of content.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (pendingLines.length === 0 && (trimmed === "" || trimmed.startsWith("#"))) {
+      continue;
+    }
+
+    pendingLines.push(line);
+    if (!trimmed.endsWith("\\")) {
+      flushPendingLines();
+    }
+  }
+
+  flushPendingLines();
+  return instructions;
+}
+
+function stripOuterQuotes(value: string): string {
+  return value.replace(/^['"]|['"]$/gu, "");
+}
+
+function normalizeCopyPath(value: string): string {
+  let normalized = stripOuterQuotes(value).trim();
+  if (normalized.endsWith("/.")) {
+    normalized = normalized.slice(0, -2);
+  }
+
+  normalized = normalized.replace(/\/+$/u, "");
+  if (normalized.startsWith("./")) {
+    normalized = normalized.slice(2);
+  }
+
+  return normalized.length > 0 ? normalized : "/";
+}
+
+function isSkillsPath(value: string): boolean {
+  const normalized = normalizeCopyPath(value);
+  if (normalized === "skills") {
+    return true;
+  }
+
+  return normalized.split("/").at(-1) === "skills";
+}
+
+function tokenizeCopyArguments(value: string): string[] {
+  const matches = value.match(/"[^"]*"|'[^']*'|\S+/gu);
+  return matches ?? [];
+}
+
+function parseCopyInstruction(instruction: DockerInstruction): {
+  flags: string[];
+  sources: string[];
+  destination: string;
+} | null {
+  if (instruction.keyword !== "COPY") {
+    return null;
+  }
+
+  const rawArgs = instruction.body
+    .trimStart()
+    .slice(instruction.keyword.length)
+    .replace(/\\\s*\n\s*/gu, " ")
+    .trim();
+  const jsonArgsMatch = rawArgs.match(/^(?<flags>(?:--\S+\s+)*)?(?<json>\[.*\])$/su);
+  if (jsonArgsMatch?.groups?.json) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonArgsMatch.groups.json) as unknown;
+    } catch {
+      return null;
+    }
+
+    if (!Array.isArray(parsed) || parsed.length < 2 || !parsed.every((entry) => typeof entry === "string")) {
+      return null;
+    }
+
+    return {
+      flags: jsonArgsMatch.groups.flags?.trim().split(/\s+/u).filter(Boolean) ?? [],
+      sources: parsed.slice(0, -1),
+      destination: parsed.at(-1) ?? "",
+    };
+  }
+
+  const tokens = tokenizeCopyArguments(rawArgs);
+  if (tokens.length < 2) {
+    return null;
+  }
+
+  let flagEnd = 0;
+  while (flagEnd < tokens.length && tokens[flagEnd].startsWith("--")) {
+    flagEnd += 1;
+  }
+
+  if (tokens.length - flagEnd < 2) {
+    return null;
+  }
+
+  return {
+    flags: tokens.slice(0, flagEnd),
+    sources: tokens.slice(flagEnd, -1),
+    destination: tokens.at(-1) ?? "",
+  };
+}
+
+function hasSkillsCopyInstructionInFinalStage(content: string): boolean {
+  const instructions = parseDockerInstructions(content);
+  const finalStage = instructions.at(-1)?.stageIndex ?? -1;
+  return instructions.some((instruction) => {
+    if (instruction.stageIndex !== finalStage) {
+      return false;
+    }
+
+    const parsed = parseCopyInstruction(instruction);
+    if (!parsed) {
+      return false;
+    }
+
+    const destination = normalizeCopyPath(parsed.destination);
+    if (destination !== "/skills") {
+      return false;
+    }
+
+    return parsed.sources.some(isSkillsPath);
+  });
+}
+
+export async function injectSkillsCopyInstruction(dockerfilePath: string): Promise<void> {
+  const content = await readFile(dockerfilePath, "utf8");
+  if (hasSkillsCopyInstructionInFinalStage(content)) {
+    return;
+  }
+
+  await writeFile(dockerfilePath, content.trimEnd() + "\nCOPY ./skills/ /skills/\n", "utf8");
 }
 
 async function pathExists(path: string): Promise<boolean> {

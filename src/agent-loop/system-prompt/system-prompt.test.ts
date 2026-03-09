@@ -13,13 +13,12 @@ describe("generateSystemPromptTemplate", () => {
     expect(template).toBe("You are a helpful assistant.");
   });
 
-  it("inlines skill content when content is provided", () => {
+  it("renders skill as one-liner with description and sandbox path", () => {
     const skills: SkillSummary[] = [
       {
         name: "Extract Line Items",
         description: "Parse invoice rows from OCR output.",
         sourcePath: "/skills/extract-line-items/SKILL.md",
-        content: "---\nname: Extract Line Items\n---\n\n# Extract\n\nDo the extraction.",
       },
     ];
 
@@ -29,8 +28,9 @@ describe("generateSystemPromptTemplate", () => {
     });
 
     expect(template).toContain("## Skills");
-    expect(template).toContain("### Extract Line Items (/skills/01-extract-line-items/SKILL.md)");
-    expect(template).toContain("Do the extraction.");
+    expect(template).toContain(
+      "- Extract Line Items (/skills/01-extract-line-items/SKILL.md): Parse invoice rows from OCR output.",
+    );
   });
 
   it("falls back to path reference when content is not provided", () => {
@@ -49,7 +49,7 @@ describe("generateSystemPromptTemplate", () => {
 
     expect(template).toContain("## Skills");
     expect(template).toContain(
-      "- Extract Line Items: Parse invoice rows from OCR output. (/skills/01-extract-line-items/SKILL.md)",
+      "- Extract Line Items (/skills/01-extract-line-items/SKILL.md): Parse invoice rows from OCR output.",
     );
   });
 
@@ -61,17 +61,17 @@ describe("generateSystemPromptTemplate", () => {
           name: "Skill One",
           description: "First skill",
           sourcePath: "/skills/skill-one/SKILL.md",
-          content: "# Skill One\n\nFirst.",
         },
         {
           name: "Skill Two",
           description: "Second skill",
           sourcePath: "/skills/skill-two/SKILL.md",
-          content: "# Skill Two\n\nSecond.",
         },
       ],
     });
 
+    expect(template).toContain("- Skill One (/skills/01-skill-one/SKILL.md): First skill");
+    expect(template).toContain("- Skill Two (/skills/02-skill-two/SKILL.md): Second skill");
     expect(template).toMatch(/Skill One[\s\S]*Skill Two/);
   });
 

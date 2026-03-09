@@ -2,7 +2,6 @@ export type SkillSummary = {
   name: string;
   description: string;
   sourcePath: string;
-  content?: string;
 };
 
 export type GenerateSystemPromptInput = {
@@ -27,16 +26,12 @@ function formatSkillsSection(skills: SkillSummary[]): string {
   const sections = skills.map((skill, index) => {
     const sandboxPath = toSandboxSkillPath(index, skill.name);
 
-    if (skill.content) {
-      return `### ${skill.name} (${sandboxPath})\n${skill.content.trim()}`;
-    }
-
     const location = skill.sourcePath.trim();
     if (location.length === 0) {
       throw new Error(`Skill "${skill.name}" is missing sourcePath.`);
     }
 
-    return `- ${skill.name}: ${skill.description} (${sandboxPath})`;
+    return `- ${skill.name} (${sandboxPath}): ${skill.description}`;
   });
 
   return ["## Skills", ...sections].join("\n\n");

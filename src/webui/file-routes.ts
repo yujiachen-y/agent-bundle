@@ -299,6 +299,7 @@ async function handleClearContext(
   agent: Agent,
   sandbox: Sandbox,
   eventBus: WebUIEventBus,
+  onClear?: () => void,
 ): Promise<Response> {
   let clearWorkspace = false;
   try {
@@ -310,6 +311,7 @@ async function handleClearContext(
 
   try {
     await clearContext(agent, sandbox, eventBus, clearWorkspace);
+    onClear?.();
     return c.json({ ok: true });
   } catch (error) {
     return c.json(
@@ -319,11 +321,16 @@ async function handleClearContext(
   }
 }
 
+export type FileRouteOptions = {
+  onContextClear?: () => void;
+};
+
 export function registerFileRoutes(
   app: Hono,
   agent: Agent,
   sandbox: Sandbox,
   eventBus: WebUIEventBus,
+  fileRouteOptions?: FileRouteOptions,
 ): void {
   app.get("/api/files", async (c): Promise<Response> => {
     try {
@@ -336,5 +343,7 @@ export function registerFileRoutes(
   app.get("/api/file-content/*", (c) => handleFileContent(c, sandbox));
   app.post("/api/file-upload", (c) => handleFileUpload(c, sandbox));
   app.get("/api/file-download", (c) => handleFileDownload(c, sandbox));
-  app.post("/api/clear-context", (c) => handleClearContext(c, agent, sandbox, eventBus));
+  app.post("/api/clear-context", (c) =>
+    handleClearContext(c, agent, sandbox, eventBus, fileRouteOptions?.onContextClear),
+  );
 }

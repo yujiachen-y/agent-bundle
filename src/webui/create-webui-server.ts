@@ -25,12 +25,18 @@ export type SkillInfo = {
   description: string;
 };
 
+export type ModelConfigInfo = {
+  provider: string;
+  model: string;
+};
+
 export type WebUIServerOptions = {
   agent: Agent;
   sandbox: Sandbox;
   commands?: readonly Command[];
   skills?: readonly SkillInfo[];
   devMetrics?: DevMetricsCollector;
+  modelConfig?: ModelConfigInfo;
 };
 
 type WsClient = {
@@ -59,16 +65,26 @@ function serveStaticFile(c: Context, filePath: string): Response | null {
 
 const MAX_DEBUG_EVENTS = 10_000;
 
+function countAssistantMessages(history: ResponseInput): number {
+  return history.filter((m) => m.role === "assistant").length;
+}
+
 export function createWebUIServer(options: WebUIServerOptions): {
   app: Hono;
   eventBus: WebUIEventBus;
   handleUpgrade: (request: IncomingMessage, socket: unknown, head: Buffer) => void;
   shutdown: () => void;
 } {
-  const { agent, sandbox, commands, skills, devMetrics } = options;
+  const { agent, sandbox, commands, skills, devMetrics, modelConfig } = options;
   const eventBus = new WebUIEventBus();
   const clients = new Set<WsClient>();
   const debugEvents: ResponseEvent[] = [];
+  // Tracks the number of assistant messages in history when the event buffer
+  // was last reset. This lets the frontend align event turns to the correct
+  // history positions regardless of Clear Events or buffer truncation.
+  // Initialized from the agent's existing history so saved sessions are
+  // aligned correctly from the start.
+  let eventsAssistantOffset = countAssistantMessages(agent.getConversationHistory());
   const app = createServer(agent, commands ? { commands } : undefined);
 
   if (devMetrics) {
@@ -80,6 +96,7 @@ export function createWebUIServer(options: WebUIServerOptions): {
       name: agent.name,
       status: agent.status,
       skills: skills ?? [],
+      ...(modelConfig ? { modelConfig } : {}),
     });
   });
 
@@ -87,6 +104,9 @@ export function createWebUIServer(options: WebUIServerOptions): {
     return c.json({
       systemPrompt: agent.getSystemPrompt(),
       history: agent.getConversationHistory(),
+      events: debugEvents,
+      eventsAssistantOffset: eventsAssistantOffset,
+      eventsTruncated: debugEvents.length >= MAX_DEBUG_EVENTS,
     });
   });
 
@@ -94,8 +114,13 @@ export function createWebUIServer(options: WebUIServerOptions): {
     return c.json({ events: debugEvents });
   });
 
-  app.post("/api/transcript/clear", (c): Response => {
+  function resetDebugEvents(): void {
     debugEvents.length = 0;
+    eventsAssistantOffset = countAssistantMessages(agent.getConversationHistory());
+  }
+
+  app.post("/api/transcript/clear", (c): Response => {
+    resetDebugEvents();
     return c.json({ ok: true });
   });
 
@@ -110,7 +135,7 @@ export function createWebUIServer(options: WebUIServerOptions): {
     return c.json({ ok: true });
   });
 
-  registerFileRoutes(app, agent, sandbox, eventBus);
+  registerFileRoutes(app, agent, sandbox, eventBus, { onContextClear: resetDebugEvents });
   registerSandboxFileRoutes(app, sandbox);
 
   app.get("/assets/:filename", (c): Response | Promise<Response> => {
@@ -126,7 +151,7 @@ export function createWebUIServer(options: WebUIServerOptions): {
   });
 
   const wss = new WebSocketServer({ noServer: true });
-  setupWsConnections(wss, clients, eventBus, agent, sandbox, commands, debugEvents);
+  setupWsConnections(wss, clients, eventBus, agent, sandbox, commands, debugEvents, resetDebugEvents);
 
   function handleUpgrade(request: IncomingMessage, socket: unknown, head: Buffer): void {
     const url = request.url ?? "";
@@ -158,6 +183,7 @@ function setupWsConnections(
   sandbox: Sandbox,
   commands: readonly Command[] | undefined,
   debugEvents: ResponseEvent[],
+  resetDebugEvents: () => void,
 ): void {
   wss.on("connection", (ws: WebSocket) => {
     const unsubscribe = eventBus.subscribe((event: WebUIEvent) => {
@@ -178,7 +204,7 @@ function setupWsConnections(
     }
 
     ws.on("message", (raw: Buffer | string) => {
-      handleWsMessage(raw, ws, agent, sandbox, eventBus, commands ?? [], debugEvents);
+      handleWsMessage(raw, ws, agent, sandbox, eventBus, commands ?? [], debugEvents, resetDebugEvents);
     });
 
     ws.on("close", () => {
@@ -196,6 +222,7 @@ function handleWsMessage(
   eventBus: WebUIEventBus,
   commands: readonly Command[],
   debugEvents: ResponseEvent[],
+  resetDebugEvents: () => void,
 ): void {
   let parsed: unknown;
   try {
@@ -210,7 +237,7 @@ function handleWsMessage(
     return;
   }
   if (parsed.type === "clear_context") {
-    handleClearContextMessage(parsed, ws, agent, sandbox, eventBus);
+    handleClearContextMessage(parsed, ws, agent, sandbox, eventBus, resetDebugEvents);
     return;
   }
   if (parsed.type === "get_transcript") {
@@ -218,6 +245,7 @@ function handleWsMessage(
       type: "transcript",
       history: agent.getConversationHistory(),
       events: debugEvents,
+      eventsTruncated: debugEvents.length >= MAX_DEBUG_EVENTS,
     });
     return;
   }
@@ -254,10 +282,12 @@ function handleClearContextMessage(
   agent: Agent,
   sandbox: Sandbox,
   eventBus: WebUIEventBus,
+  resetDebugEvents: () => void,
 ): void {
   const clearWorkspace = parsed.clearWorkspace === true;
   void clearContext(agent, sandbox, eventBus, clearWorkspace)
     .then(() => {
+      resetDebugEvents();
       safeWsSend(ws, { type: "clear_context.done" });
     })
     .catch((error: unknown) => {

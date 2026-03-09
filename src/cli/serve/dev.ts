@@ -89,6 +89,10 @@ export async function runDevCommand(
       commands: context.commands,
       skills: context.skills,
       devMetrics,
+      modelConfig: {
+        provider: context.config.model.provider,
+        model: context.config.model.model,
+      },
     });
     httpServer = await startHttpServerImpl({
       appFetch: webUI.app.fetch.bind(webUI.app),

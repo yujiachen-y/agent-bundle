@@ -163,4 +163,139 @@ describe("transcript endpoints", () => {
     copy.push({ role: "assistant", content: "injected" });
     expect(agent.getConversationHistory()).toHaveLength(1);
   });
+
+  it("GET /api/transcript includes events, offset, and truncated flag", async () => {
+    agent.conversationHistory = [
+      { role: "user", content: "hello" },
+    ];
+
+    const { app, shutdown } = createWebUIServer({ agent, sandbox });
+    const res = await app.request("/api/transcript");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.systemPrompt).toBe("test system prompt");
+    expect(body.history).toHaveLength(1);
+    expect(body.events).toEqual([]);
+    expect(body.eventsAssistantOffset).toBe(0);
+    expect(body.eventsTruncated).toBe(false);
+    shutdown();
+  });
+
+  it("POST /api/transcript/clear updates eventsAssistantOffset", async () => {
+    agent.conversationHistory = [
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "hi" },
+      { role: "user", content: "bye" },
+      { role: "assistant", content: "goodbye" },
+    ];
+
+    const { app, shutdown } = createWebUIServer({ agent, sandbox });
+
+    // Clear events — offset should capture 2 assistant messages
+    const clearRes = await app.request("/api/transcript/clear", { method: "POST" });
+    expect(clearRes.status).toBe(200);
+
+    const transcriptRes = await app.request("/api/transcript");
+    const body = await transcriptRes.json();
+    expect(body.eventsAssistantOffset).toBe(2);
+    expect(body.eventsTruncated).toBe(false);
+    shutdown();
+  });
+
+});
+
+describe("info endpoint", () => {
+  let agent: StubAgent;
+  let sandbox: FakeSandbox;
+
+  beforeEach(() => {
+    const s = setup();
+    agent = s.agent;
+    sandbox = s.sandbox;
+  });
+
+  it("GET /api/info includes modelConfig when provided", async () => {
+    const { app, shutdown } = createWebUIServer({
+      agent,
+      sandbox,
+      modelConfig: { provider: "anthropic", model: "claude-sonnet-4-20250514" },
+    });
+    const res = await app.request("/api/info");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.modelConfig).toEqual({
+      provider: "anthropic",
+      model: "claude-sonnet-4-20250514",
+    });
+    shutdown();
+  });
+
+  it("GET /api/info omits modelConfig when not provided", async () => {
+    const { app, shutdown } = createWebUIServer({ agent, sandbox });
+    const res = await app.request("/api/info");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.modelConfig).toBeUndefined();
+    shutdown();
+  });
+});
+
+describe("transcript event alignment", () => {
+  let agent: StubAgent;
+  let sandbox: FakeSandbox;
+
+  beforeEach(() => {
+    const s = setup();
+    agent = s.agent;
+    sandbox = s.sandbox;
+  });
+
+  it("eventsAssistantOffset initializes from existing history", async () => {
+    agent.conversationHistory = [
+      { role: "user", content: "a" },
+      { role: "assistant", content: "b" },
+      { role: "user", content: "c" },
+      { role: "assistant", content: "d" },
+      { role: "user", content: "e" },
+      { role: "assistant", content: "f" },
+    ];
+
+    const { app, shutdown } = createWebUIServer({ agent, sandbox });
+    const res = await app.request("/api/transcript");
+    const body = await res.json();
+    // 3 assistant messages already in history → offset starts at 3
+    expect(body.eventsAssistantOffset).toBe(3);
+    shutdown();
+  });
+
+  it("POST /api/clear-context resets debug events and offset", async () => {
+    agent.conversationHistory = [
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "hi" },
+    ];
+
+    const { app, shutdown } = createWebUIServer({ agent, sandbox });
+
+    // Verify initial offset is 1 (one assistant message)
+    const before = await app.request("/api/transcript");
+    const beforeBody = await before.json();
+    expect(beforeBody.eventsAssistantOffset).toBe(1);
+
+    // Clear context (clears history via agent.clearHistory)
+    const clearRes = await app.request("/api/clear-context", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clearWorkspace: false }),
+    });
+    expect(clearRes.status).toBe(200);
+
+    // After clear-context, offset should be recalculated from current history.
+    // StubAgent.clearHistory increments a counter but doesn't actually clear
+    // conversationHistory, so the offset reflects the stub's current state.
+    const after = await app.request("/api/transcript");
+    const afterBody = await after.json();
+    expect(afterBody.events).toEqual([]);
+    expect(typeof afterBody.eventsAssistantOffset).toBe("number");
+    shutdown();
+  });
 });

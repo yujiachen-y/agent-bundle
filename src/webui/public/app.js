@@ -1389,22 +1389,104 @@
   var transcriptRefreshBtn = document.getElementById("transcript-refresh");
   var transcriptCopyBtn = document.getElementById("transcript-copy");
   var transcriptClearBtn = document.getElementById("transcript-clear");
+  var transcriptAutoRefreshToggle = document.getElementById("transcript-auto-refresh-toggle");
+  var transcriptAutoRefreshTimer = null;
 
-  function refreshTranscript() {
-    fetch("/api/transcript")
-      .then(function(res) { return res.json(); })
-      .then(function(data) {
-        renderTranscriptHistory(data.history || [], data.systemPrompt || "");
-      })
-      .catch(function() {
-        if (transcriptList) transcriptList.innerHTML = '<div class="transcript-empty">Failed to load transcript.</div>';
-      });
+  function groupEventsIntoTurns(events) {
+    var turns = [];
+    var current = null;
+    for (var i = 0; i < events.length; i++) {
+      var ev = events[i];
+      if (ev.type === "response.created") {
+        current = {
+          responseId: ev.responseId,
+          textParts: [],
+          finalText: null,
+          toolCalls: [],
+          usage: null,
+          error: null,
+          completed: false,
+        };
+        turns.push(current);
+        continue;
+      }
+      // If we get events before a response.created, create a synthetic turn
+      if (!current) {
+        current = {
+          responseId: null,
+          textParts: [],
+          finalText: null,
+          toolCalls: [],
+          usage: null,
+          error: null,
+          completed: false,
+        };
+        turns.push(current);
+      }
+      if (ev.type === "response.output_text.delta") {
+        current.textParts.push(ev.delta);
+      } else if (ev.type === "response.output_text.done") {
+        current.finalText = ev.text;
+      } else if (ev.type === "response.tool_call.created") {
+        current.toolCalls.push({
+          id: ev.toolCall.id,
+          name: ev.toolCall.name,
+          input: ev.toolCall.input,
+          updates: [],
+          result: null,
+        });
+      } else if (ev.type === "tool_execution_update") {
+        // Match to the corresponding tool call
+        for (var t = current.toolCalls.length - 1; t >= 0; t--) {
+          if (current.toolCalls[t].id === ev.toolCallId) {
+            current.toolCalls[t].updates.push(ev.chunk);
+            break;
+          }
+        }
+      } else if (ev.type === "response.tool_call.done") {
+        for (var r = current.toolCalls.length - 1; r >= 0; r--) {
+          if (current.toolCalls[r].id === ev.result.toolCallId) {
+            current.toolCalls[r].result = ev.result;
+            break;
+          }
+        }
+      } else if (ev.type === "response.completed") {
+        if (ev.output && ev.output.usage) {
+          current.usage = ev.output.usage;
+        }
+        current.completed = true;
+        current = null;
+      } else if (ev.type === "response.error") {
+        current.error = ev.error;
+        current = null;
+      }
+    }
+    return turns;
   }
 
-  function renderTranscriptHistory(history, systemPrompt) {
+  function createCollapsible(headerEl, contentEl, startCollapsed) {
+    var chevron = document.createElement("span");
+    chevron.className = "transcript-chevron";
+    chevron.textContent = startCollapsed ? "\u25b6" : "\u25bc";
+    headerEl.insertBefore(chevron, headerEl.firstChild);
+    headerEl.style.cursor = "pointer";
+    if (startCollapsed) contentEl.classList.add("transcript-content--collapsed");
+    headerEl.addEventListener("click", function() {
+      var isCollapsed = contentEl.classList.toggle("transcript-content--collapsed");
+      chevron.textContent = isCollapsed ? "\u25b6" : "\u25bc";
+    });
+  }
+
+  function renderTranscript(data) {
     if (!transcriptList) return;
     transcriptList.innerHTML = "";
 
+    var systemPrompt = data.systemPrompt || "";
+    var history = data.history || [];
+    var events = data.events || [];
+    var turns = groupEventsIntoTurns(events);
+
+    // System prompt (collapsible)
     if (systemPrompt) {
       var sysEntry = document.createElement("div");
       sysEntry.className = "transcript-entry transcript-entry--system";
@@ -1414,6 +1496,10 @@
       sysBadge.className = "transcript-role-badge transcript-role--system";
       sysBadge.textContent = "SYSTEM PROMPT";
       sysHeader.appendChild(sysBadge);
+      var sysLenBadge = document.createElement("span");
+      sysLenBadge.className = "transcript-meta-badge";
+      sysLenBadge.textContent = systemPrompt.length.toLocaleString() + " chars";
+      sysHeader.appendChild(sysLenBadge);
       sysEntry.appendChild(sysHeader);
       var sysContent = document.createElement("div");
       sysContent.className = "transcript-entry-content";
@@ -1422,116 +1508,390 @@
       sysText.textContent = systemPrompt;
       sysContent.appendChild(sysText);
       sysEntry.appendChild(sysContent);
+      createCollapsible(sysHeader, sysContent, true);
       transcriptList.appendChild(sysEntry);
     }
 
-    if (!history || history.length === 0) {
-      if (!systemPrompt) {
-        transcriptList.innerHTML = '<div class="transcript-empty">No conversation history yet.</div>';
-      }
+    // If no events, fall back to history-only rendering
+    if (turns.length === 0 && history.length > 0) {
+      renderHistoryFallback(history);
       return;
     }
-    history.forEach(function(msg, index) {
-      var entry = document.createElement("div");
-      entry.className = "transcript-entry transcript-entry--" + msg.role;
-
-      var header = document.createElement("div");
-      header.className = "transcript-entry-header";
-      var badge = document.createElement("span");
-      badge.className = "transcript-role-badge transcript-role--" + msg.role;
-      badge.textContent = msg.role.toUpperCase();
-      header.appendChild(badge);
-      var indexSpan = document.createElement("span");
-      indexSpan.className = "transcript-index";
-      indexSpan.textContent = "#" + index;
-      header.appendChild(indexSpan);
-      entry.appendChild(header);
-
-      var content = document.createElement("div");
-      content.className = "transcript-entry-content";
-
-      if (msg.role === "assistant" && msg.tool_calls && msg.tool_calls.length > 0) {
-        if (msg.content) {
-          var textBlock = document.createElement("div");
-          textBlock.className = "transcript-text";
-          textBlock.textContent = msg.content.length > 500 ? msg.content.slice(0, 500) + "..." : msg.content;
-          content.appendChild(textBlock);
-        }
-        msg.tool_calls.forEach(function(tc) {
-          var toolBlock = document.createElement("div");
-          toolBlock.className = "transcript-tool-call";
-          var toolHeader = document.createElement("div");
-          toolHeader.className = "transcript-tool-header";
-          toolHeader.textContent = "Tool: " + tc.name;
-          toolBlock.appendChild(toolHeader);
-          var toolInput = document.createElement("pre");
-          toolInput.className = "transcript-tool-input";
-          toolInput.textContent = JSON.stringify(tc.input, null, 2);
-          toolInput.style.display = "none";
-          toolBlock.appendChild(toolInput);
-          toolHeader.style.cursor = "pointer";
-          toolHeader.addEventListener("click", function() {
-            toolInput.style.display = toolInput.style.display === "none" ? "" : "none";
-          });
-          content.appendChild(toolBlock);
-        });
-      } else if (msg.role === "tool" && msg.tool_results) {
-        msg.tool_results.forEach(function(tr) {
-          var resultBlock = document.createElement("div");
-          resultBlock.className = "transcript-tool-result";
-          var resultHeader = document.createElement("div");
-          resultHeader.className = "transcript-tool-header";
-          resultHeader.textContent = "Result" + (tr.isError ? " (ERROR)" : "") + " [" + tr.toolCallId + "]";
-          resultBlock.appendChild(resultHeader);
-          var resultBody = document.createElement("pre");
-          resultBody.className = "transcript-tool-input";
-          var outputText = typeof tr.output === "string" ? tr.output : JSON.stringify(tr.output, null, 2);
-          resultBody.textContent = outputText.length > 2000 ? outputText.slice(0, 2000) + "..." : outputText;
-          resultBody.style.display = "none";
-          resultBlock.appendChild(resultBody);
-          resultHeader.style.cursor = "pointer";
-          resultHeader.addEventListener("click", function() {
-            resultBody.style.display = resultBody.style.display === "none" ? "" : "none";
-          });
-          if (tr.isError) resultBlock.classList.add("transcript-tool-result--error");
-          content.appendChild(resultBlock);
-        });
-      } else {
-        var textEl = document.createElement("div");
-        textEl.className = "transcript-text";
-        var text = msg.content || "";
-        textEl.textContent = text.length > 1000 ? text.slice(0, 1000) + "..." : text;
-        content.appendChild(textEl);
-      }
-
-      entry.appendChild(content);
-      transcriptList.appendChild(entry);
-    });
-
-    // Also show accumulated event count
-    if (transcriptEvents.length > 0) {
-      var eventsSection = document.createElement("div");
-      eventsSection.className = "transcript-events-summary";
-      eventsSection.textContent = transcriptEvents.length + " streaming events captured this session";
-      transcriptList.appendChild(eventsSection);
+    if (turns.length === 0 && history.length === 0 && !systemPrompt) {
+      transcriptList.innerHTML = '<div class="transcript-empty">No conversation history yet.</div>';
+      return;
     }
+
+    // The server tracks eventsAssistantOffset: the number of assistant
+    // messages that existed when the event buffer was last reset (0 at
+    // startup, updated on Clear Events). Use it directly so events are
+    // aligned to the correct history positions regardless of clears or
+    // buffer truncation.
+    var eventOffset = data.eventsAssistantOffset || 0;
+    var eventsTruncated = !!data.eventsTruncated;
+    var totalAssistants = 0;
+    for (var c = 0; c < history.length; c++) {
+      if (history[c].role === "assistant") totalAssistants++;
+    }
+    var assistantIndex = 0;
+    for (var h = 0; h < history.length; h++) {
+      var msg = history[h];
+      if (msg.role === "user") {
+        renderHistoryMessage(msg, h);
+      } else if (msg.role === "assistant") {
+        var turnIdx = assistantIndex - eventOffset;
+        if (turnIdx >= 0 && turnIdx < turns.length) {
+          renderTurn(turns[turnIdx], turnIdx);
+        } else {
+          renderHistoryMessage(msg, h);
+        }
+        assistantIndex++;
+      } else if (msg.role === "tool") {
+        // Tool results already rendered by the event turn; only show from
+        // history when the preceding assistant was not matched to an event.
+        var prevAssistantTurnIdx = (assistantIndex - 1) - eventOffset;
+        if (prevAssistantTurnIdx < 0 || prevAssistantTurnIdx >= turns.length) {
+          renderHistoryMessage(msg, h);
+        }
+      }
+    }
+
+    // Append any remaining event turns not yet matched to history
+    // (e.g. in-flight streaming turn whose response.completed has not yet
+    // updated conversationHistory).
+    var matchedTurns = Math.min(turns.length, Math.max(0, totalAssistants - eventOffset));
+    for (var t = matchedTurns; t < turns.length; t++) {
+      renderTurn(turns[t], t);
+    }
+
+    // Truncation warning
+    if (eventsTruncated) {
+      var warnEl = document.createElement("div");
+      warnEl.className = "transcript-truncation-warning";
+      warnEl.textContent = "Event buffer full — recent turns may not have event details. Click Clear Events and retry to reset.";
+      transcriptList.appendChild(warnEl);
+    }
+
+    // Cumulative stats
+    renderCumulativeStats(turns);
 
     transcriptList.scrollTop = transcriptList.scrollHeight;
   }
 
+  function renderTurn(turn, turnIndex) {
+    var entry = document.createElement("div");
+    entry.className = "transcript-entry transcript-entry--assistant";
+
+    // Header with metadata badges
+    var header = document.createElement("div");
+    header.className = "transcript-entry-header";
+    var badge = document.createElement("span");
+    badge.className = "transcript-role-badge transcript-role--assistant";
+    badge.textContent = "ASSISTANT";
+    header.appendChild(badge);
+
+    var indexSpan = document.createElement("span");
+    indexSpan.className = "transcript-index";
+    indexSpan.textContent = "#" + turnIndex;
+    header.appendChild(indexSpan);
+
+    // Metadata row
+    var meta = document.createElement("div");
+    meta.className = "transcript-metadata";
+
+    if (turn.usage) {
+      var usageBadge = document.createElement("span");
+      usageBadge.className = "transcript-meta-badge transcript-meta-badge--usage";
+      usageBadge.textContent = turn.usage.totalTokens.toLocaleString() + " tokens";
+      usageBadge.title = "In: " + turn.usage.inputTokens.toLocaleString() + " / Out: " + turn.usage.outputTokens.toLocaleString();
+      meta.appendChild(usageBadge);
+    }
+
+    if (turn.toolCalls.length > 0) {
+      var toolCountBadge = document.createElement("span");
+      toolCountBadge.className = "transcript-meta-badge transcript-meta-badge--tools";
+      toolCountBadge.textContent = turn.toolCalls.length + " tool" + (turn.toolCalls.length > 1 ? "s" : "");
+      meta.appendChild(toolCountBadge);
+    }
+
+    if (turn.error) {
+      var errorBadge = document.createElement("span");
+      errorBadge.className = "transcript-meta-badge transcript-meta-badge--error";
+      errorBadge.textContent = "ERROR";
+      meta.appendChild(errorBadge);
+    }
+
+    if (!turn.completed && !turn.error) {
+      var streamingBadge = document.createElement("span");
+      streamingBadge.className = "transcript-meta-badge transcript-meta-badge--streaming";
+      streamingBadge.textContent = "streaming...";
+      meta.appendChild(streamingBadge);
+    }
+
+    header.appendChild(meta);
+    entry.appendChild(header);
+
+    var content = document.createElement("div");
+    content.className = "transcript-entry-content";
+
+    // Text content
+    var text = turn.finalText || turn.textParts.join("");
+    if (text) {
+      var textBlock = document.createElement("div");
+      textBlock.className = "transcript-text transcript-text--markdown";
+      try {
+        textBlock.innerHTML = marked.parse(text);
+        highlightCodeBlocks(textBlock);
+      } catch (_e) {
+        textBlock.textContent = text;
+      }
+      content.appendChild(textBlock);
+    }
+
+    // Tool calls
+    turn.toolCalls.forEach(function(tc) {
+      var toolBlock = document.createElement("div");
+      toolBlock.className = "transcript-tool-call";
+
+      var toolHeader = document.createElement("div");
+      toolHeader.className = "transcript-tool-header";
+      var toolName = document.createElement("span");
+      toolName.className = "transcript-tool-name";
+      toolName.textContent = tc.name;
+      toolHeader.appendChild(toolName);
+
+      if (tc.result) {
+        var statusIcon = document.createElement("span");
+        statusIcon.className = tc.result.isError ? "transcript-tool-status transcript-tool-status--error" : "transcript-tool-status transcript-tool-status--ok";
+        statusIcon.textContent = tc.result.isError ? "error" : "done";
+        toolHeader.appendChild(statusIcon);
+      }
+      toolBlock.appendChild(toolHeader);
+
+      var toolBody = document.createElement("div");
+      toolBody.className = "transcript-tool-body";
+
+      // Input section
+      var inputLabel = document.createElement("div");
+      inputLabel.className = "transcript-tool-section-label";
+      inputLabel.textContent = "Input";
+      toolBody.appendChild(inputLabel);
+      var inputPre = document.createElement("pre");
+      inputPre.className = "transcript-tool-input";
+      inputPre.textContent = JSON.stringify(tc.input, null, 2);
+      toolBody.appendChild(inputPre);
+
+      // Output / result section
+      if (tc.result) {
+        var outputLabel = document.createElement("div");
+        outputLabel.className = "transcript-tool-section-label";
+        if (tc.result.isError) outputLabel.classList.add("transcript-tool-section-label--error");
+        outputLabel.textContent = tc.result.isError ? "Error Output" : "Output";
+        toolBody.appendChild(outputLabel);
+        var outputPre = document.createElement("pre");
+        outputPre.className = "transcript-tool-input";
+        if (tc.result.isError) outputPre.classList.add("transcript-tool-input--error");
+        var outText = typeof tc.result.output === "string" ? tc.result.output : JSON.stringify(tc.result.output, null, 2);
+        outputPre.textContent = outText.length > 4000 ? outText.slice(0, 4000) + "\n... (truncated)" : outText;
+        toolBody.appendChild(outputPre);
+      } else if (tc.updates.length > 0) {
+        var updateLabel = document.createElement("div");
+        updateLabel.className = "transcript-tool-section-label";
+        updateLabel.textContent = "Streaming Output";
+        toolBody.appendChild(updateLabel);
+        var updatePre = document.createElement("pre");
+        updatePre.className = "transcript-tool-input";
+        updatePre.textContent = tc.updates.join("");
+        toolBody.appendChild(updatePre);
+      }
+
+      toolBlock.appendChild(toolBody);
+      createCollapsible(toolHeader, toolBody, true);
+
+      if (tc.result && tc.result.isError) toolBlock.classList.add("transcript-tool-call--error");
+      content.appendChild(toolBlock);
+    });
+
+    // Usage breakdown
+    if (turn.usage) {
+      var usageBar = document.createElement("div");
+      usageBar.className = "transcript-usage";
+      usageBar.innerHTML =
+        '<span class="transcript-usage-item"><span class="transcript-usage-label">In:</span> <span class="transcript-usage-value">' + turn.usage.inputTokens.toLocaleString() + '</span></span>' +
+        '<span class="transcript-usage-item"><span class="transcript-usage-label">Out:</span> <span class="transcript-usage-value">' + turn.usage.outputTokens.toLocaleString() + '</span></span>' +
+        '<span class="transcript-usage-item"><span class="transcript-usage-label">Total:</span> <span class="transcript-usage-value">' + turn.usage.totalTokens.toLocaleString() + '</span></span>';
+      content.appendChild(usageBar);
+    }
+
+    // Error message
+    if (turn.error) {
+      var errorBlock = document.createElement("div");
+      errorBlock.className = "transcript-error";
+      errorBlock.textContent = turn.error;
+      content.appendChild(errorBlock);
+    }
+
+    entry.appendChild(content);
+    transcriptList.appendChild(entry);
+  }
+
+  function renderHistoryFallback(history) {
+    history.forEach(function(msg, index) {
+      renderHistoryMessage(msg, index);
+    });
+  }
+
+  function renderHistoryMessage(msg, index) {
+    var entry = document.createElement("div");
+    entry.className = "transcript-entry transcript-entry--" + msg.role;
+    var header = document.createElement("div");
+    header.className = "transcript-entry-header";
+    var badge = document.createElement("span");
+    badge.className = "transcript-role-badge transcript-role--" + msg.role;
+    badge.textContent = msg.role.toUpperCase();
+    header.appendChild(badge);
+    var indexSpan = document.createElement("span");
+    indexSpan.className = "transcript-index";
+    indexSpan.textContent = "#" + index;
+    header.appendChild(indexSpan);
+    entry.appendChild(header);
+
+    var content = document.createElement("div");
+    content.className = "transcript-entry-content";
+
+    if (msg.role === "assistant" && msg.tool_calls && msg.tool_calls.length > 0) {
+      // Assistant message with tool calls
+      if (msg.content) {
+        var textBlock = document.createElement("div");
+        textBlock.className = "transcript-text";
+        textBlock.textContent = msg.content.length > 2000 ? msg.content.slice(0, 2000) + "..." : msg.content;
+        content.appendChild(textBlock);
+      }
+      msg.tool_calls.forEach(function(tc) {
+        var toolBlock = document.createElement("div");
+        toolBlock.className = "transcript-tool-call";
+        var toolHeader = document.createElement("div");
+        toolHeader.className = "transcript-tool-header";
+        var toolName = document.createElement("span");
+        toolName.className = "transcript-tool-name";
+        toolName.textContent = tc.name;
+        toolHeader.appendChild(toolName);
+        toolBlock.appendChild(toolHeader);
+        var toolBody = document.createElement("div");
+        toolBody.className = "transcript-tool-body";
+        var inputLabel = document.createElement("div");
+        inputLabel.className = "transcript-tool-section-label";
+        inputLabel.textContent = "Input";
+        toolBody.appendChild(inputLabel);
+        var inputPre = document.createElement("pre");
+        inputPre.className = "transcript-tool-input";
+        inputPre.textContent = JSON.stringify(tc.input, null, 2);
+        toolBody.appendChild(inputPre);
+        toolBlock.appendChild(toolBody);
+        createCollapsible(toolHeader, toolBody, true);
+        content.appendChild(toolBlock);
+      });
+    } else if (msg.role === "tool" && msg.tool_results) {
+      // Tool result message
+      msg.tool_results.forEach(function(tr) {
+        var resultBlock = document.createElement("div");
+        resultBlock.className = "transcript-tool-result";
+        if (tr.isError) resultBlock.classList.add("transcript-tool-call--error");
+        var resultHeader = document.createElement("div");
+        resultHeader.className = "transcript-tool-header";
+        var resultLabel = document.createElement("span");
+        resultLabel.className = "transcript-tool-name";
+        resultLabel.textContent = "Result [" + tr.toolCallId + "]";
+        resultHeader.appendChild(resultLabel);
+        if (tr.isError) {
+          var errStatus = document.createElement("span");
+          errStatus.className = "transcript-tool-status transcript-tool-status--error";
+          errStatus.textContent = "error";
+          resultHeader.appendChild(errStatus);
+        }
+        resultBlock.appendChild(resultHeader);
+        var resultBody = document.createElement("div");
+        resultBody.className = "transcript-tool-body";
+        var outputLabel = document.createElement("div");
+        outputLabel.className = "transcript-tool-section-label";
+        if (tr.isError) outputLabel.classList.add("transcript-tool-section-label--error");
+        outputLabel.textContent = tr.isError ? "Error Output" : "Output";
+        resultBody.appendChild(outputLabel);
+        var outputPre = document.createElement("pre");
+        outputPre.className = "transcript-tool-input";
+        if (tr.isError) outputPre.classList.add("transcript-tool-input--error");
+        var outText = typeof tr.output === "string" ? tr.output : JSON.stringify(tr.output, null, 2);
+        outputPre.textContent = outText.length > 4000 ? outText.slice(0, 4000) + "\n... (truncated)" : outText;
+        resultBody.appendChild(outputPre);
+        resultBlock.appendChild(resultBody);
+        createCollapsible(resultHeader, resultBody, true);
+        content.appendChild(resultBlock);
+      });
+    } else {
+      // Plain text message
+      var textEl = document.createElement("div");
+      textEl.className = "transcript-text";
+      var text = msg.content || "";
+      textEl.textContent = text.length > 2000 ? text.slice(0, 2000) + "..." : text;
+      content.appendChild(textEl);
+    }
+
+    entry.appendChild(content);
+    transcriptList.appendChild(entry);
+  }
+
+  function renderCumulativeStats(turns) {
+    if (turns.length === 0) return;
+    var totalInputTokens = 0;
+    var totalOutputTokens = 0;
+    var totalToolCalls = 0;
+    turns.forEach(function(t) {
+      if (t.usage) {
+        totalInputTokens += t.usage.inputTokens;
+        totalOutputTokens += t.usage.outputTokens;
+      }
+      totalToolCalls += t.toolCalls.length;
+    });
+    var statsBar = document.createElement("div");
+    statsBar.className = "transcript-cumulative-stats";
+    statsBar.innerHTML =
+      '<span>' + turns.length + ' turn' + (turns.length > 1 ? 's' : '') + '</span>' +
+      '<span>' + totalToolCalls + ' tool call' + (totalToolCalls !== 1 ? 's' : '') + '</span>' +
+      '<span>' + (totalInputTokens + totalOutputTokens).toLocaleString() + ' total tokens</span>';
+    transcriptList.appendChild(statsBar);
+  }
+
+  function refreshTranscript() {
+    fetch("/api/transcript")
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        renderTranscript(data);
+      })
+      .catch(function() {
+        if (transcriptList) transcriptList.innerHTML = '<div class="transcript-empty">Failed to load transcript.</div>';
+      });
+  }
+
   if (transcriptRefreshBtn) {
     transcriptRefreshBtn.addEventListener("click", refreshTranscript);
+  }
+  if (transcriptAutoRefreshToggle) {
+    transcriptAutoRefreshToggle.addEventListener("change", function() {
+      if (transcriptAutoRefreshToggle.checked) {
+        transcriptAutoRefreshTimer = setInterval(refreshTranscript, 2000);
+      } else {
+        clearInterval(transcriptAutoRefreshTimer);
+        transcriptAutoRefreshTimer = null;
+      }
+    });
   }
   if (transcriptCopyBtn) {
     transcriptCopyBtn.addEventListener("click", function() {
       fetch("/api/transcript")
         .then(function(res) { return res.json(); })
         .then(function(data) {
-          return fetch("/api/transcript/events").then(function(res) { return res.json(); }).then(function(evtData) {
-            var combined = { history: data.history, events: evtData.events };
-            navigator.clipboard.writeText(JSON.stringify(combined, null, 2)).then(function() {
-              showToast("Transcript copied to clipboard.", false);
-            });
+          navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(function() {
+            showToast("Transcript copied to clipboard.", false);
           });
         })
         .catch(function() { showToast("Failed to copy transcript.", true); });

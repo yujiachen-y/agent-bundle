@@ -17,6 +17,7 @@ import { createServer } from "../service/create-server.js";
 import { substituteArguments } from "../service/command-routes.js";
 import { WebUIEventBus, type WebUIEvent } from "./event-bus.js";
 import { clearContext, registerFileRoutes, toContentType } from "./file-routes.js";
+import { registerSandboxFileRoutes } from "./sandbox-file-routes.js";
 
 export type SkillInfo = {
   name: string;
@@ -54,6 +55,8 @@ function serveStaticFile(c: Context, filePath: string): Response | null {
   }
 }
 
+const MAX_DEBUG_EVENTS = 10_000;
+
 export function createWebUIServer(options: WebUIServerOptions): {
   app: Hono;
   eventBus: WebUIEventBus;
@@ -63,6 +66,7 @@ export function createWebUIServer(options: WebUIServerOptions): {
   const { agent, sandbox, commands, skills } = options;
   const eventBus = new WebUIEventBus();
   const clients = new Set<WsClient>();
+  const debugEvents: ResponseEvent[] = [];
   const app = createServer(agent, commands ? { commands } : undefined);
 
   app.get("/api/info", (c): Response => {
@@ -73,7 +77,24 @@ export function createWebUIServer(options: WebUIServerOptions): {
     });
   });
 
+  app.get("/api/transcript", (c): Response => {
+    return c.json({
+      systemPrompt: agent.getSystemPrompt(),
+      history: agent.getConversationHistory(),
+    });
+  });
+
+  app.get("/api/transcript/events", (c): Response => {
+    return c.json({ events: debugEvents });
+  });
+
+  app.post("/api/transcript/clear", (c): Response => {
+    debugEvents.length = 0;
+    return c.json({ ok: true });
+  });
+
   registerFileRoutes(app, agent, sandbox, eventBus);
+  registerSandboxFileRoutes(app, sandbox);
 
   app.get("/assets/:filename", (c): Response | Promise<Response> => {
     const filename = c.req.param("filename");
@@ -88,7 +109,7 @@ export function createWebUIServer(options: WebUIServerOptions): {
   });
 
   const wss = new WebSocketServer({ noServer: true });
-  setupWsConnections(wss, clients, eventBus, agent, sandbox, commands);
+  setupWsConnections(wss, clients, eventBus, agent, sandbox, commands, debugEvents);
 
   function handleUpgrade(request: IncomingMessage, socket: unknown, head: Buffer): void {
     const url = request.url ?? "";
@@ -119,6 +140,7 @@ function setupWsConnections(
   agent: Agent,
   sandbox: Sandbox,
   commands: readonly Command[] | undefined,
+  debugEvents: ResponseEvent[],
 ): void {
   wss.on("connection", (ws: WebSocket) => {
     const unsubscribe = eventBus.subscribe((event: WebUIEvent) => {
@@ -139,7 +161,7 @@ function setupWsConnections(
     }
 
     ws.on("message", (raw: Buffer | string) => {
-      handleWsMessage(raw, ws, agent, sandbox, eventBus, commands ?? []);
+      handleWsMessage(raw, ws, agent, sandbox, eventBus, commands ?? [], debugEvents);
     });
 
     ws.on("close", () => {
@@ -156,6 +178,7 @@ function handleWsMessage(
   sandbox: Sandbox,
   eventBus: WebUIEventBus,
   commands: readonly Command[],
+  debugEvents: ResponseEvent[],
 ): void {
   let parsed: unknown;
   try {
@@ -166,18 +189,26 @@ function handleWsMessage(
 
   if (!isRecord(parsed)) return;
   if (parsed.type === "command") {
-    handleCommandMessage(parsed, ws, agent, eventBus, commands);
+    handleCommandMessage(parsed, ws, agent, eventBus, commands, debugEvents);
     return;
   }
   if (parsed.type === "clear_context") {
     handleClearContextMessage(parsed, ws, agent, sandbox, eventBus);
     return;
   }
+  if (parsed.type === "get_transcript") {
+    safeWsSend(ws, {
+      type: "transcript",
+      history: agent.getConversationHistory(),
+      events: debugEvents,
+    });
+    return;
+  }
   if (parsed.type !== "chat") return;
 
   const input = parsed.input;
   if (!Array.isArray(input) || input.length === 0) return;
-  void streamAgentResponse(agent, input as ResponseInput, eventBus);
+  void streamAgentResponse(agent, input as ResponseInput, eventBus, debugEvents);
 }
 
 function handleCommandMessage(
@@ -186,6 +217,7 @@ function handleCommandMessage(
   agent: Agent,
   eventBus: WebUIEventBus,
   commands: readonly Command[],
+  debugEvents: ResponseEvent[],
 ): void {
   const name = typeof parsed.name === "string" ? parsed.name : "";
   const args = typeof parsed.args === "string" ? parsed.args : "";
@@ -196,7 +228,7 @@ function handleCommandMessage(
   }
   const content = substituteArguments(command.content, args);
   const input: ResponseInput = [{ role: "user", content }];
-  void streamAgentResponse(agent, input, eventBus);
+  void streamAgentResponse(agent, input, eventBus, debugEvents);
 }
 
 function handleClearContextMessage(
@@ -232,10 +264,14 @@ async function streamAgentResponse(
   agent: Agent,
   input: ResponseInput,
   eventBus: WebUIEventBus,
+  debugEvents: ResponseEvent[],
 ): Promise<void> {
   try {
     for await (const event of agent.respondStream(input)) {
       eventBus.emit({ type: "agent_event", event });
+      if (debugEvents.length < MAX_DEBUG_EVENTS) {
+        debugEvents.push(event);
+      }
     }
   } catch (error) {
     const errorEvent: ResponseEvent = {
@@ -243,5 +279,8 @@ async function streamAgentResponse(
       error: error instanceof Error ? error.message : String(error),
     };
     eventBus.emit({ type: "agent_event", event: errorEvent });
+    if (debugEvents.length < MAX_DEBUG_EVENTS) {
+      debugEvents.push(errorEvent);
+    }
   }
 }

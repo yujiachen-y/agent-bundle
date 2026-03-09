@@ -46,6 +46,8 @@ export interface Agent {
 
   respond(input: ResponseInput): Promise<ResponseOutput>;
   respondStream(input: ResponseInput, options?: RespondStreamOptions): AsyncIterable<ResponseEvent>;
+  getConversationHistory(): ResponseInput;
+  getSystemPrompt(): string;
   clearHistory(): void;
   shutdown(): Promise<void>;
 }

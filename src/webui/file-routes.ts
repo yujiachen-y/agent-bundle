@@ -16,6 +16,88 @@ export type FileTreeNode = {
 
 export const WORKSPACE_ROOT = "/workspace";
 
+const CONTENT_TYPES: Record<string, string> = {
+  ".c": "text/plain; charset=utf-8",
+  ".cc": "text/plain; charset=utf-8",
+  ".cpp": "text/plain; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+  ".env": "text/plain; charset=utf-8",
+  ".gif": "image/gif",
+  ".go": "text/plain; charset=utf-8",
+  ".h": "text/plain; charset=utf-8",
+  ".hpp": "text/plain; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".ini": "text/plain; charset=utf-8",
+  ".java": "text/plain; charset=utf-8",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".js": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".log": "text/plain; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".py": "text/plain; charset=utf-8",
+  ".rb": "text/plain; charset=utf-8",
+  ".rs": "text/plain; charset=utf-8",
+  ".sh": "text/plain; charset=utf-8",
+  ".sql": "text/plain; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".toml": "text/plain; charset=utf-8",
+  ".ts": "text/plain; charset=utf-8",
+  ".tsx": "text/plain; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".webp": "image/webp",
+  ".xml": "application/xml; charset=utf-8",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".yaml": "text/plain; charset=utf-8",
+  ".yml": "text/plain; charset=utf-8",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+
+const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
+const TEXT_EXTENSIONS = new Set([
+  ".c",
+  ".cc",
+  ".cpp",
+  ".css",
+  ".csv",
+  ".env",
+  ".go",
+  ".h",
+  ".hpp",
+  ".html",
+  ".ini",
+  ".java",
+  ".js",
+  ".json",
+  ".log",
+  ".md",
+  ".mjs",
+  ".py",
+  ".rb",
+  ".rs",
+  ".sh",
+  ".sql",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".txt",
+  ".xml",
+  ".yaml",
+  ".yml",
+]);
+const TEXT_FILE_NAMES = new Set([".dockerignore", ".gitignore", ".npmrc", "dockerfile", "license", "makefile", "readme"]);
+const UNSUPPORTED_PREVIEW_EXTENSIONS = new Set([
+  ".7z", ".avi", ".bin", ".doc", ".docx", ".gz", ".mov", ".mp3",
+  ".mp4", ".ppt", ".pptx", ".tar", ".wav", ".xls", ".xlsx", ".zip",
+]);
+
+type PreviewType = "image" | "pdf" | "text" | "unsupported";
+
 /** Strict prefix check — prevents `/workspacevil` from passing. */
 function isWithinWorkspace(resolved: string): boolean {
   return resolved === WORKSPACE_ROOT || resolved.startsWith(WORKSPACE_ROOT + "/");
@@ -31,15 +113,27 @@ function assertShellSafePath(filePath: string): void {
 }
 
 export function toContentType(ext: string): string {
-  switch (ext) {
-    case ".html": return "text/html; charset=utf-8";
-    case ".css": return "text/css; charset=utf-8";
-    case ".js": return "application/javascript; charset=utf-8";
-    case ".json": return "application/json; charset=utf-8";
-    case ".svg": return "image/svg+xml";
-    case ".png": return "image/png";
-    default: return "application/octet-stream";
-  }
+  return CONTENT_TYPES[ext] ?? "application/octet-stream";
+}
+
+function isTextPreviewPath(resolved: string, ext: string): boolean {
+  if (TEXT_EXTENSIONS.has(ext)) return true;
+  const fileName = path.basename(resolved).toLowerCase();
+  return fileName.startsWith(".env") || TEXT_FILE_NAMES.has(fileName);
+}
+
+function getPreviewType(resolved: string, ext: string): PreviewType {
+  if (IMAGE_EXTENSIONS.has(ext)) return "image";
+  if (ext === ".pdf") return "pdf";
+  if (isTextPreviewPath(resolved, ext)) return "text";
+  if (UNSUPPORTED_PREVIEW_EXTENSIONS.has(ext)) return "unsupported";
+  return "unsupported";
+}
+
+async function fileExists(sandbox: Sandbox, resolved: string): Promise<boolean> {
+  assertShellSafePath(resolved);
+  const result = await sandbox.exec(`test -f "${resolved}"`);
+  return result.exitCode === 0;
 }
 
 async function buildFileTree(
@@ -89,18 +183,30 @@ async function handleFileContent(c: Context, sandbox: Sandbox): Promise<Response
   }
 
   const ext = path.extname(resolved).toLowerCase();
-  const isImage = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"].includes(ext);
-  const isPdf = ext === ".pdf";
+  const previewType = getPreviewType(resolved, ext);
 
   try {
-    if (isImage || isPdf) {
+    if (previewType === "image" || previewType === "pdf") {
       assertShellSafePath(resolved);
       const result = await sandbox.exec(`base64 < "${resolved}"`);
       if (result.exitCode !== 0) {
         return c.json({ error: "Not found" }, 404);
       }
       const base64 = result.stdout.replace(/\s/g, "");
-      return c.json({ type: isPdf ? "pdf" : "image", ext, base64 });
+      return c.json({ type: previewType, ext, base64 });
+    }
+
+    if (previewType === "unsupported") {
+      const exists = await fileExists(sandbox, resolved);
+      if (!exists) {
+        return c.json({ error: "Not found" }, 404);
+      }
+
+      return c.json({
+        type: "unsupported",
+        ext,
+        message: "Preview unavailable for this file type. Download to open locally.",
+      });
     }
 
     const content = await sandbox.file.read(resolved);

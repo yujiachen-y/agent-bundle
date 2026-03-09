@@ -35,6 +35,14 @@ class StreamingStubAgent implements Agent {
     }
   }
 
+  public getConversationHistory(): ResponseInput {
+    return [];
+  }
+
+  public getSystemPrompt(): string {
+    return "";
+  }
+
   public async shutdown(): Promise<void> {
     this.statusValue = "stopped";
   }

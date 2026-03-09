@@ -95,6 +95,14 @@ class PiMonoLoopAgent implements Agent {
     await this.loop.dispose();
   }
 
+  public getConversationHistory(): ResponseInput {
+    return [];
+  }
+
+  public getSystemPrompt(): string {
+    return "";
+  }
+
   public clearHistory(): void {
     // E2E agent is stateless across requests in this test suite.
   }

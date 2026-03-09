@@ -14,6 +14,7 @@ class StubAgent implements Agent {
   private statusValue: AgentStatus = "ready";
   public respondStreamEvents: ResponseEvent[] = [];
   public clearHistoryCalls = 0;
+  public conversationHistory: ResponseInput = [];
 
   public get status(): AgentStatus {
     return this.statusValue;
@@ -33,6 +34,14 @@ class StubAgent implements Agent {
     for (const event of this.respondStreamEvents) {
       yield event;
     }
+  }
+
+  public getConversationHistory(): ResponseInput {
+    return [...this.conversationHistory];
+  }
+
+  public getSystemPrompt(): string {
+    return "test system prompt";
   }
 
   public async shutdown(): Promise<void> {
@@ -194,6 +203,70 @@ describe("createWebUIServer — core API endpoints", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.output).toBe("ok");
+    shutdown();
+  });
+});
+
+describe("createWebUIServer — file preview API", () => {
+  let agent: StubAgent;
+  let sandbox: FakeSandbox;
+
+  beforeEach(() => {
+    const s = setup();
+    agent = s.agent;
+    sandbox = s.sandbox;
+  });
+
+  it("GET /api/file-content previews text files as text", async () => {
+    sandbox.nextReadResult = "hello from preview";
+    const { app, shutdown } = createWebUIServer({ agent, sandbox });
+
+    const res = await app.request("/api/file-content/notes.txt");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({
+      type: "text",
+      ext: ".txt",
+      content: "hello from preview",
+    });
+    expect(sandbox.readCalls).toEqual(["/workspace/notes.txt"]);
+    expect(sandbox.execCalls).toEqual([]);
+    shutdown();
+  });
+
+  it("GET /api/file-content returns unsupported for pptx files", async () => {
+    sandbox.nextExecResult = { stdout: "", stderr: "", exitCode: 0 };
+    const { app, shutdown } = createWebUIServer({ agent, sandbox });
+
+    const res = await app.request("/api/file-content/output.pptx");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({
+      type: "unsupported",
+      ext: ".pptx",
+      message: "Preview unavailable for this file type. Download to open locally.",
+    });
+    expect(sandbox.readCalls).toEqual([]);
+    expect(sandbox.execCalls[0]?.command).toContain('test -f "/workspace/output.pptx"');
+    shutdown();
+  });
+
+  it("GET /api/file-download serves pptx with the office mime type", async () => {
+    sandbox.nextExecResult = {
+      stdout: Buffer.from("pptx-bytes").toString("base64"),
+      stderr: "",
+      exitCode: 0,
+    };
+    const { app, shutdown } = createWebUIServer({ agent, sandbox });
+
+    const res = await app.request("/api/file-download?path=/workspace/output.pptx");
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe(
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    );
     shutdown();
   });
 });

@@ -209,6 +209,8 @@ export function createServeHarness(options: ServeHarnessOptions = {}): ServeHarn
     respondStream: async function* () {
       return;
     },
+    getConversationHistory: () => [],
+    getSystemPrompt: () => "",
     clearHistory: agentClearHistoryMock,
     shutdown: agentShutdownMock,
   };

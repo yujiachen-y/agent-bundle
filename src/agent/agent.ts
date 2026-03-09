@@ -47,6 +47,7 @@ export class AgentImpl<V extends string> implements Agent {
   private loop: AgentLoop | null = null;
   private mcpClientManager: McpClientManager | null = null;
   private conversationHistory: ResponseInput = [];
+  private filledSystemPrompt: string = "";
   private readonly otelHooks: AgentObservabilityHooks | null;
   private readonly instrumentToolCall: ReturnType<typeof createToolCallInstrumenter> | null;
   private readonly instrumentMcpCall: ReturnType<typeof createMcpCallInstrumenter> | null;
@@ -75,6 +76,7 @@ export class AgentImpl<V extends string> implements Agent {
 
     this.sandbox = sandbox;
     this.loop = loop;
+    this.filledSystemPrompt = systemPrompt;
     this.conversationHistory = this.options.session?.conversationHistory ?? [];
 
     try {
@@ -120,6 +122,14 @@ export class AgentImpl<V extends string> implements Agent {
     }
 
     return responseOutput;
+  }
+
+  public getConversationHistory(): ResponseInput {
+    return [...this.conversationHistory];
+  }
+
+  public getSystemPrompt(): string {
+    return this.filledSystemPrompt;
   }
 
   public clearHistory(): void {

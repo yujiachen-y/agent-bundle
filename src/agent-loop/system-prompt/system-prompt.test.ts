@@ -29,7 +29,7 @@ describe("generateSystemPromptTemplate", () => {
     });
 
     expect(template).toContain("## Skills");
-    expect(template).toContain("### Extract Line Items (/skills/extract-line-items/SKILL.md)");
+    expect(template).toContain("### Extract Line Items (/skills/01-extract-line-items/SKILL.md)");
     expect(template).toContain("Do the extraction.");
   });
 
@@ -49,7 +49,7 @@ describe("generateSystemPromptTemplate", () => {
 
     expect(template).toContain("## Skills");
     expect(template).toContain(
-      "- Extract Line Items: Parse invoice rows from OCR output. (/skills/extract-line-items/SKILL.md)",
+      "- Extract Line Items: Parse invoice rows from OCR output. (/skills/01-extract-line-items/SKILL.md)",
     );
   });
 

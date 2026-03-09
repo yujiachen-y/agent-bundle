@@ -40,6 +40,14 @@
   var filePollingTimer = null;
   var ws = null;
 
+  // Browse mode: "workspace" | "sandbox"
+  var browseMode = "workspace";
+  var sandboxBrowsePath = "/";
+
+  // Transcript state
+  var transcriptEvents = [];
+  var activeWorkspaceTab = "workspace";
+
   // Streaming text accumulation
   var currentAgentText = "";
   var currentAgentEl = null;
@@ -566,7 +574,10 @@
   }
 
   function refreshFileTree() {
-    fetch("/api/files")
+    var url = browseMode === "sandbox"
+      ? "/api/sandbox-files?path=" + encodeURIComponent(sandboxBrowsePath)
+      : "/api/files";
+    fetch(url)
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (!data.entries) return;
@@ -630,6 +641,36 @@
   };
   function extToLang(ext) { return LANG_MAP[ext] || ""; }
 
+  function renderUnsupportedPreview(filePath, fileName, message) {
+    var container = document.createElement("div");
+    container.className = "unsupported-preview";
+
+    var title = document.createElement("h3");
+    title.className = "unsupported-preview-title";
+    title.textContent = "Preview unavailable";
+    container.appendChild(title);
+
+    var description = document.createElement("p");
+    description.className = "unsupported-preview-description";
+    description.textContent = message || "This file type cannot be previewed in the browser.";
+    container.appendChild(description);
+
+    var meta = document.createElement("p");
+    meta.className = "unsupported-preview-meta";
+    meta.textContent = "File: " + fileName;
+    container.appendChild(meta);
+
+    var action = document.createElement("a");
+    action.className = "unsupported-preview-action";
+    var dlEndpoint = browseMode === "sandbox" ? "/api/sandbox-file-download" : "/api/file-download";
+    action.href = dlEndpoint + "?path=" + encodeURIComponent(filePath);
+    action.download = fileName || "file";
+    action.textContent = "Download file";
+    container.appendChild(action);
+
+    previewContent.appendChild(container);
+  }
+
   function openFilePreview(filePath, fileName) {
     activeFilePath = filePath;
     previewArea.setAttribute("data-file-path", filePath);
@@ -639,7 +680,8 @@
     var breadcrumb = document.getElementById("preview-breadcrumb");
     if (breadcrumb) {
       breadcrumb.innerHTML = "";
-      var parts = filePath.replace(/^\/workspace\//, "").split("/");
+      var displayPath = browseMode === "sandbox" ? filePath : filePath.replace(/^\/workspace\//, "");
+      var parts = displayPath.replace(/^\//, "").split("/");
       parts.forEach(function(part, i) {
         var span = document.createElement("span");
         if (i < parts.length - 1) {
@@ -663,10 +705,12 @@
 
     showPreview();
 
-    var relative = filePath.replace(/^\/workspace\//, "");
     var ext = getExtension(fileName);
+    var contentUrl = browseMode === "sandbox"
+      ? "/api/sandbox-file-content" + filePath
+      : "/api/file-content/" + encodeURIComponent(filePath.replace(/^\/workspace\//, ""));
 
-    fetch("/api/file-content/" + encodeURIComponent(relative))
+    fetch(contentUrl)
       .then(function (res) {
         if (!res.ok) throw new Error("Not found");
         return res.json();
@@ -692,6 +736,8 @@
           img.style.cursor = "pointer";
           img.addEventListener("click", function () { openImageModal(src); });
           previewContent.appendChild(img);
+        } else if (data.type === "unsupported") {
+          renderUnsupportedPreview(filePath, fileName, data.message);
         } else {
           var text = data.content || "";
           var pre = document.createElement("pre");
@@ -1211,6 +1257,9 @@
     ws.onmessage = function (msg) {
       try {
         var event = JSON.parse(msg.data);
+        if (event.type && event.type.startsWith("response.") || event.type === "tool_execution_update") {
+          transcriptEvents.push(event);
+        }
         handleAgentEvent(event);
       } catch (_) { /* ignore */ }
     };
@@ -1242,6 +1291,258 @@
       return;
     }
   });
+
+  // --  Browse Mode Toggle
+  var browseModeToggle = document.getElementById("browse-mode-toggle");
+  var browseModeLabel = document.getElementById("browse-mode-label");
+  var sandboxBreadcrumbEl = document.getElementById("sandbox-breadcrumb");
+
+  function updateBrowseModeUI() {
+    if (browseModeLabel) {
+      browseModeLabel.textContent = browseMode === "sandbox" ? "/ (sandbox)" : "/workspace";
+    }
+    if (sandboxBreadcrumbEl) {
+      if (browseMode === "sandbox" && sandboxBrowsePath !== "/") {
+        sandboxBreadcrumbEl.style.display = "";
+        sandboxBreadcrumbEl.innerHTML = "";
+        var parts = sandboxBrowsePath.replace(/^\//, "").split("/").filter(Boolean);
+        var rootLink = document.createElement("span");
+        rootLink.className = "sandbox-crumb sandbox-crumb--link";
+        rootLink.textContent = "/";
+        rootLink.addEventListener("click", function() {
+          sandboxBrowsePath = "/";
+          expandedDirsInitialized = false;
+          expandedDirs = new Set();
+          updateBrowseModeUI();
+          refreshFileTree();
+        });
+        sandboxBreadcrumbEl.appendChild(rootLink);
+        var cumulative = "";
+        parts.forEach(function(part) {
+          cumulative += "/" + part;
+          var sep = document.createElement("span");
+          sep.className = "sandbox-crumb-sep";
+          sep.textContent = "\u203A";
+          sandboxBreadcrumbEl.appendChild(sep);
+          var link = document.createElement("span");
+          link.className = "sandbox-crumb sandbox-crumb--link";
+          link.textContent = part;
+          var target = cumulative;
+          link.addEventListener("click", function() {
+            sandboxBrowsePath = target;
+            expandedDirsInitialized = false;
+            expandedDirs = new Set();
+            updateBrowseModeUI();
+            refreshFileTree();
+          });
+          sandboxBreadcrumbEl.appendChild(link);
+        });
+      } else {
+        sandboxBreadcrumbEl.style.display = "none";
+      }
+    }
+  }
+
+  if (browseModeToggle) {
+    browseModeToggle.addEventListener("click", function() {
+      browseMode = browseMode === "workspace" ? "sandbox" : "workspace";
+      sandboxBrowsePath = "/";
+      expandedDirsInitialized = false;
+      expandedDirs = new Set();
+      previousFilePaths = new Set();
+      lastFileEntries = null;
+      updateBrowseModeUI();
+      refreshFileTree();
+    });
+  }
+
+  // --  Workspace Tab Switching
+  var workspaceContent = document.getElementById("workspace-content");
+  var transcriptPanel = document.getElementById("transcript-panel");
+  var workspaceTabs = document.querySelectorAll(".workspace-tab");
+
+  workspaceTabs.forEach(function(tab) {
+    tab.addEventListener("click", function() {
+      var target = tab.getAttribute("data-tab");
+      if (target === activeWorkspaceTab) return;
+      activeWorkspaceTab = target;
+      workspaceTabs.forEach(function(t) { t.classList.remove("workspace-tab--active"); });
+      tab.classList.add("workspace-tab--active");
+      if (target === "transcript") {
+        workspaceContent.style.display = "none";
+        transcriptPanel.style.display = "";
+        refreshTranscript();
+      } else {
+        workspaceContent.style.display = "";
+        transcriptPanel.style.display = "none";
+      }
+    });
+  });
+
+  // --  Transcript Panel
+  var transcriptList = document.getElementById("transcript-list");
+  var transcriptRefreshBtn = document.getElementById("transcript-refresh");
+  var transcriptCopyBtn = document.getElementById("transcript-copy");
+  var transcriptClearBtn = document.getElementById("transcript-clear");
+
+  function refreshTranscript() {
+    fetch("/api/transcript")
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        renderTranscriptHistory(data.history || [], data.systemPrompt || "");
+      })
+      .catch(function() {
+        if (transcriptList) transcriptList.innerHTML = '<div class="transcript-empty">Failed to load transcript.</div>';
+      });
+  }
+
+  function renderTranscriptHistory(history, systemPrompt) {
+    if (!transcriptList) return;
+    transcriptList.innerHTML = "";
+
+    if (systemPrompt) {
+      var sysEntry = document.createElement("div");
+      sysEntry.className = "transcript-entry transcript-entry--system";
+      var sysHeader = document.createElement("div");
+      sysHeader.className = "transcript-entry-header";
+      var sysBadge = document.createElement("span");
+      sysBadge.className = "transcript-role-badge transcript-role--system";
+      sysBadge.textContent = "SYSTEM PROMPT";
+      sysHeader.appendChild(sysBadge);
+      sysEntry.appendChild(sysHeader);
+      var sysContent = document.createElement("div");
+      sysContent.className = "transcript-entry-content";
+      var sysText = document.createElement("div");
+      sysText.className = "transcript-text";
+      sysText.textContent = systemPrompt;
+      sysContent.appendChild(sysText);
+      sysEntry.appendChild(sysContent);
+      transcriptList.appendChild(sysEntry);
+    }
+
+    if (!history || history.length === 0) {
+      if (!systemPrompt) {
+        transcriptList.innerHTML = '<div class="transcript-empty">No conversation history yet.</div>';
+      }
+      return;
+    }
+    history.forEach(function(msg, index) {
+      var entry = document.createElement("div");
+      entry.className = "transcript-entry transcript-entry--" + msg.role;
+
+      var header = document.createElement("div");
+      header.className = "transcript-entry-header";
+      var badge = document.createElement("span");
+      badge.className = "transcript-role-badge transcript-role--" + msg.role;
+      badge.textContent = msg.role.toUpperCase();
+      header.appendChild(badge);
+      var indexSpan = document.createElement("span");
+      indexSpan.className = "transcript-index";
+      indexSpan.textContent = "#" + index;
+      header.appendChild(indexSpan);
+      entry.appendChild(header);
+
+      var content = document.createElement("div");
+      content.className = "transcript-entry-content";
+
+      if (msg.role === "assistant" && msg.tool_calls && msg.tool_calls.length > 0) {
+        if (msg.content) {
+          var textBlock = document.createElement("div");
+          textBlock.className = "transcript-text";
+          textBlock.textContent = msg.content.length > 500 ? msg.content.slice(0, 500) + "..." : msg.content;
+          content.appendChild(textBlock);
+        }
+        msg.tool_calls.forEach(function(tc) {
+          var toolBlock = document.createElement("div");
+          toolBlock.className = "transcript-tool-call";
+          var toolHeader = document.createElement("div");
+          toolHeader.className = "transcript-tool-header";
+          toolHeader.textContent = "Tool: " + tc.name;
+          toolBlock.appendChild(toolHeader);
+          var toolInput = document.createElement("pre");
+          toolInput.className = "transcript-tool-input";
+          toolInput.textContent = JSON.stringify(tc.input, null, 2);
+          toolInput.style.display = "none";
+          toolBlock.appendChild(toolInput);
+          toolHeader.style.cursor = "pointer";
+          toolHeader.addEventListener("click", function() {
+            toolInput.style.display = toolInput.style.display === "none" ? "" : "none";
+          });
+          content.appendChild(toolBlock);
+        });
+      } else if (msg.role === "tool" && msg.tool_results) {
+        msg.tool_results.forEach(function(tr) {
+          var resultBlock = document.createElement("div");
+          resultBlock.className = "transcript-tool-result";
+          var resultHeader = document.createElement("div");
+          resultHeader.className = "transcript-tool-header";
+          resultHeader.textContent = "Result" + (tr.isError ? " (ERROR)" : "") + " [" + tr.toolCallId + "]";
+          resultBlock.appendChild(resultHeader);
+          var resultBody = document.createElement("pre");
+          resultBody.className = "transcript-tool-input";
+          var outputText = typeof tr.output === "string" ? tr.output : JSON.stringify(tr.output, null, 2);
+          resultBody.textContent = outputText.length > 2000 ? outputText.slice(0, 2000) + "..." : outputText;
+          resultBody.style.display = "none";
+          resultBlock.appendChild(resultBody);
+          resultHeader.style.cursor = "pointer";
+          resultHeader.addEventListener("click", function() {
+            resultBody.style.display = resultBody.style.display === "none" ? "" : "none";
+          });
+          if (tr.isError) resultBlock.classList.add("transcript-tool-result--error");
+          content.appendChild(resultBlock);
+        });
+      } else {
+        var textEl = document.createElement("div");
+        textEl.className = "transcript-text";
+        var text = msg.content || "";
+        textEl.textContent = text.length > 1000 ? text.slice(0, 1000) + "..." : text;
+        content.appendChild(textEl);
+      }
+
+      entry.appendChild(content);
+      transcriptList.appendChild(entry);
+    });
+
+    // Also show accumulated event count
+    if (transcriptEvents.length > 0) {
+      var eventsSection = document.createElement("div");
+      eventsSection.className = "transcript-events-summary";
+      eventsSection.textContent = transcriptEvents.length + " streaming events captured this session";
+      transcriptList.appendChild(eventsSection);
+    }
+
+    transcriptList.scrollTop = transcriptList.scrollHeight;
+  }
+
+  if (transcriptRefreshBtn) {
+    transcriptRefreshBtn.addEventListener("click", refreshTranscript);
+  }
+  if (transcriptCopyBtn) {
+    transcriptCopyBtn.addEventListener("click", function() {
+      fetch("/api/transcript")
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          return fetch("/api/transcript/events").then(function(res) { return res.json(); }).then(function(evtData) {
+            var combined = { history: data.history, events: evtData.events };
+            navigator.clipboard.writeText(JSON.stringify(combined, null, 2)).then(function() {
+              showToast("Transcript copied to clipboard.", false);
+            });
+          });
+        })
+        .catch(function() { showToast("Failed to copy transcript.", true); });
+    });
+  }
+  if (transcriptClearBtn) {
+    transcriptClearBtn.addEventListener("click", function() {
+      fetch("/api/transcript/clear", { method: "POST" })
+        .then(function() {
+          transcriptEvents = [];
+          refreshTranscript();
+          showToast("Transcript events cleared.", false);
+        })
+        .catch(function() { showToast("Failed to clear transcript.", true); });
+    });
+  }
 
   // --  Init
   window.addEventListener("files-changed", refreshFileTree);

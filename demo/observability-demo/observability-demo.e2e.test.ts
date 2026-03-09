@@ -141,6 +141,14 @@ class OtelDemoAgent implements Agent {
     }
   }
 
+  getConversationHistory(): ResponseInput {
+    return [];
+  }
+
+  getSystemPrompt(): string {
+    return "";
+  }
+
   async shutdown(): Promise<void> {
     if (this.statusValue === "stopped") return;
     this.statusValue = "stopped";

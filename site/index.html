@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>agent-bundle — Bundle skills into a single deployable agent</title>
+<title>agent-bundle — Define agent skills in YAML. Generate a production-ready agent service.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -285,7 +285,7 @@
     font-family: var(--font-mono);
     font-size: 13.5px;
     line-height: 1.9;
-    height: 420px;
+    height: 360px;
     overflow: hidden;
   }
   .term-content .line {
@@ -540,23 +540,19 @@
     <a href="#quickstart">Quick Start</a>
     <a href="https://github.com/yujiachen-y/agent-bundle" class="gh-btn">
       <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-      Star
+      Star <span id="starCount"></span>
     </a>
   </div>
 </nav>
 
 <!-- Hero -->
 <div class="hero">
-  <div class="hero-pill">
-    <span class="pill-dot">→</span>
-    v1.0 Now Available
-  </div>
-  <h1>Bundle skills into a single deployable agent</h1>
-  <p class="sub">One YAML. Dev-to-prod in minutes, not months.<br>Sandboxed execution. Token-scoped data access.</p>
+  <h1>Define skills in YAML. Generate a production-ready agent service.</h1>
+  <p class="sub">One YAML config. Prisma-style typed codegen.<br>Import the generated package into your own service.</p>
 
   <!-- Install bar -->
   <div class="install-bar" id="installBar" title="Click to copy">
-    <code><span class="dollar">$</span>pnpm add -g agent-bundle</code>
+    <code><span class="dollar">$</span>npm install agent-bundle</code>
     <button class="install-copy" id="installCopy">Copy</button>
   </div>
 
@@ -576,7 +572,7 @@
           <div class="term-circle r"></div>
           <div class="term-circle y"></div>
           <div class="term-circle g"></div>
-          <span class="term-title">~/my-agent</span>
+          <span class="term-title">~/personalized-recommend</span>
         </div>
         <div class="term-content" id="terminal"></div>
       </div>
@@ -592,34 +588,34 @@
   <div class="section-heading anim-in">Everything you need to ship agents.</div>
   <div class="feat-grid">
     <div class="feat-cell">
-      <div class="feat-icon">👁</div>
-      <h3>See inside the sandbox</h3>
-      <p>WebUI shows the agent's live file tree and terminal output as it runs. No more black boxes.</p>
-    </div>
-    <div class="feat-cell">
       <div class="feat-icon">⚡</div>
       <h3>Type-safe codegen</h3>
-      <p>Prisma-style generate. Variable names are checked at compile time — miss one and it won't build.</p>
-    </div>
-    <div class="feat-cell">
-      <div class="feat-icon">⟳</div>
-      <h3>Dev-prod parity</h3>
-      <p>serve and build share the same sandbox abstraction. What passes locally ships as-is.</p>
+      <p>Prisma-style generate. Your YAML config becomes a typed TypeScript package you can import like any dependency.</p>
     </div>
     <div class="feat-cell">
       <div class="feat-icon">🔓</div>
       <h3>No vendor lock-in</h3>
-      <p>Swap LLM providers or sandbox backends with one line of YAML. Anthropic, OpenAI, Gemini, Ollama.</p>
+      <p>Anthropic, OpenAI, Gemini, OpenRouter — or run locally with Ollama, no API key needed. One line of YAML to swap.</p>
     </div>
     <div class="feat-cell">
-      <div class="feat-icon">↺</div>
-      <h3>Session recovery</h3>
-      <p>Agent crashes mid-run? Resume from its last conversation state. Production-grade reliability.</p>
+      <div class="feat-icon">🧩</div>
+      <h3>Plugin marketplace</h3>
+      <p>Pull skills and commands from a plugin marketplace. Local skills, local commands, and marketplace plugins — all merged into one typed bundle.</p>
+    </div>
+    <div class="feat-cell">
+      <div class="feat-icon">👁</div>
+      <h3>Live sandbox view</h3>
+      <p>WebUI shows the agent's file tree, file preview, LLM transcript, and metrics dashboard as it runs. No more black boxes.</p>
+    </div>
+    <div class="feat-cell">
+      <div class="feat-icon">📊</div>
+      <h3>Observability built in</h3>
+      <p>Token usage, tool call latency, error rates — visible in the dev UI and exportable via OpenTelemetry for production.</p>
     </div>
     <div class="feat-cell">
       <div class="feat-icon">🛡</div>
       <h3>Token-scoped MCP</h3>
-      <p>Even under prompt injection, the agent cannot exceed what the MCP server permits for that token.</p>
+      <p>Connect to internal services via MCP servers. Even under prompt injection, the agent cannot exceed what the MCP server permits.</p>
     </div>
   </div>
 </div>
@@ -639,42 +635,45 @@
       </div>
       <div class="qs-code">
         <button class="cp" onclick="copyBlock(this)">Copy</button>
-<pre><span class="p">$</span> pnpm add -g agent-bundle</pre>
+<pre><span class="p">$</span> npm install agent-bundle</pre>
       </div>
     </div>
 
     <div class="qs-step">
       <div class="qs-step-head">
         <div class="qs-num">2</div>
-        <div class="qs-label">Define your bundle</div>
+        <div class="qs-label">Define your agent</div>
       </div>
       <div class="qs-code">
         <button class="cp" onclick="copyBlock(this)">Copy</button>
-<pre><span class="c"># bundle.yaml</span>
-<span class="k">name</span>: my-agent
+<pre><span class="c"># agent-bundle.yaml</span>
+<span class="k">name</span>: personalized-recommend
 
 <span class="k">model</span>:
-  <span class="k">provider</span>: anthropic
-  <span class="k">model</span>: <span class="s">claude-sonnet-4-20250514</span>
+  <span class="k">provider</span>: openrouter
+  <span class="k">model</span>: <span class="s">qwen/qwen3.5-397b-a17b</span>
 
 <span class="k">sandbox</span>:
-  <span class="k">provider</span>: kubernetes
+  <span class="k">provider</span>: e2b
 
 <span class="k">skills</span>:
-  - <span class="k">path</span>: <span class="s">./skills/my-skill</span></pre>
+  - <span class="k">path</span>: <span class="s">./skills/update-memory</span>
+  - <span class="k">path</span>: <span class="s">./skills/recommend</span></pre>
       </div>
     </div>
 
     <div class="qs-step">
       <div class="qs-step-head">
         <div class="qs-num">3</div>
-        <div class="qs-label">Generate, serve, build</div>
+        <div class="qs-label">Generate and import</div>
       </div>
       <div class="qs-code">
         <button class="cp" onclick="copyBlock(this)">Copy</button>
-<pre><span class="p">$</span> agent-bundle generate  <span class="c"># type-safe client</span>
-<span class="p">$</span> agent-bundle serve     <span class="c"># local dev + WebUI</span>
-<span class="p">$</span> agent-bundle build     <span class="c"># production image</span></pre>
+<pre><span class="p">$</span> npx agent-bundle generate  <span class="c"># typed package → node_modules/</span>
+
+<span class="c"># then in your code:</span>
+<span class="k">import</span> { PersonalizedRecommend }
+  <span class="k">from</span> <span class="s">"@agent-bundle/personalized-recommend"</span>;</pre>
       </div>
     </div>
   </div>
@@ -708,22 +707,26 @@
 const termEl = document.getElementById('terminal');
 
 const sequence = [
-  { type: 'cmd', prompt: '$ ', text: 'agent-bundle generate', delay: 0 },
-  { type: 'out', cls: 'dim', text: 'Generating bundle "my-agent" from bundle.yaml', delay: 800 },
-  { type: 'out', cls: 'ok', text: '✓ Generate completed: node_modules/@agent-bundle/my-agent', delay: 1400 },
-  { type: 'blank', delay: 1900 },
-  { type: 'cmd', prompt: '$ ', text: 'agent-bundle serve', delay: 2300 },
-  { type: 'out', cls: 'dim', text: 'Loading bundle "my-agent" ...', delay: 3000 },
-  { type: 'out', cls: 'dim', text: '  Sandbox: kubernetes (my-sandbox:latest)', delay: 3500 },
-  { type: 'out', cls: 'dim', text: '  Model:   anthropic/claude-sonnet-4-20250514', delay: 4000 },
-  { type: 'out', cls: 'ok', text: '✓ TUI ready — WebUI at http://localhost:3000', delay: 4600 },
-  { type: 'blank', delay: 5100 },
-  { type: 'cmd', prompt: '$ ', text: 'agent-bundle build', delay: 5500 },
-  { type: 'out', cls: 'dim', text: 'Building Docker image my-sandbox:latest ...', delay: 6200 },
-  { type: 'out', cls: 'warn', text: '  dist/my-agent/index.ts   ← typed factory', delay: 6800 },
-  { type: 'out', cls: 'warn', text: '  dist/my-agent/types.ts   ← variable types', delay: 7200 },
-  { type: 'out', cls: 'warn', text: '  dist/my-agent/bundle.json', delay: 7600 },
-  { type: 'out', cls: 'ok', text: '✓ Build completed — ready to deploy', delay: 8200 },
+  { type: 'cmd', prompt: '$ ', text: 'cat agent-bundle.yaml', delay: 0 },
+  { type: 'out', cls: 'warn', text: 'name: personalized-recommend', delay: 600 },
+  { type: 'out', cls: 'dim', text: 'model:', delay: 800 },
+  { type: 'out', cls: 'dim', text: '  provider: openrouter', delay: 950 },
+  { type: 'out', cls: 'dim', text: 'sandbox:', delay: 1100 },
+  { type: 'out', cls: 'dim', text: '  provider: e2b', delay: 1250 },
+  { type: 'out', cls: 'dim', text: 'skills:', delay: 1400 },
+  { type: 'out', cls: 'dim', text: '  - path: ./skills/update-memory', delay: 1550 },
+  { type: 'out', cls: 'dim', text: '  - path: ./skills/recommend', delay: 1700 },
+  { type: 'blank', delay: 2200 },
+  { type: 'cmd', prompt: '$ ', text: 'agent-bundle generate', delay: 2600 },
+  { type: 'out', cls: 'dim', text: 'Generating bundle "personalized-recommend" ...', delay: 3300 },
+  { type: 'blank', delay: 3600 },
+  { type: 'out', cls: 'warn', text: '  node_modules/@agent-bundle/personalized-recommend/', delay: 3900 },
+  { type: 'out', cls: 'warn', text: '    index.ts      ← typed agent factory', delay: 4200 },
+  { type: 'out', cls: 'warn', text: '    types.ts      ← type definitions', delay: 4500 },
+  { type: 'out', cls: 'warn', text: '    bundle.json   ← resolved config', delay: 4800 },
+  { type: 'out', cls: 'warn', text: '    package.json  ← scoped package', delay: 5100 },
+  { type: 'blank', delay: 5400 },
+  { type: 'out', cls: 'ok', text: '✓ Generate completed — import and use in your service', delay: 5700 },
 ];
 
 function typeText(container, text, charDelay) {
@@ -821,12 +824,24 @@ document.querySelectorAll('.anim-in').forEach(el => io.observe(el));
 const installBar = document.getElementById('installBar');
 const installCopy = document.getElementById('installCopy');
 function copyInstall() {
-  navigator.clipboard.writeText('pnpm add -g agent-bundle').then(() => {
+  navigator.clipboard.writeText('npm install agent-bundle').then(() => {
     installCopy.textContent = 'Copied!';
     setTimeout(() => installCopy.textContent = 'Copy', 2000);
   });
 }
 installBar.addEventListener('click', copyInstall);
+
+// ---- Fetch GitHub star count ----
+fetch('https://api.github.com/repos/yujiachen-y/agent-bundle')
+  .then(r => r.json())
+  .then(data => {
+    const count = data.stargazers_count;
+    if (typeof count === 'number') {
+      const el = document.getElementById('starCount');
+      if (el) el.textContent = count >= 1000 ? (count / 1000).toFixed(1) + 'k' : String(count);
+    }
+  })
+  .catch(() => {});
 
 // ---- Code block copy ----
 function copyBlock(btn) {

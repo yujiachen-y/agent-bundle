@@ -29,9 +29,8 @@ describe("generateSystemPromptTemplate", () => {
     });
 
     expect(template).toContain("## Skills");
-    expect(template).toContain("### Extract Line Items");
+    expect(template).toContain("### Extract Line Items (/skills/extract-line-items/SKILL.md)");
     expect(template).toContain("Do the extraction.");
-    expect(template).not.toContain("/skills/extract-line-items/SKILL.md");
   });
 
   it("falls back to path reference when content is not provided", () => {

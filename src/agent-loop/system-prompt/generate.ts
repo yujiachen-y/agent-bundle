@@ -13,7 +13,7 @@ export type GenerateSystemPromptInput = {
 function formatSkillsSection(skills: SkillSummary[]): string {
   const sections = skills.map((skill) => {
     if (skill.content) {
-      return `### ${skill.name}\n${skill.content.trim()}`;
+      return `### ${skill.name} (${skill.sourcePath.trim()})\n${skill.content.trim()}`;
     }
 
     const location = skill.sourcePath.trim();

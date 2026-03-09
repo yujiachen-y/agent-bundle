@@ -1,6 +1,6 @@
 {
   "name": "agent-bundle",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI tool and framework for defining, developing, and shipping AI agent skills",
   "author": "Jiachen Yu",
   "homepage": "https://agent-bundle.com",

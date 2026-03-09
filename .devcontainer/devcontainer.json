@@ -1,0 +1,30 @@
+{
+  "name": "agent-bundle",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": false
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postAttachCommand": "echo '\n========================================\n  Welcome to agent-bundle!\n========================================\n\n  1. Set your API key:\n\n     export OPENROUTER_API_KEY=sk-or-...\n\n  2. Try a demo:\n\n     cd demo/code-formatter/k8s\n     cat agent-bundle.yaml    # see the agent definition\n     ./setup.sh               # start the dev server\n\n  3. Open the WebUI at http://localhost:3000\n\n  More demos: ls demo/\n  Docs: https://agent-bundle.com\n========================================\n'",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "agent-bundle dev",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.shellIntegration.enabled": true
+      }
+    }
+  }
+}

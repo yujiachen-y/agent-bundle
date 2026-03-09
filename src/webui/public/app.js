@@ -1359,6 +1359,7 @@
   // --  Workspace Tab Switching
   var workspaceContent = document.getElementById("workspace-content");
   var transcriptPanel = document.getElementById("transcript-panel");
+  var metricsPanel = document.getElementById("metrics-panel");
   var workspaceTabs = document.querySelectorAll(".workspace-tab");
 
   workspaceTabs.forEach(function(tab) {
@@ -1368,13 +1369,17 @@
       activeWorkspaceTab = target;
       workspaceTabs.forEach(function(t) { t.classList.remove("workspace-tab--active"); });
       tab.classList.add("workspace-tab--active");
+      workspaceContent.style.display = "none";
+      transcriptPanel.style.display = "none";
+      metricsPanel.style.display = "none";
       if (target === "transcript") {
-        workspaceContent.style.display = "none";
         transcriptPanel.style.display = "";
         refreshTranscript();
+      } else if (target === "metrics") {
+        metricsPanel.style.display = "";
+        refreshMetrics();
       } else {
         workspaceContent.style.display = "";
-        transcriptPanel.style.display = "none";
       }
     });
   });
@@ -1541,6 +1546,187 @@
           showToast("Transcript events cleared.", false);
         })
         .catch(function() { showToast("Failed to clear transcript.", true); });
+    });
+  }
+
+  // --  Metrics Panel
+  var metricsContent = document.getElementById("metrics-content");
+  var metricsRefreshBtn = document.getElementById("metrics-refresh");
+  var metricsResetBtn = document.getElementById("metrics-reset");
+  var metricsAutoRefreshToggle = document.getElementById("metrics-auto-refresh-toggle");
+  var metricsAutoRefreshTimer = null;
+
+  function fmtNum(n) {
+    if (n === undefined || n === null) return "0";
+    return n.toLocaleString();
+  }
+
+  function fmtMs(n) {
+    if (!n || n === 0) return "0 ms";
+    if (n < 1) return n.toFixed(3) + " ms";
+    if (n < 1000) return n.toFixed(1) + " ms";
+    return (n / 1000).toFixed(2) + " s";
+  }
+
+  function createStat(label, value, colorClass) {
+    var stat = document.createElement("div");
+    stat.className = "metrics-stat";
+    var lbl = document.createElement("div");
+    lbl.className = "metrics-stat-label";
+    lbl.textContent = label;
+    var val = document.createElement("div");
+    val.className = "metrics-stat-value" + (colorClass ? " metrics-stat-value--" + colorClass : "");
+    val.textContent = value;
+    stat.appendChild(lbl);
+    stat.appendChild(val);
+    return stat;
+  }
+
+  function createCard(title, statsEl, tableEl) {
+    var card = document.createElement("div");
+    card.className = "metrics-card";
+    var h = document.createElement("div");
+    h.className = "metrics-card-title";
+    h.textContent = title;
+    card.appendChild(h);
+    if (statsEl) card.appendChild(statsEl);
+    if (tableEl) card.appendChild(tableEl);
+    return card;
+  }
+
+  function createBreakdownTable(breakdown, headers) {
+    var keys = Object.keys(breakdown);
+    if (keys.length === 0) return null;
+    var table = document.createElement("table");
+    table.className = "metrics-table";
+    var thead = document.createElement("thead");
+    var headRow = document.createElement("tr");
+    headers.forEach(function(h) {
+      var th = document.createElement("th");
+      th.textContent = h;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    var tbody = document.createElement("tbody");
+    keys.sort(function(a, b) {
+      return (breakdown[b].count || 0) - (breakdown[a].count || 0);
+    });
+    keys.forEach(function(key) {
+      var row = document.createElement("tr");
+      var td1 = document.createElement("td");
+      td1.textContent = key;
+      row.appendChild(td1);
+      var td2 = document.createElement("td");
+      td2.textContent = fmtNum(breakdown[key].count);
+      row.appendChild(td2);
+      var td3 = document.createElement("td");
+      td3.textContent = fmtNum(breakdown[key].errors);
+      if (breakdown[key].errors > 0) td3.className = "error-cell";
+      row.appendChild(td3);
+      var td4 = document.createElement("td");
+      td4.textContent = fmtMs(breakdown[key].avgDurationMs);
+      row.appendChild(td4);
+      tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    return table;
+  }
+
+  function renderMetrics(data) {
+    if (!metricsContent) return;
+    metricsContent.innerHTML = "";
+
+    if (!data.enabled) {
+      metricsContent.innerHTML = '<div class="metrics-empty">Metrics collector not enabled.</div>';
+      return;
+    }
+
+    // Agent card
+    var agentGrid = document.createElement("div");
+    agentGrid.className = "metrics-stats-grid";
+    agentGrid.appendChild(createStat("Respond Count", fmtNum(data.respondCount), "violet"));
+    agentGrid.appendChild(createStat("Errors", fmtNum(data.respondErrorCount), data.respondErrorCount > 0 ? "red" : null));
+    agentGrid.appendChild(createStat("Active", fmtNum(data.respondActive), data.respondActive > 0 ? "green" : null));
+    agentGrid.appendChild(createStat("Avg Duration", fmtMs(data.respondDuration.avg), "blue"));
+    agentGrid.appendChild(createStat("Min Duration", fmtMs(data.respondDuration.min)));
+    agentGrid.appendChild(createStat("Max Duration", fmtMs(data.respondDuration.max)));
+    metricsContent.appendChild(createCard("Agent Lifecycle", agentGrid));
+
+    // Token card
+    var tokenGrid = document.createElement("div");
+    tokenGrid.className = "metrics-stats-grid";
+    tokenGrid.appendChild(createStat("Input Tokens", fmtNum(data.inputTokensTotal), "teal"));
+    tokenGrid.appendChild(createStat("Output Tokens", fmtNum(data.outputTokensTotal), "teal"));
+    tokenGrid.appendChild(createStat("Total Tokens", fmtNum(data.inputTokensTotal + data.outputTokensTotal), "violet"));
+    metricsContent.appendChild(createCard("Token Usage", tokenGrid));
+
+    // Tool calls card
+    var toolGrid = document.createElement("div");
+    toolGrid.className = "metrics-stats-grid";
+    toolGrid.appendChild(createStat("Total Calls", fmtNum(data.toolCallCount), "violet"));
+    toolGrid.appendChild(createStat("Errors", fmtNum(data.toolCallErrorCount), data.toolCallErrorCount > 0 ? "red" : null));
+    toolGrid.appendChild(createStat("Avg Duration", fmtMs(data.toolCallDuration.avg), "blue"));
+    toolGrid.appendChild(createStat("Max Duration", fmtMs(data.toolCallDuration.max)));
+    var toolTable = createBreakdownTable(data.toolCallsByName, ["Tool", "Calls", "Errors", "Avg"]);
+    metricsContent.appendChild(createCard("Tool Calls", toolGrid, toolTable));
+
+    // MCP card
+    var mcpGrid = document.createElement("div");
+    mcpGrid.className = "metrics-stats-grid";
+    mcpGrid.appendChild(createStat("Total Calls", fmtNum(data.mcpCallCount), "violet"));
+    mcpGrid.appendChild(createStat("Errors", fmtNum(data.mcpCallErrorCount), data.mcpCallErrorCount > 0 ? "red" : null));
+    mcpGrid.appendChild(createStat("Avg Duration", fmtMs(data.mcpCallDuration.avg), "blue"));
+    mcpGrid.appendChild(createStat("Max Duration", fmtMs(data.mcpCallDuration.max)));
+    var mcpTable = createBreakdownTable(data.mcpCallsByServer, ["Server", "Calls", "Errors", "Avg"]);
+    metricsContent.appendChild(createCard("MCP Calls", mcpGrid, mcpTable));
+
+    // HTTP card
+    var httpGrid = document.createElement("div");
+    httpGrid.className = "metrics-stats-grid";
+    httpGrid.appendChild(createStat("Total Requests", fmtNum(data.httpRequestCount), "violet"));
+    httpGrid.appendChild(createStat("Avg Duration", fmtMs(data.httpRequestDuration.avg), "blue"));
+    httpGrid.appendChild(createStat("Max Duration", fmtMs(data.httpRequestDuration.max)));
+    var httpTable = createBreakdownTable(data.httpRequestsByRoute, ["Route", "Requests", "Errors", "Avg"]);
+    metricsContent.appendChild(createCard("HTTP Requests", httpGrid, httpTable));
+
+    // Uptime
+    var uptime = document.createElement("div");
+    uptime.className = "metrics-uptime";
+    uptime.textContent = "Collecting since " + new Date(data.collectorStartedAt).toLocaleString();
+    metricsContent.appendChild(uptime);
+  }
+
+  function refreshMetrics() {
+    fetch("/api/metrics")
+      .then(function(res) { return res.json(); })
+      .then(function(data) { renderMetrics(data); })
+      .catch(function() {
+        if (metricsContent) metricsContent.innerHTML = '<div class="metrics-empty">Failed to load metrics.</div>';
+      });
+  }
+
+  if (metricsRefreshBtn) {
+    metricsRefreshBtn.addEventListener("click", refreshMetrics);
+  }
+  if (metricsResetBtn) {
+    metricsResetBtn.addEventListener("click", function() {
+      fetch("/api/metrics/reset", { method: "POST" })
+        .then(function() {
+          refreshMetrics();
+          showToast("Metrics reset.", false);
+        })
+        .catch(function() { showToast("Failed to reset metrics.", true); });
+    });
+  }
+  if (metricsAutoRefreshToggle) {
+    metricsAutoRefreshToggle.addEventListener("change", function() {
+      if (metricsAutoRefreshToggle.checked) {
+        metricsAutoRefreshTimer = setInterval(refreshMetrics, 5000);
+      } else {
+        clearInterval(metricsAutoRefreshTimer);
+        metricsAutoRefreshTimer = null;
+      }
     });
   }
 

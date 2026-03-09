@@ -15,6 +15,7 @@ import type { Sandbox } from "../sandbox/types.js";
 import { isRecord } from "../shared/errors.js";
 import { createServer } from "../service/create-server.js";
 import { substituteArguments } from "../service/command-routes.js";
+import { devMetricsMiddleware, type DevMetricsCollector } from "./dev-metrics.js";
 import { WebUIEventBus, type WebUIEvent } from "./event-bus.js";
 import { clearContext, registerFileRoutes, toContentType } from "./file-routes.js";
 import { registerSandboxFileRoutes } from "./sandbox-file-routes.js";
@@ -29,6 +30,7 @@ export type WebUIServerOptions = {
   sandbox: Sandbox;
   commands?: readonly Command[];
   skills?: readonly SkillInfo[];
+  devMetrics?: DevMetricsCollector;
 };
 
 type WsClient = {
@@ -63,11 +65,15 @@ export function createWebUIServer(options: WebUIServerOptions): {
   handleUpgrade: (request: IncomingMessage, socket: unknown, head: Buffer) => void;
   shutdown: () => void;
 } {
-  const { agent, sandbox, commands, skills } = options;
+  const { agent, sandbox, commands, skills, devMetrics } = options;
   const eventBus = new WebUIEventBus();
   const clients = new Set<WsClient>();
   const debugEvents: ResponseEvent[] = [];
   const app = createServer(agent, commands ? { commands } : undefined);
+
+  if (devMetrics) {
+    app.use("*", devMetricsMiddleware(devMetrics));
+  }
 
   app.get("/api/info", (c): Response => {
     return c.json({
@@ -90,6 +96,17 @@ export function createWebUIServer(options: WebUIServerOptions): {
 
   app.post("/api/transcript/clear", (c): Response => {
     debugEvents.length = 0;
+    return c.json({ ok: true });
+  });
+
+  app.get("/api/metrics", (c): Response => {
+    if (!devMetrics) return c.json({ enabled: false });
+    return c.json({ enabled: true, ...devMetrics.snapshot() });
+  });
+
+  app.post("/api/metrics/reset", (c): Response => {
+    if (!devMetrics) return c.json({ enabled: false });
+    devMetrics.reset();
     return c.json({ ok: true });
   });
 

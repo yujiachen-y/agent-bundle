@@ -1,4 +1,6 @@
 import { createWebUIServer } from "../../webui/create-webui-server.js";
+import { DevMetricsCollector } from "../../webui/dev-metrics.js";
+import { wrapAgentWithDevMetrics } from "../../webui/dev-metrics-agent-wrapper.js";
 import type { Agent } from "../../agent/types.js";
 import { startHttpServer, type StartedHttpServer } from "./http.js";
 import {
@@ -79,11 +81,14 @@ export async function runDevCommand(
   };
 
   try {
+    const devMetrics = new DevMetricsCollector();
+    const instrumentedAgent = wrapAgentWithDevMetrics(context.agent, devMetrics);
     webUI = createWebUIServerImpl({
-      agent: context.agent,
+      agent: instrumentedAgent,
       sandbox: context.webUISandbox,
       commands: context.commands,
       skills: context.skills,
+      devMetrics,
     });
     httpServer = await startHttpServerImpl({
       appFetch: webUI.app.fetch.bind(webUI.app),

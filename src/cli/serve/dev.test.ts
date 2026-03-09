@@ -42,12 +42,11 @@ it("starts WebUI server and passes upgrade handler to HTTP server", async () => 
   );
 
   expect(result.port).toBe(5310);
-  expect(harness.createWebUIServerMock).toHaveBeenCalledWith(
-    expect.objectContaining({
-      agent: harness.agent,
-      commands: [],
-    }),
-  );
+  const webUIArgs = harness.createWebUIServerMock.mock.calls[0][0];
+  // Agent is wrapped with DevMetricsCollector, so check delegation rather than identity.
+  expect(webUIArgs.agent.name).toBe(harness.agent.name);
+  expect(webUIArgs.commands).toEqual([]);
+  expect(webUIArgs.devMetrics).toBeDefined();
   expect(harness.startHttpServerMock).toHaveBeenCalledWith(
     expect.objectContaining({
       port: 5400,

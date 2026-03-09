@@ -47,6 +47,7 @@
         <div class="workspace-tabs">
           <button class="workspace-tab workspace-tab--active" data-tab="workspace">Workspace</button>
           <button class="workspace-tab" data-tab="transcript">Transcript</button>
+          <button class="workspace-tab" data-tab="metrics">Metrics</button>
         </div>
 
         <!-- Workspace content area -->
@@ -102,6 +103,18 @@
             <div id="preview-content" class="preview-content"></div>
           </div>
 
+        </div>
+
+        <!-- Metrics panel (hidden by default) -->
+        <div id="metrics-panel" class="metrics-panel" style="display:none;">
+          <div class="metrics-toolbar">
+            <button id="metrics-refresh" class="transcript-btn" type="button" title="Refresh metrics">Refresh</button>
+            <label class="metrics-auto-refresh">
+              <input id="metrics-auto-refresh-toggle" type="checkbox"> Auto-refresh (5s)
+            </label>
+            <button id="metrics-reset" class="transcript-btn transcript-btn--danger" type="button" title="Reset metrics">Reset</button>
+          </div>
+          <div id="metrics-content" class="metrics-content"></div>
         </div>
 
         <!-- Transcript panel (hidden by default) -->

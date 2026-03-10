@@ -52,7 +52,7 @@ skills:
 **2. Generate** — Prisma-style typed codegen:
 
 ```bash
-agent-bundle generate
+npx agent-bundle generate
 ```
 
 ```
@@ -98,7 +98,7 @@ Agent skills work great inside local coding agents. Deploying them to production
 |  | Without agent-bundle | With agent-bundle |
 |--|---------------------|-------------------|
 | **Define** | Scattered scripts and prompts | Single YAML config — version it, diff it, review it |
-| **Generate** | Hand-wire LLM calls, no type safety | `agent-bundle generate` — typed factory you can import like any package |
+| **Generate** | Hand-wire LLM calls, no type safety | `npx agent-bundle generate` — typed factory you can import like any package |
 | **Ship** | Rewrite into a service from scratch | Import the generated package into your own service — zero rewrite |
 | **Behave** | Dev and prod diverge silently | Same sandbox runtime in dev, serve, and build |
 
@@ -182,7 +182,7 @@ Local skills, local commands, and marketplace plugins — all merged into one ty
 
 ### Live sandbox view
 
-`agent-bundle dev` opens a WebUI at localhost:3000 — watch the agent's file tree, preview generated files, inspect the full LLM transcript, and monitor token usage and tool call metrics. No more black boxes.
+`npx agent-bundle dev` opens a WebUI at localhost:3000 — watch the agent's file tree, preview generated files, inspect the full LLM transcript, and monitor token usage and tool call metrics. No more black boxes.
 
 | Workspace | File Preview | Transcript | Metrics |
 |:-:|:-:|:-:|:-:|
@@ -205,7 +205,7 @@ Connect to internal services via MCP servers. Even under prompt injection, the a
 ### AWS ECS Fargate _(beta)_
 
 ```bash
-agent-bundle deploy --target aws --secret API_KEY
+npx agent-bundle deploy --target aws --secret API_KEY
 ```
 
 Pushes to ECR and deploys to ECS Fargate — no Terraform or CloudFormation required. See [Deploy docs](./docs/configuration.md#deploy-beta) for details.

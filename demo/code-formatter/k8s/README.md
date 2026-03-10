@@ -18,7 +18,7 @@ OPENROUTER_API_KEY=... npm run setup
 The setup script installs dependencies, ensures a local k3d cluster, builds sandbox images, imports them, and runs:
 
 ```text
-agent-bundle dev --config ./agent-bundle.yaml
+npx agent-bundle dev --config ./agent-bundle.yaml
 ```
 
 By default, open `http://localhost:3000` (or the auto-detected worktree port).

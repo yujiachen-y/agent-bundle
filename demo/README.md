@@ -15,7 +15,7 @@ All demos require **Node.js 20+**. Most demos also need API keys as environment 
 
 ### Config-only agents
 
-These demos run entirely through `agent-bundle dev` — no custom server code needed. Define a YAML config, point it at skills, and go.
+These demos run entirely through `npx agent-bundle dev` — no custom server code needed. Define a YAML config, point it at skills, and go.
 
 | Demo | Sandbox | Description |
 |---|---|---|
@@ -26,7 +26,7 @@ These demos run entirely through `agent-bundle dev` — no custom server code ne
 
 ### Custom servers with `generate`
 
-These demos use `agent-bundle generate` to produce a typed TypeScript client, then embed it in a custom Node.js server with their own API routes.
+These demos use `npx agent-bundle generate` to produce a typed TypeScript client, then embed it in a custom Node.js server with their own API routes.
 
 | Demo | What it demonstrates |
 |---|---|

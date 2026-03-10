@@ -17,7 +17,7 @@ npm ci
 E2B_API_KEY=... OPENROUTER_API_KEY=... npm run setup
 ```
 
-The setup script validates API access, builds the E2B template, and starts `agent-bundle dev`.
+The setup script validates API access, builds the E2B template, and starts `npx agent-bundle dev`.
 
 ## Smoke Test
 

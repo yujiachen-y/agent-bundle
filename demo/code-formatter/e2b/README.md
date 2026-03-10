@@ -22,9 +22,9 @@ E2B_API_KEY=... OPENROUTER_API_KEY=... npm run setup
 `setup.sh` will:
 
 1. Validate required environment variables
-2. Ensure `agent-bundle` CLI is available
-3. Run `agent-bundle build --config ./agent-bundle.yaml`
-4. Run `agent-bundle dev --config ./agent-bundle.yaml`
+2. Ensure `npx agent-bundle` CLI is available
+3. Run `npx agent-bundle build --config ./agent-bundle.yaml`
+4. Run `npx agent-bundle dev --config ./agent-bundle.yaml`
 
 Then open `http://localhost:3000` (or the auto-detected worktree port).
 

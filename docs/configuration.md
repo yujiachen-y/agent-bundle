@@ -41,13 +41,13 @@ sandbox:
     memory: 512MB
 
   e2b:
-    template: my-custom-template # required for `agent-bundle build` when provider=e2b
+    template: my-custom-template # required for `npx agent-bundle build` when provider=e2b
     build:
-      dockerfile: ./Dockerfile   # required for `agent-bundle build` when provider=e2b
+      dockerfile: ./Dockerfile   # required for `npx agent-bundle build` when provider=e2b
 
   kubernetes:
     build:
-      dockerfile: ./Dockerfile # optional: run docker build during `agent-bundle build`
+      dockerfile: ./Dockerfile # optional: run docker build during `npx agent-bundle build`
       context: .               # optional: defaults to dockerfile directory
     image: my-sandbox:latest   # required when build is configured
 
@@ -57,7 +57,7 @@ sandbox:
 
 `resources` is optional. If you provide it, specify both `cpu` and `memory`; partial overrides are rejected. Omit `resources` to use defaults (`cpu: 2`, `memory: 512MB`).
 
-When `sandbox.provider` is `e2b`, both `sandbox.e2b.template` and `sandbox.e2b.build.dockerfile` are required for `agent-bundle build`. The build command generates a temporary build context (`/skills`, `/tools`, `e2b.Dockerfile`) and builds templates via the E2B SDK API. If SDK build fails, it falls back to `e2b template build --path <generated-context> <sandbox.e2b.template>`. If CLI fallback is used and `E2B_ACCESS_TOKEN` is unset while `E2B_API_KEY` is present, the build command reuses `E2B_API_KEY` for CLI auth.
+When `sandbox.provider` is `e2b`, both `sandbox.e2b.template` and `sandbox.e2b.build.dockerfile` are required for `npx agent-bundle build`. The build command generates a temporary build context (`/skills`, `/tools`, `e2b.Dockerfile`) and builds templates via the E2B SDK API. If SDK build fails, it falls back to `e2b template build --path <generated-context> <sandbox.e2b.template>`. If CLI fallback is used and `E2B_ACCESS_TOKEN` is unset while `E2B_API_KEY` is present, the build command reuses `E2B_API_KEY` for CLI auth.
 
 ## Skills
 
@@ -101,13 +101,13 @@ Even under prompt injection, the agent cannot exceed what the MCP server permits
 
 > **Status: beta.** The deploy command works but has not been battle-tested in production. Expect rough edges; please report issues.
 
-`agent-bundle deploy` pushes a built bundle to a cloud target. Currently only AWS ECS Fargate is supported. It shells out to the `aws` and `docker` CLIs — no extra npm dependencies.
+`npx agent-bundle deploy` pushes a built bundle to a cloud target. Currently only AWS ECS Fargate is supported. It shells out to the `aws` and `docker` CLIs — no extra npm dependencies.
 
 ### Prerequisites
 
 - AWS CLI v2 configured with valid credentials (`aws configure`)
 - Docker CLI installed and running
-- A built bundle (`agent-bundle build` must have been run first)
+- A built bundle (`npx agent-bundle build` must have been run first)
 
 ### Config
 
@@ -127,7 +127,7 @@ All `aws` fields are optional and fall back to defaults.
 ### CLI Flags
 
 ```bash
-agent-bundle deploy [options]
+npx agent-bundle deploy [options]
 ```
 
 | Flag | Description |
@@ -143,17 +143,17 @@ agent-bundle deploy [options]
 
 ```bash
 # Build first
-agent-bundle build
+npx agent-bundle build
 
 # Deploy with secrets (values read from env vars)
 export ANTHROPIC_API_KEY=sk-...
-agent-bundle deploy --target aws --secret ANTHROPIC_API_KEY
+npx agent-bundle deploy --target aws --secret ANTHROPIC_API_KEY
 
 # Deploy with region override
-agent-bundle deploy --target aws --region ap-northeast-1
+npx agent-bundle deploy --target aws --region ap-northeast-1
 
 # Tear down all resources
-agent-bundle deploy --target aws --teardown
+npx agent-bundle deploy --target aws --teardown
 ```
 
 ### What it creates

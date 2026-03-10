@@ -1,6 +1,6 @@
 # Data Analyst E2B Demo
 
-Standalone config-only demo for `agent-bundle dev` with an E2B sandbox.
+Standalone config-only demo for `npx agent-bundle dev` with an E2B sandbox.
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ npm ci
 E2B_API_KEY=... OPENROUTER_API_KEY=... npm run setup
 ```
 
-The setup script validates API access, builds the E2B template, and starts `agent-bundle dev`.
+The setup script validates API access, builds the E2B template, and starts `npx agent-bundle dev`.
 
 ## Smoke Test
 

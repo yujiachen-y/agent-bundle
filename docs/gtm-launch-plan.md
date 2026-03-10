@@ -81,9 +81,9 @@ Cline, etc). Deploying them to production means rewriting everything.
 agent-bundle closes that gap:
 
 1. Define your agent in a YAML file (model, sandbox, skills)
-2. `agent-bundle dev` — live WebUI showing file tree + terminal in real time
-3. `agent-bundle build` — typed TypeScript factory + Docker image
-4. `agent-bundle serve` — OpenAI-compatible API endpoint
+2. `npx agent-bundle dev` — live WebUI showing file tree + terminal in real time
+3. `npx agent-bundle build` — typed TypeScript factory + Docker image
+4. `npx agent-bundle serve` — OpenAI-compatible API endpoint
 
 One YAML config, same sandbox in dev and prod, no vendor lock-in (Anthropic /
 OpenAI / Gemini / Ollama), E2B or Kubernetes sandboxes.
@@ -104,7 +104,7 @@ Website: https://agent-bundle.com
 
 **Post 1 — Launch thread** (pin this):
 - Tweet 1: One-liner + repo link + architecture diagram
-- Tweet 2: 30-second screen recording of `agent-bundle dev` (WebUI in action)
+- Tweet 2: 30-second screen recording of `npx agent-bundle dev` (WebUI in action)
 - Tweet 3: The 3-command pipeline (YAML → build → serve → curl)
 - Tweet 4: "Supports Anthropic, OpenAI, Gemini, Ollama, OpenRouter — swap with one line of YAML"
 - Tweet 5: Link to Show HN post
@@ -119,7 +119,7 @@ Website: https://agent-bundle.com
 **Post 3 — The WebUI angle** (with screen recording):
 > Most agent frameworks are black boxes. You send a message and hope for the best.
 >
-> agent-bundle dev gives you a live view of the agent's file tree and terminal. You see exactly what it's doing inside the sandbox.
+> npx agent-bundle dev gives you a live view of the agent's file tree and terminal. You see exactly what it's doing inside the sandbox.
 
 ### Tertiary: Reddit
 
@@ -308,7 +308,7 @@ Each new demo must:
 2. Self-contained directory with its own `package.json`, `setup.sh`, `README.md`
 3. One-command setup (`./setup.sh`)
 4. 15-second screen recording at the top of its README
-5. Both CLI (`agent-bundle dev`) and API (`curl POST /v1/responses`) entry points
+5. Both CLI (`npx agent-bundle dev`) and API (`curl POST /v1/responses`) entry points
 6. Fixed sample inputs in the repo for reproducibility
 
 ---

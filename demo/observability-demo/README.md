@@ -15,8 +15,8 @@ npm ci
 OPENROUTER_API_KEY=... npm run setup
 ```
 
-The setup script installs dependencies, runs `agent-bundle build`, runs
-`agent-bundle generate`, then starts `tsx main.ts`.
+The setup script installs dependencies, runs `npx agent-bundle build`, runs
+`npx agent-bundle generate`, then starts `tsx main.ts`.
 
 ## Smoke Test
 

@@ -1,5 +1,7 @@
 # agent-bundle
 
+[![npm](https://img.shields.io/npm/v/agent-bundle)](https://www.npmjs.com/package/agent-bundle)
+[![npm downloads](https://img.shields.io/npm/dm/agent-bundle)](https://www.npmjs.com/package/agent-bundle)
 [![CI](https://github.com/yujiachen-y/agent-bundle/actions/workflows/ci.yml/badge.svg)](https://github.com/yujiachen-y/agent-bundle/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/yujiachen-y/agent-bundle/graph/badge.svg?token=NW998X95RW)](https://codecov.io/gh/yujiachen-y/agent-bundle)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)

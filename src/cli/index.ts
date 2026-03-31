@@ -5,6 +5,7 @@ import { defineCommand, runMain } from "citty";
 import { DEFAULT_OUTPUT_DIR, runBuildCommand } from "./build/build.js";
 import { runDeployCommand } from "./deploy/deploy.js";
 import { runGenerateCommand } from "./generate/generate.js";
+import { runInitCommand } from "./init/init.js";
 import { runDevCommand } from "./serve/dev.js";
 import { runServeCommand } from "./serve/serve.js";
 
@@ -67,7 +68,8 @@ const keyValueArg = {
 
 const secretKeyArg = {
   type: "string",
-  description: "Secret key name. Repeat flag or use comma-separated values. Values are read from environment variables.",
+  description:
+    "Secret key name. Repeat flag or use comma-separated values. Values are read from environment variables.",
 } as const;
 
 const deployTargetArg = {
@@ -80,6 +82,16 @@ const regionArg = {
   type: "string",
   description: "AWS region override for deploy.",
 } as const;
+
+const initCommand = defineCommand({
+  meta: {
+    name: "init",
+    description: "Scaffold a new agent-bundle project interactively.",
+  },
+  run: async (): Promise<void> => {
+    await runInitCommand();
+  },
+});
 
 const serveCommand = defineCommand({
   meta: {
@@ -195,6 +207,7 @@ const mainCommand = defineCommand({
     description: "Bundle skills into a single deployable agent.",
   },
   subCommands: {
+    init: initCommand,
     serve: serveCommand,
     dev: devCommand,
     generate: generateCommand,

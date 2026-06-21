@@ -38,7 +38,7 @@
 
 ### What We Don't Have (Not Doing for v1)
 
-The previous GTM research doc proposed 10 polished cookbook demos, Gitpod one-click links, terminal GIF recordings, a separate cookbook repo, and a 4-week phased release cadence. None of this is built. We are launching without it.
+The previous GTM research doc proposed 10 polished cookbook demos, hosted cloud IDE one-click links, terminal GIF recordings, a separate cookbook repo, and a 4-week phased release cadence. None of this is built. We are launching without it.
 
 This plan works with what exists today.
 
@@ -155,7 +155,6 @@ The current README is solid but can be improved for conversion:
 | Action | Effort | Impact | Notes |
 |---|---|---|---|
 | Record a 30s WebUI screen recording, add to README | 1 hour | Very high | #1 priority — visual proof |
-| Add "Open in GitHub Codespaces" button | 2 hours | High | Free tier, no signup friction |
 | Add social preview image (`og:image`) to repo | 30 min | Medium | Shows up in link previews everywhere |
 | Add topic tags to GitHub repo | 5 min | Medium | `ai-agent`, `typescript`, `sandbox`, `cli`, `yaml` |
 | Pin issues for "good first issue" | 30 min | Medium | Signals active community |
@@ -163,7 +162,7 @@ The current README is solid but can be improved for conversion:
 
 ### Things NOT Worth Doing for v1
 
-- Gitpod one-click (requires maintaining a separate config; GitHub Codespaces is simpler)
+- Hosted cloud IDE one-click links (avoid account-backed trial paths and maintained workspace configs)
 - Separate cookbook repo (existing `demo/` directory is sufficient)
 - 4-week phased release (ship everything at once, iterate based on feedback)
 - Polished marketing videos (screen recordings are enough)
@@ -175,7 +174,7 @@ The current README is solid but can be improved for conversion:
 
 | Day | Channel | Content |
 |---|---|---|
-| Mon | GitHub | Finalize README (GIF, "try it now", Codespaces button, topic tags, social preview) |
+| Mon | GitHub | Finalize README (GIF, "try it now", topic tags, social preview) |
 | Tue AM | Hacker News | Show HN post (8-10am ET) |
 | Tue AM | Twitter/X | Launch thread (immediately after HN) |
 | Tue PM | Reddit | r/programming + r/typescript posts |
@@ -203,8 +202,7 @@ The current README is solid but can be improved for conversion:
 - [ ] Record 30-second WebUI screen recording (GIF or MP4)
 - [ ] Add screen recording to README hero section
 - [ ] Add "Try it now" section to README with demo one-liner
-- [ ] Add GitHub Codespaces config (`.devcontainer/devcontainer.json`)
-- [ ] Add "Open in Codespaces" button to README
+- [ ] Verify no hosted cloud IDE config or one-click button is present
 - [ ] Set GitHub repo social preview image
 - [ ] Add GitHub topic tags (`ai-agent`, `typescript`, `sandbox`, `cli`, `yaml`, `mcp`)
 - [ ] Pin 2-3 "good first issue" issues
